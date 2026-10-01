@@ -78,3 +78,13 @@ No data migrations were performed outside git; rollback is complete and lossless
 - 6 binary-art old-brand matches remain until operator supplies replacement art (§3.5–3.6).
 - `vendor/` engine sources and upstream patches intentionally keep `tosh`-prefixed C symbols — renaming them would break the patch series against upstream llama.cpp.
 - Web-ui bundle (`Assets/web-ui/…/bundle.js`) renamed at the 3 branded physical lines only; a rebuild from the webui source with `scripts/rebrand-webui.sh` is advised before public release.
+
+## AMENDMENT 3 (2026-10-01) — wave-2 release
+- v0.88.0 tagged and pushed; CI run 36940659745 builds both variants + DMGs from the tag.
+- Live-fire on the operator's real model found and fixed a POST /tools ship-blocker
+  (36f991e: --webui-mcp-proxy now passed with agent tools). That fix landed on main AFTER
+  the v0.88.0 tag was cut — the tag's CI artifacts do NOT contain it.
+- Operator decision needed: (a) keep v0.88.0 as the exercise run and cut v0.88.1 from
+  current main for the installable DMG, or (b) delete + retag v0.88.0 at 36f991e
+  (`git tag -d v0.88.0 && git push origin :refs/tags/v0.88.0` then re-tag) so the release
+  carries the fix. Recommended: (b) — nothing has been consumed from the release yet.
