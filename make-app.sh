@@ -70,8 +70,13 @@ if [ -x "$LLAMA_STATIC/llama-server" ]; then
     if [ -f "$LLAMA_STATIC/test-backend-ops" ]; then
         cp "$LLAMA_STATIC/test-backend-ops" "$APP/Contents/Resources/bin/"
     fi
-    # all @rpath dylibs travel alongside the binaries
-    cp "$LLAMA_STATIC"/*.dylib "$APP/Contents/Resources/bin/" 2>/dev/null || true
+    # all @rpath dylibs travel alongside the binaries. zsh aborts the script on
+    # a non-matching glob before cp even runs, so probe with null_glob.
+    setopt null_glob
+    local_dylibs=("$LLAMA_STATIC"/*.dylib)
+    if [ ${#local_dylibs[@]} -gt 0 ]; then
+        cp "${local_dylibs[@]}" "$APP/Contents/Resources/bin/"
+    fi
     echo "bundled static llama-server/llama-bench from $LLAMA_STATIC"
 else
     echo "WARNING: engines not built; run ./scripts/build-engines.sh first"
