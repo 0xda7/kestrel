@@ -296,3 +296,21 @@ These steps are reviewer-executed (GUI-driving tools are orchestrator-only); no 
   on-DMG binary); DS_Store 0 x toshllm; detaches clean.
 - DELIVERY.md item 1 corrected: org handle is Northlatch-Labs-LLC (transfer cmd
   updated); canonical repo remains 0xda7/kestrel per operator.
+
+## 10:46 — Silent model-start failure: root-caused and fixed (4392e20)
+**Symptom (operator):** models won't start in the shipped Kestrel.app; "the error doesn't even show in my log".
+**Root cause chain (evidence closed):**
+1. Shipped dist/Kestrel.app was ENGINELESS (no Contents/Resources/bin/); this machine has no Xcode/cmake/brew, so scripts/build-engines.sh could never run locally.
+2. ServerSettings.defaultBinary fell back to the original author's ~/dev/repositorios/llama.cpp path (rebrand-class miss: personal path with no brand strings) — nonexistent here.
+3. start() hit the fileExists guard BEFORE fileLog.startSession() → state=.failed(msg) lived only in memory → logs dir EMPTY (reproduced: ~/Library/Application Support/Kestrel/logs/ empty after the operator's 09:46 attempt).
+**Fix (commit 4392e20, pushed):** missing-binary + spawn failures now append to the file log with the exact path checked (bilingual); author dev-path fallbacks removed from Server.swift AND make-app.sh; kernels/ made optional; @rpath dylibs now shipped alongside binaries.
+**Unblock:** official ggml-org llama.cpp b11321 macOS-x64 release (minos 13.3 ≤ 14.0 floor) staged into vendor/llama.cpp/build-static/bin; packager bundles it.
+**Gates:** build ✓ (26s) · brand audit TRUE_RESIDUALS=0 ✓ · bundle: 35 files in bin/, codesign OK, id com.northlatchlabs.kestrel v0.87.9 ✓ · bundled engine live-fire: /health ok + real completion from ~/models/gemma3-1b (32 tok / 730 ms, CPU) ✓ · DMG 39,103,455 B sha256 a21e7745…, mount-verified with engine inside ✓.
+**Residual:** DMG at dist/Kestrel-v0.87.9.dmg (operator: install over the old copy). CI (macos-26 runners) still builds the properly-patched engines on tags — official binaries are the local stand-in. spctl rejection on ad-hoc signing remains a documented caveat.
+
+## 13:23 — Engine ported from the operator's working install; silent-failure class closed
+**Operator correction accepted:** the patched engine (v0.4.1-dev b11141, commit 957538960, +AMD patches) existed all along inside /Applications/toshllm.app. Earlier "engine missing" claim was wrong — checked wrong locations.
+**Port (P1):** toshllm.app bin/ (incl. kernels/, test-backend-ops) → vendor/llama.cpp/build-static/bin → bundled via make-app.sh. Brand string "ToshLLM engine" → "Kestrel engine" (equal-length byte patch, re-signed). Kestrel references its own bundle only; zero runtime ties to toshllm.app.
+**Optimization evidence (P2, llama-bench, operator's DeepSeek-Coder-V2-Lite, 96-tok gen, 2 reps):** ncmoe=43/t=6 → 9.41; t=12 → 9.93; ncmoe=20/t=6 → 10.46; ncmoe=20/t=12 → 10.81 tok/s (+15%). Delivered as evidence, NOT hardcoded: app's per-model ncmoe recall + Settings already expose both levers. Heuristic left fit-first by design (generalizes across machines).
+**Live-fire (P3):** bundled llama-server, operator's exact arg list incl. -ctv turbo4 → health ok, 10.6 tok/s measured on 220-tok completion. The original failing command now boots.
+**Ship (P4):** dist/Kestrel-v0.87.9.dmg, 48,801,262 B, sha256 3f25574b…; mount-verified (engine, kernels/, codesign, 0 ToshLLM residuals); brand audit TRUE_RESIDUALS=0.
