@@ -365,6 +365,10 @@ struct ServerSettings {
         if agentToolsEnabled {
             if !args.contains("--jinja") { args.append("--jinja") }
             args += ["--tools", "all"]
+            // Without the MCP proxy endpoint this engine build answers
+            // POST /tools with 404 "this feature is disabled" (verified in the
+            // live-fire of 2026-10-01): the tools list, but calls fail.
+            if !uiMcpProxy { args.append("--webui-mcp-proxy") }
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
         if uiMcpProxy { args.append("--ui-mcp-proxy") }
@@ -430,6 +434,8 @@ struct ServerSettings {
         args.append("--metrics")
         if agentToolsEnabled {
             args += ["--jinja", "--tools", "all"]
+            // Same engine-404 guard as the main path above.
+            if !uiMcpProxy { args.append("--webui-mcp-proxy") }
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
         if uiMcpProxy { args.append("--ui-mcp-proxy") }
