@@ -1,0 +1,323 @@
+// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import Foundation
+
+/// Profile: a named snapshot of the entire server configuration.
+struct Profile: Codable, Identifiable {
+    var id = UUID()
+    var name: String
+    var modelPath: String
+    var ngl: Int
+    var ncmoe: Int
+    var ctx: Int
+    var contextAutomatic: Bool? = nil
+    var threads: Int
+    var flashAttn: String
+    var noMmap: Bool
+    var jinja: Bool
+    var vramReserve: Int
+    var gpuIndex: Int
+    var extraArgs: String
+    var cacheTypeK: String
+    var cacheTypeV: String
+    var mlock: Bool
+    var port: Int
+    var specMTP: Bool? = nil
+    // "bundled" | "turbo" | absolute path. Optional for backward compatibility.
+    var engine: String?
+    // Optionals for backward compatibility with profiles saved by older builds.
+    var cacheRAM: Int? = nil
+    var reasoningInline: Bool? = nil
+    var parallelSlots: Int? = nil
+    var faAmd: Bool? = nil
+    var dynamicMoe: Bool? = nil
+    var dynamicMoeSlots: Int? = nil
+    var dynamicMoePrefetch: Int? = nil
+    var dynamicMoePolicy: String? = nil
+    var persistCache: Bool? = nil
+    var multiGPU: Bool? = nil
+    // Split knobs optional for backward compatibility with profiles saved before they existed.
+    var multiGPUCount: Int? = nil
+    var splitMode: String? = nil
+    var splitGroupSize: Int? = nil
+    var mgpuEvents: Bool? = nil
+    var mgpuPeer: Bool? = nil
+    var forcePrivateBuffers: Bool? = nil
+    var cacheReuse: Bool? = nil
+    var loadVision: Bool? = nil
+    var localNetworkDiscovery: Bool? = nil
+    var gpuList: [Int]? = nil
+    var embeddings: Bool? = nil
+    var uiMcpProxy: Bool? = nil
+    var routerMode: Bool? = nil
+    var routerModelsMax: Int? = nil
+    var ubatch: Int? = nil
+    /// Added servers inherit the global settings except these fields. nil (any
+    /// profile saved before this existed) means every field applies, as before.
+    var pinned: [String]? = nil
+
+    enum Pin {
+        static let model      = "model"
+        static let moe        = "moe"
+        static let ctx        = "ctx"
+        static let flashAttention = "flashAttention"
+        static let gpu        = "gpu"
+        static let discovery  = "discovery"
+        static let vision     = "vision"
+        static let embeddings = "embeddings"
+        static let uiMcpProxy  = "uiMcpProxy"
+        static let router     = "router"
+        static let ubatch     = "ubatch"
+        static let parallelSlots = "parallelSlots"
+        static let extraArgs  = "extraArgs"
+    }
+}
+
+@MainActor
+final class ProfileStore: ObservableObject {
+    @Published var profiles: [Profile] = []
+    /// Name of the profile last applied, shown in the picker so the selection is
+    /// visible. nil means "no profile" (the user's own settings).
+    @Published var activeProfileName: String? = UserDefaults.standard.string(forKey: activeKey)
+    /// The user's configuration captured the moment they applied the first profile,
+    /// so "Default" can return to exactly what they had before any profile.
+    @Published var baselineConfig: Profile?
+    private let storeKey = "profiles"
+    private static let activeKey = "activeProfileName"
+    private static let baselineKey = "baselineProfile"
+
+    init() { load() }
+
+    func saveCurrent(name: String) {
+        add(ServerSettings.fromDefaults().makeProfile(name: name))
+    }
+
+    /// Stores a profile (e.g. snapshotted from a benchmark run). Replaces any
+    /// existing profile with the same name and gives it a fresh id.
+    func add(_ profile: Profile) {
+        var p = profile
+        p.id = UUID()
+        profiles.removeAll { $0.name == p.name }
+        profiles.append(p)
+        save()
+    }
+
+    func apply(_ p: Profile) {
+        // First time we leave the "no profile" state, snapshot the user's config so
+        // "Default" can restore exactly what they had before any profile.
+        if activeProfileName == nil, baselineConfig == nil {
+            let base = ServerSettings.fromDefaults().makeProfile(name: "__baseline__")
+            baselineConfig = base
+            if let data = try? JSONEncoder().encode(base) {
+                UserDefaults.standard.set(data, forKey: Self.baselineKey)
+            }
+        }
+        write(p)
+        activeProfileName = p.name
+        UserDefaults.standard.set(p.name, forKey: Self.activeKey)
+    }
+
+    /// Restore the configuration the user had before applying any profile and clear
+    /// the selection. If no baseline was captured, just clears the selection.
+    func clearActive() {
+        if let base = baselineConfig { write(base) }
+        activeProfileName = nil
+        baselineConfig = nil
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.activeKey)
+        d.removeObject(forKey: Self.baselineKey)
+    }
+
+    /// Make a config the new global default — used by the benchmark's "Apply to
+    /// global". Unlike `apply`, this is not a named-profile overlay: it updates the
+    /// settings you return to with "Default", and leaves no profile selected.
+    func setAsDefault(_ p: Profile) {
+        write(p)
+        activeProfileName = nil
+        baselineConfig = nil
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.activeKey)
+        d.removeObject(forKey: Self.baselineKey)
+    }
+
+    /// Writes a profile's values into the live settings (no selection bookkeeping).
+    private func write(_ p: Profile) {
+        let d = UserDefaults.standard
+        d.set(p.modelPath, forKey: SettingsKeys.modelPath)
+        d.set(p.ngl, forKey: SettingsKeys.ngl)
+        d.set(p.ncmoe, forKey: SettingsKeys.ncmoe)
+        d.set(p.ctx, forKey: SettingsKeys.ctx)
+        if let value = p.contextAutomatic { d.set(value, forKey: SettingsKeys.contextAutomatic) }
+        d.set(p.threads, forKey: SettingsKeys.threads)
+        d.set(p.flashAttn, forKey: SettingsKeys.flashAttn)
+        d.set(p.noMmap, forKey: SettingsKeys.noMmap)
+        d.set(p.jinja, forKey: SettingsKeys.jinja)
+        d.set(p.vramReserve, forKey: SettingsKeys.vramReserve)
+        d.set(p.gpuIndex, forKey: SettingsKeys.gpuIndex)
+        d.set(p.extraArgs, forKey: SettingsKeys.extraArgs)
+        d.set(p.cacheTypeK, forKey: SettingsKeys.cacheTypeK)
+        d.set(p.cacheTypeV, forKey: SettingsKeys.cacheTypeV)
+        d.set(p.mlock, forKey: SettingsKeys.mlock)
+        d.set(p.port, forKey: SettingsKeys.port)
+        if let mtp = p.specMTP { d.set(mtp, forKey: SettingsKeys.specMTP) }
+        if let cram = p.cacheRAM { d.set(cram, forKey: SettingsKeys.cacheRAM) }
+        if let inline = p.reasoningInline { d.set(inline, forKey: SettingsKeys.reasoningInline) }
+        if let slots = p.parallelSlots { d.set(slots, forKey: SettingsKeys.parallelSlots) }
+        if let v = p.faAmd { d.set(v, forKey: SettingsKeys.faAmd) }
+        if let v = p.dynamicMoe { d.set(v, forKey: SettingsKeys.dynamicMoe) }
+        if let v = p.dynamicMoeSlots { d.set(v, forKey: SettingsKeys.dynamicMoeSlots) }
+        if let v = p.dynamicMoePrefetch { d.set(v, forKey: SettingsKeys.dynamicMoePrefetch) }
+        if let v = p.dynamicMoePolicy { d.set(v, forKey: SettingsKeys.dynamicMoePolicy) }
+        if let v = p.persistCache { d.set(v, forKey: SettingsKeys.persistCache) }
+        if let v = p.multiGPU { d.set(v, forKey: SettingsKeys.multiGPU) }
+        if let v = p.multiGPUCount { d.set(v, forKey: SettingsKeys.multiGPUCount) }
+        if let v = p.splitMode { d.set(v, forKey: SettingsKeys.splitMode) }
+        if let v = p.splitGroupSize { d.set(v, forKey: SettingsKeys.splitGroupSize) }
+        if let v = p.mgpuEvents { d.set(v, forKey: SettingsKeys.mgpuEvents) }
+        if let v = p.mgpuPeer { d.set(v, forKey: SettingsKeys.mgpuPeer) }
+        if let v = p.forcePrivateBuffers { d.set(v, forKey: SettingsKeys.forcePrivateBuffers) }
+        if let v = p.loadVision { d.set(v, forKey: SettingsKeys.loadVision) }
+        if let v = p.localNetworkDiscovery { d.set(v, forKey: SettingsKeys.localNetworkDiscovery) }
+        if let v = p.cacheReuse { d.set(v, forKey: SettingsKeys.cacheReuse) }
+        if let v = p.gpuList { d.set(v.map(String.init).joined(separator: ","), forKey: SettingsKeys.gpuList) }
+        if let v = p.embeddings { d.set(v, forKey: SettingsKeys.embeddings) }
+        if let v = p.uiMcpProxy { d.set(v, forKey: SettingsKeys.uiMcpProxy) }
+        if let v = p.routerMode { d.set(v, forKey: SettingsKeys.routerMode) }
+        if let v = p.routerModelsMax { d.set(v, forKey: SettingsKeys.routerModelsMax) }
+        if let v = p.ubatch { d.set(v, forKey: SettingsKeys.ubatch) }
+        switch p.engine {
+        case "bundled", "turbo": d.set("bundled", forKey: SettingsKeys.engineKind)
+        case let .some(path) where !path.isEmpty:
+            d.set("custom", forKey: SettingsKeys.engineKind)
+            d.set(path, forKey: SettingsKeys.serverBinary)
+        default: break
+        }
+    }
+
+    func delete(_ p: Profile) {
+        profiles.removeAll { $0.id == p.id }
+        if activeProfileName == p.name {
+            activeProfileName = nil
+            UserDefaults.standard.removeObject(forKey: Self.activeKey)
+        }
+        save()
+    }
+
+    private func load() {
+        if let data = UserDefaults.standard.data(forKey: Self.baselineKey),
+           let base = try? JSONDecoder().decode(Profile.self, from: data) {
+            baselineConfig = base
+        }
+        guard let data = UserDefaults.standard.data(forKey: storeKey),
+              let list = try? JSONDecoder().decode([Profile].self, from: data) else { return }
+        profiles = list
+    }
+
+    private func save() {
+        guard let data = try? JSONEncoder().encode(profiles) else { return }
+        UserDefaults.standard.set(data, forKey: storeKey)
+    }
+}
+
+extension ServerSettings {
+    /// "bundled" or an absolute path, matching Profile.engine.
+    var engineTag: String {
+        serverBinary == ServerSettings.defaultBinary ? "bundled" : serverBinary
+    }
+
+    /// Snapshot the full runtime config into a named profile.
+    func makeProfile(name: String) -> Profile {
+        Profile(name: name, modelPath: modelPath, ngl: ngl, ncmoe: ncmoe, ctx: ctx,
+                contextAutomatic: contextAutomatic,
+                threads: threads, flashAttn: flashAttn, noMmap: noMmap, jinja: jinja,
+                vramReserve: vramReserveMB,
+                gpuIndex: gpuIndex, extraArgs: extraArgs, cacheTypeK: cacheTypeK,
+                cacheTypeV: cacheTypeV, mlock: mlock, port: port, specMTP: specMTP,
+                engine: engineTag, cacheRAM: cacheRAM, reasoningInline: reasoningInline,
+                parallelSlots: parallelSlots, faAmd: faAmd,
+                dynamicMoe: dynamicMoe, dynamicMoeSlots: dynamicMoeSlots,
+                dynamicMoePrefetch: dynamicMoePrefetch, dynamicMoePolicy: dynamicMoePolicy,
+                persistCache: persistCache,
+                multiGPU: multiGPU, multiGPUCount: multiGPUCount,
+                splitMode: splitMode, splitGroupSize: splitGroupSize,
+                mgpuEvents: mgpuEvents, mgpuPeer: mgpuPeer,
+                forcePrivateBuffers: forcePrivateBuffers,
+                cacheReuse: cacheReuse, loadVision: loadVision,
+                localNetworkDiscovery: localNetworkDiscovery,
+                gpuList: gpuList, embeddings: embeddings, uiMcpProxy: uiMcpProxy,
+                routerMode: routerMode, routerModelsMax: routerModelsMax,
+                ubatch: ubatch)
+    }
+
+    /// Load a profile's config into this struct without touching UserDefaults,
+    /// so the benchmark can seed a local run-config from a profile.
+    mutating func apply(_ p: Profile) {
+        modelPath = p.modelPath; ngl = p.ngl; ncmoe = p.ncmoe; ctx = p.ctx
+        if let value = p.contextAutomatic { contextAutomatic = value }
+        threads = p.threads; flashAttn = p.flashAttn; noMmap = p.noMmap; jinja = p.jinja
+        vramReserveMB = p.vramReserve
+        gpuIndex = p.gpuIndex; extraArgs = p.extraArgs; cacheTypeK = p.cacheTypeK
+        cacheTypeV = p.cacheTypeV; mlock = p.mlock; port = p.port
+        if let v = p.specMTP { specMTP = v }
+        if let v = p.cacheRAM { cacheRAM = v }
+        if let v = p.reasoningInline { reasoningInline = v }
+        if let v = p.parallelSlots { parallelSlots = v }
+        if let v = p.faAmd { faAmd = v }
+        if let v = p.ubatch { ubatch = v }
+        if let v = p.dynamicMoe { dynamicMoe = v }
+        if let v = p.dynamicMoeSlots { dynamicMoeSlots = v }
+        if let v = p.dynamicMoePrefetch { dynamicMoePrefetch = v }
+        if let v = p.dynamicMoePolicy { dynamicMoePolicy = v }
+        if let v = p.persistCache { persistCache = v }
+        if let v = p.multiGPU { multiGPU = v }
+        if let v = p.multiGPUCount { multiGPUCount = v }
+        if let v = p.splitMode { splitMode = v }
+        if let v = p.splitGroupSize { splitGroupSize = v }
+        if let v = p.mgpuEvents { mgpuEvents = v }
+        if let v = p.mgpuPeer { mgpuPeer = v }
+        if let v = p.forcePrivateBuffers { forcePrivateBuffers = v }
+        if let v = p.cacheReuse { cacheReuse = v }
+        if let v = p.loadVision { loadVision = v }
+        if let v = p.localNetworkDiscovery { localNetworkDiscovery = v }
+        gpuList = p.gpuList ?? []
+        if let v = p.embeddings { embeddings = v }
+        if let v = p.uiMcpProxy { uiMcpProxy = v }
+        if let v = p.routerMode { routerMode = v }
+        if let v = p.routerModelsMax { routerModelsMax = v }
+        switch p.engine {
+        case "bundled", "turbo": serverBinary = ServerSettings.defaultBinary
+        case let .some(path) where !path.isEmpty: serverBinary = path
+        default: break
+        }
+    }
+
+    /// Overlay only the profile fields the user pinned on that server's card;
+    /// everything else keeps the global value. The port can never be shared.
+    mutating func applyPinned(_ p: Profile, _ pinned: Set<String>) {
+        port = p.port
+        if pinned.contains(Profile.Pin.model) { modelPath = p.modelPath; ncmoe = p.ncmoe }
+        if pinned.contains(Profile.Pin.moe) { ncmoe = p.ncmoe }
+        if pinned.contains(Profile.Pin.ctx) { ctx = p.ctx }
+        if pinned.contains(Profile.Pin.ctx), let value = p.contextAutomatic { contextAutomatic = value }
+        if pinned.contains(Profile.Pin.flashAttention) {
+            flashAttn = p.flashAttn
+            if let value = p.faAmd { faAmd = value }
+        }
+        if pinned.contains(Profile.Pin.ubatch), let v = p.ubatch { ubatch = v }
+        if pinned.contains(Profile.Pin.parallelSlots), let v = p.parallelSlots { parallelSlots = v }
+        if pinned.contains(Profile.Pin.gpu) { gpuIndex = p.gpuIndex; gpuList = p.gpuList ?? [] }
+        if pinned.contains(Profile.Pin.discovery), let v = p.localNetworkDiscovery { localNetworkDiscovery = v }
+        if pinned.contains(Profile.Pin.vision), let v = p.loadVision { loadVision = v }
+        if pinned.contains(Profile.Pin.embeddings), let v = p.embeddings { embeddings = v }
+        if pinned.contains(Profile.Pin.uiMcpProxy), let v = p.uiMcpProxy { uiMcpProxy = v }
+        // Replaces the shared field instead of adding to it, so an empty value here means
+        // this server gets none of the flags the rest do.
+        if pinned.contains(Profile.Pin.extraArgs) { extraArgs = p.extraArgs }
+        if pinned.contains(Profile.Pin.router) {
+            if let v = p.routerMode { routerMode = v }
+            if let v = p.routerModelsMax { routerModelsMax = v }
+        }
+    }
+}

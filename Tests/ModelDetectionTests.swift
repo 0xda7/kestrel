@@ -1,0 +1,728 @@
+// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import XCTest
+@testable import ToshLLM
+
+final class ModelDetectionTests: XCTestCase {
+    func testGGUFMetadataIsTheMoESourceOfTruth() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let renamedMoE = dir.appendingPathComponent("renamed-model.gguf")
+        try writeGGUF(to: renamedMoE, uint32: ["qwen35moe.expert_count": 256])
+        let moe = LocalModel(url: renamedMoE, name: renamedMoE.lastPathComponent,
+                             sizeBytes: Int64(try fileSize(renamedMoE)))
+        XCTAssertTrue(moe.isMoE)
+        XCTAssertTrue(ServerSettings.modelIsMoE(at: renamedMoE.path))
+
+        let misleadingDense = dir.appendingPathComponent("definitely-moe-A3.5B.gguf")
+        try writeGGUF(to: misleadingDense, uint32: ["llama.block_count": 24])
+        let dense = LocalModel(url: misleadingDense, name: misleadingDense.lastPathComponent,
+                               sizeBytes: Int64(try fileSize(misleadingDense)))
+        XCTAssertFalse(dense.isMoE, "A valid dense GGUF must override a misleading filename")
+
+        let unreadable = dir.appendingPathComponent("fallback-A3.5B.gguf")
+        try Data().write(to: unreadable)
+        let fallback = LocalModel(url: unreadable, name: unreadable.lastPathComponent, sizeBytes: 0)
+        XCTAssertTrue(fallback.isMoE, "Filename detection remains a fallback for unreadable files")
+    }
+
+    func testOfficialOLMoEAndDeepSeekArchitecturesAreDetected() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        for architecture in ["olmoe", "deepseek", "deepseek2", "deepseek32", "deepseek4"] {
+            let url = dir.appendingPathComponent("\(architecture).gguf")
+            try writeGGUF(to: url, strings: ["general.architecture": architecture])
+            XCTAssertTrue(ServerSettings.modelIsMoE(at: url.path), architecture)
+        }
+
+        let explicitDense = dir.appendingPathComponent("deepseek-explicit-dense.gguf")
+        try writeGGUF(to: explicitDense,
+                      strings: ["general.architecture": "deepseek2"],
+                      uint32: ["deepseek2.expert_count": 0])
+        XCTAssertFalse(ServerSettings.modelIsMoE(at: explicitDense.path))
+    }
+
+    func testExpertCountAcceptsOfficialGGUFIntegerEncodings() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let uint64URL = dir.appendingPathComponent("olmoe-u64.gguf")
+        try writeGGUF(to: uint64URL, uint64: ["olmoe.expert_count": 64])
+        XCTAssertTrue(ServerSettings.modelIsMoE(at: uint64URL.path))
+        XCTAssertEqual(ServerSettings.ggufUInt32("expert_count", at: uint64URL.path), 64)
+
+        let int32URL = dir.appendingPathComponent("deepseek-i32.gguf")
+        try writeGGUF(to: int32URL, int32: ["deepseek2.expert_count": 256])
+        XCTAssertTrue(ServerSettings.modelIsMoE(at: int32URL.path))
+        XCTAssertEqual(ServerSettings.ggufUInt32("expert_count", at: int32URL.path), 256)
+    }
+
+    func testTraitWarmPublishesAfterDetectingAllModels() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let olmoe = dir.appendingPathComponent("olmoe.gguf")
+        let deepseek = dir.appendingPathComponent("deepseek.gguf")
+        try writeGGUF(to: olmoe, uint32: ["olmoe.expert_count": 64])
+        try writeGGUF(to: deepseek, uint32: ["deepseek2.expert_count": 256])
+
+        ModelTraitsCache.invalidate()
+        let published = expectation(description: "traits published as one batch")
+        ModelTraitsCache.warm(paths: [olmoe.path, deepseek.path]) { published.fulfill() }
+        wait(for: [published], timeout: 2)
+        XCTAssertTrue(ModelTraitsCache.cached(for: olmoe.path)?.isMoE == true)
+        XCTAssertTrue(ModelTraitsCache.cached(for: deepseek.path)?.isMoE == true)
+    }
+
+    func testDynamicMoeReadsLayerTotalAndActiveExpertCounts() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("renamed-qwen.gguf")
+        try writeGGUF(to: url, uint32: [
+            "qwen35moe.block_count": 40,
+            "qwen35moe.expert_count": 256,
+            "qwen35moe.expert_used_count": 8,
+        ])
+
+        var settings = ServerSettings(
+            serverBinary: "/usr/bin/true", modelPath: url.path, port: 8080,
+            ngl: 99, ncmoe: 24, ctx: 16_384, threads: 6, flashAttn: "auto",
+            noMmap: true, jinja: true, vramReserveMB: 1_024, gpuIndex: -1,
+            extraArgs: "", cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        XCTAssertEqual(settings.dynamicMoeModelInfo,
+                       DynamicMoeModelInfo(layerCount: 40, expertCount: 256,
+                                           activeExpertCount: 8))
+
+        settings.dynamicMoeSlots = 300
+        XCTAssertEqual(settings.effectiveDynamicMoeSlots, 256)
+        settings.dynamicMoeSlots = 4
+        XCTAssertEqual(settings.effectiveDynamicMoeSlots, 8)
+    }
+
+    func testBenchmarkFamilyTreatsValidArchitectureWithoutExpertsAsDense() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let denseURL = dir.appendingPathComponent("qwen-dense.gguf")
+        try writeGGUF(to: denseURL, strings: ["general.architecture": "qwen35"])
+        let dense = LocalModel(url: denseURL, name: denseURL.lastPathComponent,
+                               sizeBytes: Int64(try fileSize(denseURL)))
+        XCTAssertEqual(BenchmarkModelFamilyClassifier.family(for: dense), "dense")
+
+        let moeURL = dir.appendingPathComponent("renamed.gguf")
+        try writeGGUF(to: moeURL, strings: ["general.architecture": "qwen35moe"],
+                      uint32: ["qwen35moe.expert_count": 256])
+        let moe = LocalModel(url: moeURL, name: moeURL.lastPathComponent,
+                             sizeBytes: Int64(try fileSize(moeURL)))
+        XCTAssertEqual(BenchmarkModelFamilyClassifier.family(for: moe), "moe")
+    }
+
+    func testBenchmarkGPUArchitectureUsesTheReportedDeviceName() {
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon RX 9070 XT"), "RDNA 4")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon RX 6700 XT"), "RDNA 2")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon RX 5700 XT"), "RDNA 1")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon RX 580"), "GCN / Vega")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon Pro W6800X"), "RDNA 2")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon VII"), "GCN / Vega")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Instinct MI325X"), "CDNA 3")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Instinct MI355X"), "CDNA 4")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "AMD Radeon 890M"), "RDNA 3.5")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA GeForce RTX 5090"), "Blackwell")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA GeForce RTX 4090"), "Ada Lovelace")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA RTX 6000 Ada Generation"), "Ada Lovelace")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA RTX A6000"), "Ampere")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA Quadro RTX 6000"), "Turing")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "NVIDIA A100-SXM4-80GB"), "Ampere")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "Intel Arc B580"), "Xe2 / Battlemage")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "Intel Arc A770"), "Xe HPG / Alchemist")
+        XCTAssertEqual(GPUArchitectureClassifier.architecture(for: "Apple M4 Max GPU"), "Apple Silicon")
+        XCTAssertNil(GPUArchitectureClassifier.architecture(for: "AMD Radeon Graphics"))
+        XCTAssertNil(GPUArchitectureClassifier.architecture(for: "NVIDIA RTX 6000"))
+        XCTAssertNil(GPUArchitectureClassifier.architecture(for: "Virtual GPU"))
+    }
+
+    func testMetadataCacheInvalidatesWhenFileChanges() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("mutable.gguf")
+
+        try writeGGUF(to: url, uint32: ["qwen35moe.expert_count": 8])
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 100)],
+                                              ofItemAtPath: url.path)
+        XCTAssertTrue(ServerSettings.modelIsMoE(at: url.path))
+
+        try writeGGUF(to: url, uint32: ["qwen35moe.expert_count": 0])
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 200)],
+                                              ofItemAtPath: url.path)
+        XCTAssertFalse(ServerSettings.modelIsMoE(at: url.path))
+    }
+
+    func testMetadataCacheSupportsConcurrentReaders() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("concurrent.gguf")
+        try writeGGUF(to: url, strings: ["general.name": "Concurrent Model"],
+                      uint32: ["qwen35moe.expert_count": 128])
+
+        let lock = NSLock()
+        var failures = 0
+        DispatchQueue.concurrentPerform(iterations: 100) { _ in
+            let valid = ServerSettings.modelIsMoE(at: url.path)
+                && ServerSettings.ggufString("general.name", at: url.path) == "Concurrent Model"
+            if !valid {
+                lock.lock()
+                failures += 1
+                lock.unlock()
+            }
+        }
+        XCTAssertEqual(failures, 0)
+    }
+
+    func testCompleteShardsAreGroupedAndIncompleteSetsAreHidden() throws {
+        let entries = [
+            GGUFFileEntry(path: "model-00001-of-00003.gguf", sizeBytes: 10),
+            GGUFFileEntry(path: "model-00002-of-00003.gguf", sizeBytes: 20),
+            GGUFFileEntry(path: "model-00003-of-00003.gguf", sizeBytes: 30),
+            GGUFFileEntry(path: "broken-00001-of-00002.gguf", sizeBytes: 40),
+            GGUFFileEntry(path: "model-mmproj-F16.gguf", sizeBytes: 50),
+            GGUFFileEntry(path: "single-Q4_K_M.gguf", sizeBytes: 60),
+            GGUFFileEntry(path: "one-part-00001-of-00001.gguf", sizeBytes: 70),
+        ]
+
+        let models = GGUFFile.models(from: entries)
+        XCTAssertEqual(models.count, 3)
+        let split = try XCTUnwrap(models.first { $0.primaryPath.hasPrefix("model-") })
+        XCTAssertEqual(split.sizeBytes, 60)
+        XCTAssertEqual(split.paths, [
+            "model-00001-of-00003.gguf",
+            "model-00002-of-00003.gguf",
+            "model-00003-of-00003.gguf",
+        ])
+        XCTAssertFalse(models.contains { $0.primaryPath.contains("broken") })
+        XCTAssertFalse(models.contains { $0.primaryPath.contains("mmproj") })
+        XCTAssertTrue(models.contains { $0.primaryPath.contains("one-part") })
+    }
+
+    func testLocalScanUsesWholeShardSize() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data(repeating: 1, count: 11).write(to: dir.appendingPathComponent("split-00001-of-00002.gguf"))
+        try Data(repeating: 2, count: 13).write(to: dir.appendingPathComponent("split-00002-of-00002.gguf"))
+        try Data(repeating: 3, count: 17).write(to: dir.appendingPathComponent("incomplete-00001-of-00002.gguf"))
+
+        let models = LocalModel.scan(in: dir)
+        XCTAssertEqual(models.count, 1)
+        XCTAssertEqual(models[0].sizeBytes, 24)
+        XCTAssertEqual(models[0].partURLs.count, 2)
+        XCTAssertTrue(models[0].name.contains("00001-of-00002"))
+        XCTAssertEqual(GGUFFile.totalSize(at: models[0].url.path), 24)
+    }
+
+    func testLocalScanFindsNestedModelsAndSkipsManagedMediaFolders() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let nested = dir.appendingPathComponent("Qwen/four-bit", isDirectory: true)
+        let image = dir.appendingPathComponent("imagen", isDirectory: true)
+        let videos = dir.appendingPathComponent("videos", isDirectory: true)
+        let whisper = dir.appendingPathComponent("whisper", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: image, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: videos, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: whisper, withIntermediateDirectories: true)
+        try Data([1]).write(to: nested.appendingPathComponent("nested-model.gguf"))
+        try Data([1]).write(to: nested.appendingPathComponent("split-00001-of-00002.gguf"))
+        try Data([2]).write(to: nested.appendingPathComponent("split-00002-of-00002.gguf"))
+        try Data([3]).write(to: image.appendingPathComponent("diffusion.gguf"))
+        try Data([3]).write(to: videos.appendingPathComponent("video-encoder.gguf"))
+        try Data([4]).write(to: whisper.appendingPathComponent("speech.gguf"))
+
+        let models = LocalModel.scan(in: dir)
+        XCTAssertEqual(Set(models.map(\.name)), ["nested-model.gguf", "split-00001-of-00002.gguf"])
+        XCTAssertEqual(models.first { $0.name.hasPrefix("split-") }?.partURLs.count, 2)
+    }
+
+    func testRecursiveFileIndexReusesMediaComponentsOutsideManagedFolder() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let external = dir.appendingPathComponent("existing/video/encoders", isDirectory: true)
+        try FileManager.default.createDirectory(at: external, withIntermediateDirectories: true)
+        let encoder = external.appendingPathComponent("UMT5-XXL-Encoder-Q4_K_M.GGUF")
+        try Data([1]).write(to: encoder)
+
+        let index = ModelFileIndex.scan(in: dir)
+        XCTAssertEqual(index.file(named: "umt5-xxl-encoder-Q4_K_M.gguf")?.path, encoder.path)
+    }
+
+    func testRecursiveFileIndexReusesSafePunctuationVariant() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let existing = dir.appendingPathComponent("Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf")
+        try Data([1]).write(to: existing)
+
+        let index = ModelFileIndex.scan(in: dir)
+        XCTAssertEqual(index.file(named: "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf")?.path,
+                       existing.path)
+    }
+
+    func testRecursiveFileIndexFallsBackToOriginalDownloadName() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let original = dir.appendingPathComponent("stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf")
+        try Data([1]).write(to: original)
+
+        let index = ModelFileIndex.scan(in: dir)
+        XCTAssertEqual(index.file(namedAny: ["sd-v1-5-Q8_0.gguf", original.lastPathComponent])?.path,
+                       original.path)
+    }
+
+    func testRecursiveFileIndexPrefersManagedMediaCopyWhenNamesCollide() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let other = dir.appendingPathComponent("archive", isDirectory: true)
+        let managed = dir.appendingPathComponent("imagen", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: managed, withIntermediateDirectories: true)
+        try Data([1]).write(to: other.appendingPathComponent("shared.safetensors"))
+        let preferred = managed.appendingPathComponent("shared.safetensors")
+        try Data([2]).write(to: preferred)
+
+        let index = ModelFileIndex.scan(in: dir)
+        XCTAssertEqual(index.file(named: "shared.safetensors", preferredDirectory: managed)?.path,
+                       preferred.path)
+    }
+
+    func testEmbeddedNameKeepsFilenameSizeAndDropsRepositoryOwner() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("pixtral-12B-Q4_K_M.gguf")
+        try writeGGUF(to: url, strings: ["general.name": "publisher/Pixtral"])
+
+        let parsed = ModelName.forPath(url.path)
+        XCTAssertEqual(parsed.title, "Pixtral 12B")
+        XCTAssertEqual(parsed.quant, "Q4_K_M")
+    }
+
+    func testGGUFFileTypeOverridesStaleBF16MetadataName() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("Qwen3.8-27B-Ridge-3.7bpw.gguf")
+        try writeGGUF(to: url,
+                      strings: ["general.name": "Qwen3.8 27B Bf16"],
+                      uint32: ["general.file_type": 29])
+
+        let parsed = ModelName.forPath(url.path)
+        XCTAssertEqual(parsed.title, "Qwen3.8 27B")
+        XCTAssertEqual(parsed.quant, "IQ2_M")
+    }
+
+    func testMetadataAfterTokenizerIsStillRead() throws {
+        var data = Data("GGUF".utf8)
+        func appendUInt32(_ value: UInt32) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendUInt64(_ value: UInt64) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendString(_ value: String) {
+            appendUInt64(UInt64(value.utf8.count))
+            data.append(contentsOf: value.utf8)
+        }
+
+        appendUInt32(3)
+        appendUInt64(0)
+        appendUInt64(4)
+        appendString("general.architecture")
+        appendUInt32(8)
+        appendString("qwen3")
+        appendString("tokenizer.ggml.tokens")
+        appendUInt32(9)
+        appendUInt32(8)
+        appendUInt64(2)
+        appendString("one")
+        appendString("two")
+        appendString("general.file_type")
+        appendUInt32(4)
+        appendUInt32(25)
+        appendString("qwen3.context_length")
+        appendUInt32(4)
+        appendUInt32(32_768)
+
+        let metadata = try XCTUnwrap(GGUFMetadataCache.parse(from: data))
+        XCTAssertEqual(metadata.fileTypeLabel, "IQ4_NL")
+    }
+
+    func testIQ4NLFilenameFallbackKeepsFullQuantizationName() {
+        XCTAssertEqual(ModelName("Qwen3-4B-IQ4_NL.gguf").quant, "IQ4_NL")
+    }
+
+    func testDetailedUDQuantizationFromFilenameWinsOverGenericHeaderType() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("gemma-4-12B-UD-Q4_K_XL.gguf")
+        try writeGGUF(to: url, strings: ["general.name": "Gemma 4 12B"],
+                      uint32: ["general.file_type": 15])
+        XCTAssertEqual(ModelName.forPath(url.path).quant, "UD-Q4_K_XL")
+    }
+
+    func testGenericEmbeddedNameFallsBackToFilename() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("gemma-2-9B-it-IQ1_M.gguf")
+        try writeGGUF(to: url, strings: ["general.name": "Original Model"],
+                      uint32: ["general.file_type": 31])
+        XCTAssertEqual(ModelName.forPath(url.path).title, "Gemma 2 9B")
+        XCTAssertEqual(ModelName.forPath(url.path).quant, "IQ1_M")
+    }
+
+    func testFilenameKeepsMoEActiveParameterSizeMissingFromMetadata() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("Qwen3.6-35B-A3B-Q5_K_M.gguf")
+        try writeGGUF(to: url, strings: ["general.name": "Qwen3.6 35B"],
+                      uint32: ["general.file_type": 17])
+        XCTAssertEqual(ModelName.forPath(url.path).title, "Qwen3.6 35B-A3B")
+    }
+
+    func testActiveTotalMoESizeUsesTotalParametersAndActivePrefix() {
+        let parsed = ModelName("OLMoE-1B-7B-0924-Instruct-Q5_K_M.gguf")
+        XCTAssertEqual(parsed.title, "OLMoE 1B-7B")
+        XCTAssertEqual(parsed.paramsB, 7)
+        XCTAssertEqual(ModelName.activeParamsB("OLMoE-1B-7B-0924-Instruct-Q5_K_M.gguf"), 1)
+    }
+
+    func testLegacyProjectorFallbackRequiresUniqueFamilyAndDimension() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let model = dir.appendingPathComponent("Qwen3.6-14B-A3B-FableVibes-Q4_K_M.gguf")
+        let matching = dir.appendingPathComponent("Qwen3.6-14B-A3B-FableVibes-mmproj-Q8_0.gguf")
+        let unrelated = dir.appendingPathComponent("Gemma3-mmproj-F16.gguf")
+        try writeGGUF(to: model, uint32: ["qwen35moe.embedding_length": 2048])
+        try writeGGUF(to: matching, uint32: ["clip.projection_dim": 2048])
+        try writeGGUF(to: unrelated, uint32: ["clip.projection_dim": 2048])
+
+        XCTAssertEqual(resolved(ServerSettings.mmprojPath(forModel: model.path)), resolved(matching.path))
+
+        let ambiguous = dir.appendingPathComponent("Qwen3.6-14B-A3B-mmproj-F16.gguf")
+        try writeGGUF(to: ambiguous, uint32: ["clip.projection_dim": 2048])
+        XCTAssertNil(ServerSettings.mmprojPath(forModel: model.path),
+                     "Two compatible same-family projectors must remain a manual choice")
+    }
+
+    func testDecimalActiveParameterNameLooksMoE() {
+        XCTAssertTrue(ModelName.looksMoE("Model-30B-A3.5B-Q4_K_M.gguf"))
+    }
+
+    /// A range request only covers the header, so parsing works off a Data slice.
+    func testParsesHeaderFromDataAndRejectsTruncated() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("remote.gguf")
+        try writeGGUF(to: url, strings: ["general.architecture": "gemma4"],
+                      uint32: ["gemma4.expert_count": 128])
+        let full = try Data(contentsOf: url)
+
+        let parsed = try XCTUnwrap(GGUFMetadataCache.parse(from: full))
+        XCTAssertEqual(parsed.uint32(forSuffix: "expert_count"), 128)
+        XCTAssertEqual(parsed.string(for: "general.architecture"), "gemma4")
+
+        XCTAssertNil(GGUFMetadataCache.parse(from: full.prefix(12)),
+                     "a truncated header must fall back, not guess")
+        XCTAssertNil(GGUFMetadataCache.parse(from: Data("not a gguf".utf8)))
+    }
+
+    /// The whole point of the remote probe: a MoE whose filename hides it.
+    func testHeaderBeatsFilenameForRenamedMoE() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("totally-dense-looking.gguf")
+        try writeGGUF(to: url, uint32: ["gemma4.expert_count": 128])
+
+        XCTAssertFalse(ModelName.looksMoE(url.lastPathComponent))
+        let header = try XCTUnwrap(GGUFMetadataCache.parse(from: try Data(contentsOf: url)))
+        XCTAssertTrue((header.uint32(forSuffix: "expert_count") ?? 0) > 0)
+    }
+
+    func testTurboKVCompatibilityUsesGGUFHeadDimensions() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let head64 = dir.appendingPathComponent("head64.gguf")
+        try writeGGUF(to: head64, uint32: [
+            "llama.attention.key_length": 64,
+            "llama.attention.value_length": 64,
+        ])
+        XCTAssertTrue(ServerSettings.modelSupportsTurboKV(at: head64.path))
+
+        let derived128 = dir.appendingPathComponent("derived128.gguf")
+        try writeGGUF(to: derived128, uint32: [
+            "qwen3.embedding_length": 4096,
+            "qwen3.attention.head_count": 32,
+        ])
+        XCTAssertTrue(ServerSettings.modelSupportsTurboKV(at: derived128.path))
+
+        let invalidDerived = dir.appendingPathComponent("invalid-derived.gguf")
+        try writeGGUF(to: invalidDerived, uint32: [
+            "custom.embedding_length": 4097,
+            "custom.attention.head_count": 32,
+        ])
+        XCTAssertFalse(ServerSettings.modelSupportsTurboKV(at: invalidDerived.path))
+
+        let head320 = dir.appendingPathComponent("head320.gguf")
+        try writeGGUF(to: head320, uint32: ["custom.attention.key_length": 320])
+        XCTAssertTrue(ServerSettings.modelSupportsTurboKV(at: head320.path))
+
+        let mla = dir.appendingPathComponent("mla.gguf")
+        try writeGGUF(to: mla, uint32: [
+            "deepseek2.attention.key_length": 576,
+            "deepseek2.attention.value_length": 512,
+            "deepseek2.attention.key_length_mla": 576,
+            "deepseek2.attention.value_length_mla": 512,
+        ])
+        XCTAssertTrue(ServerSettings.modelSupportsTurboKV(at: mla.path))
+        XCTAssertTrue(ServerSettings.modelUsesMLA(at: mla.path))
+
+        let tooWide = dir.appendingPathComponent("head641.gguf")
+        try writeGGUF(to: tooWide, uint32: ["custom.attention.key_length": 641])
+        XCTAssertFalse(ServerSettings.modelSupportsTurboKV(at: tooWide.path))
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("toshllm-detection-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func fileSize(_ url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.size] as! NSNumber).uint64Value
+    }
+
+    private func resolved(_ path: String?) -> String? {
+        path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+    }
+
+    private func writeGGUF(
+        to url: URL,
+        strings: [String: String] = [:],
+        uint32: [String: UInt32] = [:],
+        uint64: [String: UInt64] = [:],
+        int32: [String: Int32] = [:]
+    ) throws {
+        var data = Data("GGUF".utf8)
+        func appendUInt32(_ value: UInt32) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendUInt64(_ value: UInt64) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendString(_ value: String) {
+            appendUInt64(UInt64(value.utf8.count))
+            data.append(contentsOf: value.utf8)
+        }
+
+        appendUInt32(3)
+        appendUInt64(0)
+        appendUInt64(UInt64(strings.count + uint32.count + uint64.count + int32.count))
+        for (key, value) in strings {
+            appendString(key)
+            appendUInt32(8)
+            appendString(value)
+        }
+        for (key, value) in uint32 {
+            appendString(key)
+            appendUInt32(4)
+            appendUInt32(value)
+        }
+        for (key, value) in uint64 {
+            appendString(key)
+            appendUInt32(10)
+            appendUInt64(value)
+        }
+        for (key, value) in int32 {
+            appendString(key)
+            appendUInt32(5)
+            appendUInt32(UInt32(bitPattern: value))
+        }
+        try data.write(to: url)
+    }
+
+    func testTensorSplitIsRefusedOnlyForExpertsWithASeparateScale() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Few blocks per expert is fine: the engine zeroes the empty slice instead of aborting.
+        let fewBlocks = dir.appendingPathComponent("moe-q4k.gguf")
+        try writeGGUFWithExpertDown(to: fewBlocks, ne0: 512, typeID: 12)
+        XCTAssertNil(ServerSettings.tensorSplitLimit(forModel: fewBlocks.path))
+
+        // A companion scale tensor spans two buffers, which the meta backend cannot divide.
+        let scaled = dir.appendingPathComponent("moe-scaled.gguf")
+        try writeGGUFWithExpertDown(to: scaled, ne0: 704, typeID: 39, withScale: true)
+        XCTAssertEqual(ServerSettings.tensorSplitLimit(forModel: scaled.path), 1)
+
+        let dense = dir.appendingPathComponent("dense.gguf")
+        try writeGGUF(to: dense, uint32: ["llama.block_count": 24])
+        XCTAssertNil(ServerSettings.tensorSplitLimit(forModel: dense.path))
+    }
+
+    func testTensorSplitFallsBackToLayersWhenTheModelCannotTakeIt() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let model = dir.appendingPathComponent("moe-scaled.gguf")
+        try writeGGUFWithExpertDown(to: model, ne0: 704, typeID: 39, withScale: true)
+
+        var settings = ServerSettings(
+            serverBinary: "/usr/bin/true", modelPath: model.path, port: 8080,
+            ngl: 99, ncmoe: 0, ctx: 4_096, threads: 6, flashAttn: "auto",
+            noMmap: true, jinja: true, vramReserveMB: 1_024, gpuIndex: -1,
+            extraArgs: "", cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        settings.splitMode = "tensor"
+        settings.gpuList = [0, 1]
+        XCTAssertEqual(settings.effectiveSplitMode, "layer",
+                       "Splitting a two-buffer expert would abort the engine while allocating")
+        XCTAssertTrue(settings.tensorSplitDowngraded)
+    }
+
+
+    func testLayerSplitIsBalancedByBytesWhenExpertsGoToTheCPU() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 40 blocks whose experts weigh far more than the rest of the layer.
+        let model = dir.appendingPathComponent("moe.gguf")
+        try writeGGUFWithExpertDown(to: model, ne0: 2048, typeID: 12, blockCount: 40)
+
+        var settings = ServerSettings(
+            serverBinary: "/usr/bin/true", modelPath: model.path, port: 8080,
+            ngl: 99, ncmoe: 20, ctx: 4_096, threads: 6, flashAttn: "auto",
+            noMmap: true, jinja: true, vramReserveMB: 1_024, gpuIndex: -1,
+            extraArgs: "", cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        settings.gpuList = [0, 1]
+
+        let counts = try XCTUnwrap(settings.layerBalancedTensorSplit)
+        XCTAssertEqual(counts.reduce(0, +), 40, "Every layer still lands on some GPU")
+        XCTAssertGreaterThan(counts[0], counts[1],
+                             "The GPU holding the layers whose experts went to the CPU takes more of them")
+        XCTAssertTrue(counts.allSatisfy { $0 > 0 })
+
+        settings.ncmoe = 0
+        XCTAssertNil(settings.layerBalancedTensorSplit,
+                     "With every expert on the GPU the layers already weigh the same")
+    }
+
+    func testLayerSplitIsBalancedOnASplitGGUF() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A split GGUF keeps every tensor out of the first part, which holds only metadata.
+        let first = dir.appendingPathComponent("moe-00001-of-00002.gguf")
+        let second = dir.appendingPathComponent("moe-00002-of-00002.gguf")
+        try writeGGUFWithExpertDown(to: first, ne0: 2048, typeID: 12, blockCount: 40, tensors: false)
+        try writeGGUFWithExpertDown(to: second, ne0: 2048, typeID: 12, blockCount: 40)
+
+        var settings = ServerSettings(
+            serverBinary: "/usr/bin/true", modelPath: first.path, port: 8080,
+            ngl: 99, ncmoe: 20, ctx: 4_096, threads: 6, flashAttn: "auto",
+            noMmap: true, jinja: true, vramReserveMB: 1_024, gpuIndex: -1,
+            extraArgs: "", cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        settings.gpuList = [0, 1]
+
+        let counts = try XCTUnwrap(settings.layerBalancedTensorSplit,
+                                   "The scan has to follow the other parts or the split stays uniform")
+        XCTAssertEqual(counts.reduce(0, +), 40)
+        XCTAssertGreaterThan(counts[0], counts[1])
+    }
+
+    func testDraftsAreKeptOutOfThePickerByArchitecture() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Named like a normal model: only the architecture says it is a draft.
+        let draft = dir.appendingPathComponent("Qwen3.6-35B-A3B-dspark-Q8_0.gguf")
+        try writeGGUFWithArchitecture("dflash", to: draft)
+        let model = dir.appendingPathComponent("Qwen3.6-35B-A3B-Q8_0.gguf")
+        try writeGGUFWithArchitecture("qwen3moe", to: model)
+
+        XCTAssertTrue(GGUFFile.isDraft(draft.path), "un borrador no puede aparecer como modelo")
+        XCTAssertFalse(GGUFFile.isDraft(model.path))
+
+        let found = LocalModel.scan(in: dir).map(\.name)
+        XCTAssertEqual(found, ["Qwen3.6-35B-A3B-Q8_0.gguf"])
+    }
+
+    private func writeGGUFWithArchitecture(_ arch: String, to url: URL) throws {
+        var data = Data("GGUF".utf8)
+        func appendUInt32(_ value: UInt32) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendUInt64(_ value: UInt64) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendString(_ value: String) {
+            appendUInt64(UInt64(value.utf8.count))
+            data.append(contentsOf: value.utf8)
+        }
+        appendUInt32(3)
+        appendUInt64(0)          // sin tensores
+        appendUInt64(1)          // una clave
+        appendString("general.architecture")
+        appendUInt32(8)          // string
+        appendString(arch)
+        try data.write(to: url)
+    }
+
+    private func writeGGUFWithExpertDown(
+        to url: URL, ne0: UInt64, typeID: UInt32, withScale: Bool = false, blockCount: UInt32 = 1,
+        tensors: Bool = true
+    ) throws {
+        var data = Data("GGUF".utf8)
+        func appendUInt32(_ value: UInt32) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendUInt64(_ value: UInt64) {
+            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+        }
+        func appendString(_ value: String) {
+            appendUInt64(UInt64(value.utf8.count))
+            data.append(contentsOf: value.utf8)
+        }
+        func appendTensor(_ name: String, _ ne: [UInt64], _ type: UInt32) {
+            appendString(name)
+            appendUInt32(UInt32(ne.count))
+            ne.forEach(appendUInt64)
+            appendUInt32(type)
+            appendUInt64(0)
+        }
+
+        appendUInt32(3)
+        appendUInt64(tensors ? (withScale ? 3 : 2) : 0)
+        appendUInt64(2)
+        appendString("qwen3moe.expert_count")
+        appendUInt32(4)
+        appendUInt32(128)
+        appendString("qwen3moe.block_count")
+        appendUInt32(4)
+        appendUInt32(blockCount)
+        if tensors {
+            appendTensor("blk.0.ffn_down_exps.weight", [ne0, 2048, 128], typeID)
+            appendTensor("blk.0.attn_output.weight", [2048, 2048], typeID)
+            if withScale { appendTensor("blk.0.ffn_down_exps.scale", [128], 0) }
+        }
+        try data.write(to: url)
+    }
+}
