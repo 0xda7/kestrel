@@ -13,6 +13,9 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.agentToolsEnabled) private var agentToolsEnabled = false
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
+    @AppStorage(SettingsKeys.latchDelegateEnabled) private var latchDelegateEnabled = false
+    @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
+    @AppStorage(SettingsKeys.latchDelegateTimeout) private var latchDelegateTimeout = 300
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
@@ -242,12 +245,46 @@ struct ChatAdvancedSettingsSection: View {
                             DeferredSettingsTextField("", text: $toolsRuntime,
                                                       prompt: "docker:alpine", width: 220)
                         }
+                        if !toolsRuntime.isEmpty {
+                            if let problem = ToolSupport.toolsRuntimeProblem(toolsRuntime) {
+                                Label(loc.t(problem.es, problem.en),
+                                      systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Label(loc.t("Se encontró el programa de aislamiento.", "Isolation program found."),
+                                      systemImage: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                            }
+                        }
                     }
                     SettingsRow(icon: "curlybraces",
                                 title: loc.t("Sandbox JavaScript para agentes", "JavaScript sandbox for agents"),
                                 help: loc.t("Añade una herramienta que ejecuta JavaScript en un entorno aislado para cálculos o transformaciones de datos.",
                                        "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.")) {
                         SettingsToggle(isOn: $jsSandboxEnabled)
+                    }
+                    SettingsRow(icon: "arrowshape.turn.up.right.circle",
+                                title: loc.t("Delegar a latch", "Delegate to latch"),
+                                help: loc.t("Añade una herramienta que entrega una tarea autónoma al agente latch y espera su informe final. Requiere el binario de latch instalado.",
+                                       "Adds a tool that hands a self-contained task to the latch agent and waits for its final report. Requires the latch binary to be installed.")) {
+                        SettingsToggle(isOn: $latchDelegateEnabled)
+                    }
+                    if latchDelegateEnabled {
+                        SettingsRow(icon: "wrench.and.screwdriver",
+                                    title: loc.t("Binario de latch", "Latch binary"),
+                                    help: loc.t("Ruta al ejecutable latch-harness. Se amplía ~ al usarla.",
+                                           "Path to the latch-harness executable. ~ expands when used.")) {
+                            DeferredSettingsTextField("", text: $latchBinaryPath,
+                                                      prompt: LatchDelegateService.defaultBinaryPath,
+                                                      width: 220)
+                        }
+                        integerStepper(loc.t("Tiempo límite de delegación (s)", "Delegation timeout (s)"),
+                                       value: $latchDelegateTimeout, range: 30...900,
+                                       help: loc.t("Cuánto esperar el informe del delegado antes de detenerlo.",
+                                                   "How long to wait for the delegate's report before stopping it."))
                     }
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
@@ -454,6 +491,7 @@ struct ChatAdvancedSettingsSection: View {
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
+        latchDelegateEnabled = false; latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; archiveHookSecret = ""
     }

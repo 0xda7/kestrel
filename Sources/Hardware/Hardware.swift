@@ -241,13 +241,24 @@ enum DflashMemoryPlanner {
 }
 
 enum Estimator {
-    /// ncmoe to apply when a model is picked: dense → 0; MoE → the value the
-    /// user last set for that file, or the hardware recommendation.
+    /// ncmoe to apply when a model is picked: dense → 0; MoE → a measured-best
+    /// value when a benchmark ran for this file, else the user's last choice,
+    /// else the hardware recommendation. A measurement outranks the heuristics:
+    /// it is the only value that actually ran on this machine.
     static func ncmoeForSelection(path: String, models: [LocalModel]) -> Int {
         guard !path.isEmpty, ServerSettings.modelIsMoE(at: path) else { return 0 }
+        if let measured = ServerSettings.recalledMeasuredBench(forModel: path) { return measured.ncmoe }
         if let saved = ServerSettings.recalledNcmoe(forModel: path) { return saved }
         guard let lm = models.first(where: { $0.url.path == path }) else { return 0 }
         return estimateCurrent(spec: Catalog.spec(forLocal: lm), hw: hardware).suggestedNcmoe
+    }
+
+    /// Threads to apply when a model is picked: the measured-best value from a
+    /// completed benchmark, clamped to this machine; nil keeps the caller's
+    /// current setting (physical-core defaults are never second-guessed).
+    static func threadsForSelection(path: String) -> Int? {
+        guard let measured = ServerSettings.recalledMeasuredBench(forModel: path) else { return nil }
+        return min(max(measured.threads, 1), max(1, hardware.logicalCores))
     }
 
     /// Estimate using the user's current context size and KV quantization.

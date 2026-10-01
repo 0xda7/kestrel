@@ -37,6 +37,8 @@ struct BenchResult: Codable, Identifiable {
     /// App version that produced the run, so engine changes stay comparable.
     /// Nil on results saved before this was recorded.
     var appVersion: String? = AppInfo.version
+    /// Threads (-t) the run used; nil on results saved before this was recorded.
+    var threads: Int?
 
     var shortModel: String { ModelName(model).title }
 
@@ -309,9 +311,12 @@ final class BenchmarkController: ObservableObject {
                                        fa: s.benchmarkFlashAttentionRoute,
                                        gpu: s.gpuLabel, peer: s.mgpuPeer && s.isSplitting, profile: base.makeProfile(name: name),
                                        ppN: nil, tgN: s.benchTGClamped,
-                                       kind: "real", accept: accept),
+                                       kind: "real", accept: accept, threads: s.threads),
                            at: 0)
             save()
+            ServerSettings.rememberMeasuredBench(
+                .init(ncmoe: s.ncmoe, threads: s.threads, tg: tg, pp: pp, date: .now),
+                forModel: s.modelPath)
             let accLine = accept.map { String(format: " · MTP %.0f%%", $0 * 100) } ?? ""
             emit(String(format: "→ mediana / median: %.2f t/s gen · %.1f t/s prompt%@\n\n", tg, pp, accLine))
             fileLog.prune()
@@ -391,9 +396,12 @@ final class BenchmarkController: ObservableObject {
                                        fa: settings.benchmarkFlashAttentionRoute,
                                        gpu: settings.gpuLabel, peer: settings.mgpuPeer && settings.isSplitting, profile: settings.makeProfile(name: name),
                                        ppN: settings.benchPPClamped, tgN: settings.benchTGClamped,
-                                       depth: settings.benchDepthClamped),
+                                       depth: settings.benchDepthClamped, threads: settings.threads),
                            at: 0)
             save()
+            ServerSettings.rememberMeasuredBench(
+                .init(ncmoe: settings.ncmoe, threads: settings.threads, tg: tg, pp: pp, date: .now),
+                forModel: settings.modelPath)
             fileLog.append(String(format: "→ result: %@ = %.1f t/s · %@ = %.1f t/s\n\n", ppTest, pp, tgTest, tg))
         } else {
             fileLog.append("→ result: could not parse \(ppTest)/\(tgTest) (run failed or was cancelled)\n\n")

@@ -354,6 +354,16 @@ final class ChatStore: ObservableObject {
     private static var configuredAgentTurnLimit: Int {
         max(1, UserDefaults.standard.object(forKey: SettingsKeys.chatAgenticMaxTurns) as? Int ?? 10)
     }
+    /// Appended to the system prompt only when tools are mounted. Kept short
+    /// and imperative: small context windows are the norm here.
+    static let agentDisciplinePrompt = """
+    Tool use rules:
+    - Call a tool through the function-call channel only. Never write the call as prose or inside a code fence in your reply.
+    - One tool call per turn. Wait for its result before deciding the next step.
+    - If a call fails, read the error and adjust the arguments; do not repeat it unchanged.
+    - Verify with a tool result before stating a fact about files, dates, or commands. If you did not run a tool, say that you did not check.
+    - When the task is complete, stop and write the final answer. Do not call more tools after it.
+    """
 
     @Published var conversations: [Conversation] = []
     @Published var projects: [ChatProject] = []
@@ -714,15 +724,22 @@ final class ChatStore: ObservableObject {
         let toolCwd = effectiveWorkingDirectory(for: convID)
         activeStream = (port, ChatStreamIdentity.value(conversationID: convID,
                                                        model: ServerSettings.activeRouterModel()))
-        let systemWithCwd = toolCwd.map {
-            (system.isEmpty ? "" : system + "\n\n")
-            + "File tools work inside \($0). Use paths relative to it, and never call them for text that only exists in this conversation."
-        } ?? system
         let toolsEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled)
         let javaScriptEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled)
+        let latchEnabled = LatchDelegateService.isEnabled
         let memoryToolsEnabled = ChatMemoryService.isEnabled
         let agentTurnLimit = Self.configuredAgentTurnLimit
         let enabledToolNames = conversations[i].enabledToolNames
+        // Small distilled models drift when tools are mounted: they announce a
+        // call in prose, stack several at once, or declare victory unverified.
+        // The discipline block is added only when any tool is actually offered.
+        var systemWithCwd = toolCwd.map {
+            (system.isEmpty ? "" : system + "\n\n")
+            + "File tools work inside \($0). Use paths relative to it, and never call them for text that only exists in this conversation."
+        } ?? system
+        if toolsEnabled || javaScriptEnabled || latchEnabled || memoryToolsEnabled {
+            systemWithCwd += "\n\n" + Self.agentDisciplinePrompt
+        }
 
         var history = Self.requestHistory(system: systemWithCwd,
                                           summary: conversations[i].summary,
@@ -851,6 +868,7 @@ final class ChatStore: ObservableObject {
                         }
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
+                    if LatchDelegateService.isEnabled { availableTools.append(LatchDelegateService.tool) }
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
                     availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
@@ -1030,8 +1048,22 @@ final class ChatStore: ObservableObject {
             let wasCancelled = cancelled
             let didReportError = reportedError
             let hadReasoning = !accumulator.reasoning.isEmpty
-            let finalToolCalls = accumulator.toolCalls.filter { !$0.name.isEmpty }
+            var finalToolCalls = accumulator.toolCalls.filter { !$0.name.isEmpty }
             let finalText = streamedText
+            // Text-side rescue: small models often write the call as a fenced
+            // JSON blob or a <tool_call> tag instead of using the engine's
+            // function-calling channel, then claim the tool ran. Salvage those
+            // into real pending calls so permissions still flow.
+            if finalToolCalls.isEmpty, !wasCancelled, !didReportError {
+                // Rescue from the visible answer only: a call the model merely
+                // reasoned about inside <think> must not fire a real tool.
+                let visible = hadReasoning
+                    ? finalText.split(separator: "</think>", maxSplits: 1,
+                                      omittingEmptySubsequences: false).last.map(String.init) ?? finalText
+                    : finalText
+                let names = Set(availableTools.map(\.name))
+                finalToolCalls = ToolCallRescue.rescuedCalls(text: visible, toolNames: names)
+            }
             let nextAgentRun = AgentRunContext(
                 port: port, temperature: temperature, maxTokens: maxTokens,
                 system: system, thinking: thinking, sampling: sampling,
@@ -1104,10 +1136,25 @@ final class ChatStore: ObservableObject {
         save()
     }
 
+    /// Tool calls that actually finished (completed or failed), for the
+    /// continuation card's summary. Reasoned-about or rescued-but-rejected
+    /// calls are not counted.
+    private func executedToolCount(conversation id: UUID) -> Int {
+        guard let conversation = conversations.first(where: { $0.id == id }) else { return 0 }
+        return conversation.messages.reduce(0) { total, message in
+            total + (message.toolCalls?.filter {
+                $0.state == .completed || $0.state == .failed
+            }.count ?? 0)
+        }
+    }
+
     private func beginToolPermissions(conversation id: UUID, context: AgentRunContext) {
         guard context.remainingTurns > 0 else {
             agentContext = context
-            pendingAgentContinuation = PendingAgentContinuation(conversationID: id)
+            pendingAgentContinuation = PendingAgentContinuation(
+                conversationID: id,
+                turnsUsed: Self.configuredAgentTurnLimit - max(0, context.remainingTurns),
+                toolsExecuted: executedToolCount(conversation: id))
             return
         }
         agentContext = context
@@ -1150,7 +1197,10 @@ final class ChatStore: ObservableObject {
         context.remainingTurns -= 1
         agentContext = context
         guard context.remainingTurns > 0 else {
-            pendingAgentContinuation = PendingAgentContinuation(conversationID: id)
+            pendingAgentContinuation = PendingAgentContinuation(
+                conversationID: id,
+                turnsUsed: Self.configuredAgentTurnLimit,
+                toolsExecuted: executedToolCount(conversation: id))
             return
         }
         stream(into: conversationIndex, port: context.port, temperature: context.temperature,
@@ -1259,6 +1309,9 @@ final class ChatStore: ObservableObject {
                         serverID: serverID, name: remoteName, arguments: arguments)
                 } else if request.name == JavaScriptSandboxService.toolName {
                     result = await JavaScriptSandboxService.execute(arguments: arguments)
+                } else if request.name == LatchDelegateService.toolName {
+                    result = await LatchDelegateService.execute(
+                        arguments: arguments, workingDirectory: context.workingDirectory)
                 } else if ChatMemoryService.toolNames.contains(request.name) {
                     result = await MainActor.run {
                         self?.runMemoryTool(request.name, arguments: arguments)
@@ -1309,7 +1362,10 @@ final class ChatStore: ObservableObject {
         conversations[i].messages[j].toolCalls?[k].result = result
         conversations[i].messages[j].toolCalls?[k].finishedAt = Date()
         let serverID = conversations[i].messages[j].toolCalls?[k].serverID ?? request.callID.uuidString
-        conversations[i].messages.append(ChatMessage(role: "tool", content: result, toolCallID: serverID))
+        // Cap what re-enters the context: a giant dump starves small models
+        // and eats the KV budget the rest of the run still needs.
+        let contextResult = ChatToolsService.clampedToolResult(result)
+        conversations[i].messages.append(ChatMessage(role: "tool", content: contextResult, toolCallID: serverID))
         conversations[i].updated = Date()
         save()
     }
@@ -2614,7 +2670,9 @@ struct NativeChatView: View {
             if chat.pendingAgentContinuation?.conversationID == chat.currentID {
                 AgentContinuationCard(
                     continueAction: { chat.respondToAgentContinuation(true) },
-                    stopAction: { chat.respondToAgentContinuation(false) })
+                    stopAction: { chat.respondToAgentContinuation(false) },
+                    turnsUsed: chat.pendingAgentContinuation?.turnsUsed,
+                    toolsExecuted: chat.pendingAgentContinuation?.toolsExecuted)
                     .environmentObject(loc)
                     .flippedUpsideDown()
             }

@@ -310,11 +310,13 @@ private struct ServerDetailHero: View {
 
     private func selectModel(_ path: String) {
         let suggested = Estimator.ncmoeForSelection(path: path, models: models.models)
+        let threads = Estimator.threadsForSelection(path: path)
         if server.profile == nil {
             globalModelPath = path
             globalNcmoe = suggested
+            if let threads { UserDefaults.standard.set(threads, forKey: SettingsKeys.threads) }
         } else {
-            server.profile?.selectInstanceModel(path: path, ncmoe: suggested)
+            server.profile?.selectInstanceModel(path: path, ncmoe: suggested, threads: threads)
             manager.persist()
         }
     }
@@ -691,7 +693,9 @@ private struct ServerConfigurationWorkspace: View {
     }
     private func modelSelection(_ settings: ServerSettings) -> Binding<String> {
         Binding(get: { settings.modelPath }, set: { path in
-            server.selectModel(path: path, ncmoe: Estimator.ncmoeForSelection(path: path, models: models.models))
+            server.selectModel(path: path,
+                               ncmoe: Estimator.ncmoeForSelection(path: path, models: models.models),
+                               threads: Estimator.threadsForSelection(path: path))
             manager.schedulePersist()
         })
     }

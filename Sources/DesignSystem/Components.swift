@@ -83,6 +83,11 @@ struct UseModelButton: View {
     private func apply() {
         modelPath = path
         ncmoe = Estimator.ncmoeForSelection(path: path, models: models.models)
+        // Measured-best thread count rides along when a benchmark ran for this
+        // model; the main server reads the defaults at .fromDefaults().
+        if let threads = Estimator.threadsForSelection(path: path) {
+            UserDefaults.standard.set(threads, forKey: SettingsKeys.threads)
+        }
     }
 }
 

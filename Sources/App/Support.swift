@@ -65,6 +65,11 @@ enum SettingsKeys {
     /// Per-model ncmoe at which prompt processing collapses (expert-prefetch overlap
     /// stalls at/above it); the sweep measures it and prefetch is gated below it.
     static let prefetchCliffByModel = "prefetchCliffByModel"
+    /// JSON archive ([String: MeasuredBench]) of completed per-model benchmarks,
+    /// keyed by model path: the measured-best ncmoe/threads and the tok/s they
+    /// delivered. Feeds selection pre-fill; survives settings reset like the
+    /// other per-model maps.
+    static let measuredBenchByModel = "measuredBenchByModel"
     static let ctx = "ctx"
     static let contextAutomatic = "contextAutomatic"
     static let threads = "threads"
@@ -91,6 +96,10 @@ enum SettingsKeys {
     static let agentToolsEnabled = "agentToolsEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
+    /// latch_delegate tool: path to the latch harness binary, on/off, timeout.
+    static let latchBinaryPath = "latchBinaryPath"
+    static let latchDelegateEnabled = "latchDelegateEnabled"
+    static let latchDelegateTimeout = "latchDelegateTimeout"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
     /// external memory server already covers the job and the model mixes the two.
     static let memoryToolsEnabled = "memoryToolsEnabled"
@@ -246,6 +255,7 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
+        latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
@@ -682,5 +692,49 @@ enum ToolSupport {
         guard !blocked.contains(model) else { return }
         blocked.append(model)
         UserDefaults.standard.set(blocked, forKey: SettingsKeys.toolsUnsupportedModels)
+    }
+
+    /// Returns the tools-runtime problem as a bilingual pair (Spanish, then
+    /// English) for `Localizer.t` when the configured backend cannot actually
+    /// run on this machine. Empty configuration means "run tools right here"
+    /// and is never a problem here.
+    static func toolsRuntimeProblem(_ configuration: String) -> (es: String, en: String)? {
+        let trimmed = configuration.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let scheme = trimmed.split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
+        let binary: String
+        switch scheme {
+        case "docker", "podman":
+            binary = scheme
+        case "docker-container":
+            binary = "docker"
+        case "ssh":
+            binary = "ssh"
+        default:
+            return (es: "Formato de aislamiento no reconocido: \(trimmed). Usa docker:imagen, podman:imagen, docker-container:id o ssh:destino.",
+                    en: "Unrecognized isolation format: \(trimmed). Use docker:image, podman:image, docker-container:id, or ssh:target.")
+        }
+        guard ToolRuntimeLocator.locate(binary) == nil else { return nil }
+        return (es: "El programa «\(binary)» no está instalado, así que el aislamiento \(scheme) no puede ejecutarse. Instálalo o borra el ajuste para ejecutar las herramientas aquí.",
+                en: "The \(binary) program is not installed, so \(scheme) isolation cannot run. Install it or clear the setting to run tools right here.")
+    }
+}
+
+/// Finds executables without spawning a login shell. PATH in a GUI app does
+/// not include the shell's rc additions, so common install locations are
+/// probed directly before falling back to `which`.
+enum ToolRuntimeLocator {
+    static func locate(_ name: String) -> String? {
+        let extra = ["/usr/local/bin", "/opt/homebrew/bin", "/opt/local/bin",
+                     "/usr/bin", "/bin", "/usr/local/sbin"]
+        for dir in extra where FileManager.default.isExecutableFile(atPath: dir + "/" + name) {
+            return dir + "/" + name
+        }
+        guard let path = ProcessInfo.processInfo.environment["PATH"] else { return nil }
+        for dir in path.split(separator: ":") {
+            let candidate = dir + "/" + name
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+        }
+        return nil
     }
 }

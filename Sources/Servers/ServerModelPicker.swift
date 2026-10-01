@@ -43,7 +43,9 @@ struct ServerModelPicker: View {
     }
 
     private func select(_ path: String) {
-        server.selectModel(path: path, ncmoe: Estimator.ncmoeForSelection(path: path, models: models.models))
+        server.selectModel(path: path,
+                           ncmoe: Estimator.ncmoeForSelection(path: path, models: models.models),
+                           threads: Estimator.threadsForSelection(path: path))
         manager.persist()
     }
 }

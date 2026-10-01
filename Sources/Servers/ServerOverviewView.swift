@@ -10,6 +10,7 @@ struct ServerOverviewView: View {
     var onDelete: (() -> Void)?
     @EnvironmentObject private var loc: Localizer
     @EnvironmentObject private var models: ModelStore
+    @EnvironmentObject private var bench: BenchmarkController
     @AppStorage(SettingsKeys.modelPath) private var modelPath = ""
     @AppStorage(SettingsKeys.ctx) private var context = 16384
     @AppStorage(SettingsKeys.port) private var port = 8080
@@ -58,6 +59,25 @@ struct ServerOverviewView: View {
                 GlassActionGroup {
                     ServerWebUIButton(server: server)
                         .glassButton().controlSize(.large)
+                    // One-shot speed measurement of the model the server will
+                    // actually start with, feeding the calibration pre-fill.
+                    if !bench.running {
+                        Button {
+                            bench.run(settings: server.effectiveSettings())
+                        } label: {
+                            Label(loc.t("Medir velocidad", "Measure speed"), systemImage: "speedometer")
+                        }
+                        .glassButton().controlSize(.large)
+                        .disabled(server.state == .running || server.state == .starting
+                                  || (settings.routerMode ? models.models.isEmpty : path.isEmpty))
+                        .help(loc.t("Ejecuta una prueba corta de velocidad para el modelo seleccionado.",
+                                    "Runs a short speed benchmark for the selected model."))
+                    } else {
+                        Button { bench.cancel() } label: {
+                            Label(loc.t("Detener prueba", "Stop benchmark"), systemImage: "stop.circle")
+                        }
+                        .glassButton().controlSize(.large)
+                    }
                     if let onDelete {
                         ServerDeleteButton(presentation: .labeled, action: onDelete)
                     }

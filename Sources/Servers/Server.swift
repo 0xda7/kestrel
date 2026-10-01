@@ -563,6 +563,9 @@ struct ServerSettings {
         if let mode { args += ["--load-mode", mode] }
         if benchDepthClamped > 0 { args += ["-d", String(benchDepthClamped)] }
         if !effectiveDynamicMoe && ncmoe > 0 { args += ["-ncmoe", String(ncmoe)] }
+        // Threads must be pinned to the app's setting or the benchmark measures
+        // llama-bench's own default instead of the configuration we deliver.
+        args += ["-t", String(threads)]
         if let ub = effectiveUbatch { args += ["-ub", String(ub), "-b", String(ub)] }
         if effectiveDynamicMoe { args += ["-ot", Self.dynamicMoeTensorOverride] }
         if cacheTypeK != "f16" { args += ["-ctk", cacheTypeK] }
@@ -1382,6 +1385,39 @@ struct ServerSettings {
 
     nonisolated static func recalledNcmoe(forModel path: String) -> Int? {
         (UserDefaults.standard.dictionary(forKey: SettingsKeys.ncmoeByModel) as? [String: Int])?[path]
+    }
+
+    /// One completed benchmark for a model: the configuration it ran with and the
+    /// speed it delivered. Persisted as JSON in UserDefaults, keyed by model path.
+    struct MeasuredBench: Codable {
+        var ncmoe: Int
+        var threads: Int
+        var tg: Double
+        var pp: Double
+        var date: Date
+    }
+
+    /// Remembers a completed benchmark's measured-best configuration for a model
+    /// so the next selection pre-fills it. Stores regardless of architecture: a
+    /// dense model's measurement is equally real, it just has no ncmoe dimension.
+    nonisolated static func rememberMeasuredBench(_ value: MeasuredBench, forModel path: String) {
+        guard !path.isEmpty else { return }
+        var map = Self.measuredBenchMap()
+        map[path] = value
+        if let data = try? JSONEncoder().encode(map) {
+            UserDefaults.standard.set(String(decoding: data, as: UTF8.self), forKey: SettingsKeys.measuredBenchByModel)
+        }
+    }
+
+    nonisolated static func recalledMeasuredBench(forModel path: String) -> MeasuredBench? {
+        guard !path.isEmpty, let data = UserDefaults.standard.string(forKey: SettingsKeys.measuredBenchByModel)?.data(using: .utf8) else { return nil }
+        return (try? JSONDecoder().decode([String: MeasuredBench].self, from: data))?[path]
+    }
+
+    nonisolated private static func measuredBenchMap() -> [String: MeasuredBench] {
+        guard let data = UserDefaults.standard.string(forKey: SettingsKeys.measuredBenchByModel)?.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: MeasuredBench].self, from: data) else { return [:] }
+        return map
     }
 
     /// Remembers the ncmoe at which the expert-prefetch overlap stalls the GPU; prefetch

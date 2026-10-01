@@ -7,7 +7,17 @@ import SwiftUI
 struct AgentContinuationCard: View {
     let continueAction: () -> Void
     let stopAction: () -> Void
+    var turnsUsed: Int?
+    var toolsExecuted: Int?
     @EnvironmentObject private var loc: Localizer
+
+    private var summary: String? {
+        guard let turnsUsed else { return nil }
+        let tools = toolsExecuted ?? 0
+        return loc.t(
+            "Ha usado \(turnsUsed) turnos y \(tools) herramientas.",
+            "It used \(turnsUsed) turns and \(tools) tools.")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -15,6 +25,11 @@ struct AgentContinuationCard: View {
                         "The agent reached its 8-turn limit. Continue?"),
                   systemImage: "arrow.clockwise.circle")
                 .font(.callout)
+            if let summary {
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             HStack {
                 Button(loc.t("Continuar", "Continue"), systemImage: "play.fill",
                        action: continueAction)
