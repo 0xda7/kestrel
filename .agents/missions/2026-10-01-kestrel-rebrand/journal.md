@@ -314,3 +314,19 @@ These steps are reviewer-executed (GUI-driving tools are orchestrator-only); no 
 **Optimization evidence (P2, llama-bench, operator's DeepSeek-Coder-V2-Lite, 96-tok gen, 2 reps):** ncmoe=43/t=6 → 9.41; t=12 → 9.93; ncmoe=20/t=6 → 10.46; ncmoe=20/t=12 → 10.81 tok/s (+15%). Delivered as evidence, NOT hardcoded: app's per-model ncmoe recall + Settings already expose both levers. Heuristic left fit-first by design (generalizes across machines).
 **Live-fire (P3):** bundled llama-server, operator's exact arg list incl. -ctv turbo4 → health ok, 10.6 tok/s measured on 220-tok completion. The original failing command now boots.
 **Ship (P4):** dist/Kestrel-v0.87.9.dmg, 48,801,262 B, sha256 3f25574b…; mount-verified (engine, kernels/, codesign, 0 ToshLLM residuals); brand audit TRUE_RESIDUALS=0.
+
+## 16:34 — Wave-2 harness hardening shipped; live-fire caught a POST /tools ship-blocker
+- H1–H4 compiled and committed (f826a27): tolerant tool-call parsing, text-side rescue,
+  result clamp, latch_delegate tool, discipline prompt, turn/tool counter on the
+  continuation card, tools-runtime honesty warning, Measure speed button on server overview.
+- Release chain: 0.88.0 (VERSION, AppInfo, CHANGELOG section) → d23d13a → tag v0.88.0 →
+  CI run 36940659745 (Build & Release, both variants + DMGs) in flight.
+- Brand audit on 0.88.0 tree: TRUE_RESIDUALS=0, BINARY_ART_MATCHES=0 (operator art gate unchanged).
+- LIVE-FIRE (operator's Qwen3.5-9B-distilled-IQ4_NL, bundled engine b11141): native
+  function-calls work (finish=tool_calls), multi-turn tool-result round-trip answers from
+  tool output ("0.88.0"), but POST /tools 404s "feature_disabled" with the app's arg set.
+  Root cause: engine requires --webui-mcp-proxy for the POST endpoint. Fixed in 36f991e,
+  gate Build complete! (8.80s), pushed; amendment 2 recorded in the harness plan.
+- Lesson (institutional): compile-green ≠ runtime-working; only live-fire on the real
+  engine + real model surfaced this. The discipline prompt + rescue now have API-level
+  evidence; GUI end-to-end still awaits the operator running the 0.88.0 app.
