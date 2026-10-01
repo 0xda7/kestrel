@@ -31,7 +31,7 @@ final class UpdateChecker: ObservableObject {
     private var checksumsURL: URL?
     private var periodicTask: Task<Void, Never>?
 
-    static let releasesAPI = "https://api.github.com/repos/northlatchlabs/kestrel/releases/latest"
+    static let releasesAPI = "https://api.github.com/repos/0xda7/kestrel/releases/latest"
 
     /// Re-checks every hour while the app stays open, for people who never
     /// relaunch. Silent: it only lights up the existing update badge.
@@ -215,7 +215,7 @@ final class UpdateChecker: ObservableObject {
         guard !loadingNotes else { return }
         loadingNotes = true
         defer { loadingNotes = false }
-        guard let url = URL(string: "https://api.github.com/repos/northlatchlabs/kestrel/releases?per_page=30"),
+        guard let url = URL(string: "https://api.github.com/repos/0xda7/kestrel/releases?per_page=30"),
               let (data, response) = try? await URLSession.shared.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
@@ -295,7 +295,7 @@ struct ReleaseNotesPopover: View {
             Divider()
             Button(loc.t("Ver en GitHub", "View on GitHub")) {
                 let tag = updates.releaseNotes?.first.map { "v\($0.version)" } ?? "v\(AppInfo.version)"
-                NSWorkspace.shared.open(URL(string: "https://github.com/northlatchlabs/kestrel/releases/tag/\(tag)")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/0xda7/kestrel/releases/tag/\(tag)")!)
             }
             .buttonStyle(.link).font(.caption)
         }

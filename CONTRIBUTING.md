@@ -7,7 +7,7 @@ contribution is licensed under the same terms.
 ## Getting started
 
 ```bash
-git clone https://github.com/northlatchlabs/kestrel
+git clone https://github.com/0xda7/kestrel
 cd kestrel
 ./scripts/build-engines.sh   # one-time: builds the patched llama.cpp engines
 ./make-app.sh                # builds and packages dist/Kestrel.app

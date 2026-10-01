@@ -95,9 +95,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- **LLMs: the engine no longer quits on the first request on the FirePro D500 and D700 of a Mac Pro 6,1.** Reading a prompt now falls back to the generic attention kernels when the driver refuses the AMD ones, the way generating already did. Reported in [#12](https://github.com/northlatchlabs/kestrel/issues/12).
+- **LLMs: the engine no longer quits on the first request on the FirePro D500 and D700 of a Mac Pro 6,1.** Reading a prompt now falls back to the generic attention kernels when the driver refuses the AMD ones, the way generating already did. Reported in [#12](https://github.com/0xda7/kestrel/issues/12).
 
-- **LLMs: a collective on a split model no longer folds in what the previous round left in its buffers.** Generation across the four dies of two Radeon Pro W6800X Duo cards goes from 32.7 to 43.2 tokens a second, and reading a prompt and generation stay where they were on Radeon Pro Vega II Duo. Contributed in [#104](https://github.com/northlatchlabs/kestrel/pull/104).
+- **LLMs: a collective on a split model no longer folds in what the previous round left in its buffers.** Generation across the four dies of two Radeon Pro W6800X Duo cards goes from 32.7 to 43.2 tokens a second, and reading a prompt and generation stay where they were on Radeon Pro Vega II Duo. Contributed in [#104](https://github.com/0xda7/kestrel/pull/104).
 
 - **Typing into a settings field and leaving for another tab no longer discards what you typed.** The field wrote its value only when it lost focus, and changing tabs takes it away before that happens.
 
@@ -125,9 +125,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- **LLMs: GPT-OSS-20B downloads from the catalog again.** The catalog asked Hugging Face for a filename that differs in capitalisation from the one it hosts, so the transfer failed the moment it started. Contributed in [#100](https://github.com/northlatchlabs/kestrel/pull/100).
+- **LLMs: GPT-OSS-20B downloads from the catalog again.** The catalog asked Hugging Face for a filename that differs in capitalisation from the one it hosts, so the transfer failed the moment it started. Contributed in [#100](https://github.com/0xda7/kestrel/pull/100).
 
-- **LLMs: applying a profile brings back the GPU split it was saved with.** The snapshot left out how a model splits across cards, and vision and local-network discovery with it, so two profiles differing only in the split applied the same configuration. Contributed in [#101](https://github.com/northlatchlabs/kestrel/pull/101).
+- **LLMs: applying a profile brings back the GPU split it was saved with.** The snapshot left out how a model splits across cards, and vision and local-network discovery with it, so two profiles differing only in the split applied the same configuration. Contributed in [#101](https://github.com/0xda7/kestrel/pull/101).
 
 ## [0.87.3] - 2026-09-12
 
@@ -137,15 +137,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **LLMs: sparse attention returns the right answer on Radeon Vega, Radeon VII and Radeon Pro Vega.** The engine's attention suite goes from 1806 to 1812 of 1812 cases, with every other card unchanged.
 
-- **Chat: typing with a Chinese, Japanese or Korean input method no longer loses the syllable being composed.** Reported in [#99](https://github.com/northlatchlabs/kestrel/issues/99).
+- **Chat: typing with a Chinese, Japanese or Korean input method no longer loses the syllable being composed.** Reported in [#99](https://github.com/0xda7/kestrel/issues/99).
 
 ## [0.87.2] - 2026-09-11
 
 ### Fixed
 
-- **Chat: local MCP servers connect straight away instead of staying on Connecting.** Reported in [#98](https://github.com/northlatchlabs/kestrel/issues/98).
+- **Chat: local MCP servers connect straight away instead of staying on Connecting.** Reported in [#98](https://github.com/0xda7/kestrel/issues/98).
 
-- **Benchmarks no longer closes the app in a narrow window.** The results table scrolls sideways when it does not fit. Reported in [#97](https://github.com/northlatchlabs/kestrel/issues/97).
+- **Benchmarks no longer closes the app in a narrow window.** The results table scrolls sideways when it does not fit. Reported in [#97](https://github.com/0xda7/kestrel/issues/97).
 
 - **Benchmarks no longer keeps a processor core busy at some window widths.**
 
@@ -165,15 +165,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **Text and number fields respond immediately.** A keystroke no longer rebuilds the whole screen, and numeric fields reject anything that is not a number.
 
-- **LLMs: GCN cards verify speculation up to a third faster.** With a 27B model and its DFlash2 draft, generation goes from 15.5 to 20.9 tokens per second; how much it gains depends on the prompt. Reading a prompt and plain generation are unchanged. Contributed by [malzzz](https://github.com/malzzz) in [#94](https://github.com/northlatchlabs/kestrel/pull/94).
+- **LLMs: GCN cards verify speculation up to a third faster.** With a 27B model and its DFlash2 draft, generation goes from 15.5 to 20.9 tokens per second; how much it gains depends on the prompt. Reading a prompt and plain generation are unchanged. Contributed by [malzzz](https://github.com/malzzz) in [#94](https://github.com/0xda7/kestrel/pull/94).
 
 ### Fixed
 
 - **A DFlash/DFlash2 draft works with a model split across cards by tensors instead of taking the engine down.** The output head is now kept whole on each card for that pairing, which costs its size per card and nothing in any other configuration. On four cards it turns out to be the fastest arrangement of the three: a 27B generates 20.5 tokens per second against 14.6 splitting by layers, accepting the same drafts on a Radeon Pro Vega II Duo.
 
-- **Attention no longer crashes on 384- and 640-wide heads.** Outside TurboQuant they had no kernel, and the engine reached for it anyway. They now fall back to the processor. Contributed by [malzzz](https://github.com/malzzz) in [#96](https://github.com/northlatchlabs/kestrel/pull/96).
+- **Attention no longer crashes on 384- and 640-wide heads.** Outside TurboQuant they had no kernel, and the engine reached for it anyway. They now fall back to the processor. Contributed by [malzzz](https://github.com/malzzz) in [#96](https://github.com/0xda7/kestrel/pull/96).
 
-- **The engine builds again with its expert cache compiled out.** Contributed by [malzzz](https://github.com/malzzz) in [#95](https://github.com/northlatchlabs/kestrel/pull/95).
+- **The engine builds again with its expert cache compiled out.** Contributed by [malzzz](https://github.com/malzzz) in [#95](https://github.com/0xda7/kestrel/pull/95).
 
 - **LLMs: Radeon RX 400/500, Radeon Pro 400/500 and Radeon Pro WX write text again instead of nonsense.** Since 0.87.0 the engine read the weights from addresses those cards need aligned, so half of them came back as neighbouring data. Every other card keeps the code and the speed it had. Reported by [FreQRiDeR](https://www.reddit.com/user/FreQRiDeR/).
 
@@ -372,13 +372,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **A speculative draft the engine cannot load is no longer offered or used.** Newer DFlash drafts carry stages with no loader here; the server exited on the tensor count.
 
-- **The fused QKV path now runs during generation.** Its matcher expected the projections in a different order, so the faster path was never selected; Gemma 3 4B with Turbo KV gains 1.7% on a Radeon RX 6700 XT. Thanks to [malzzz](https://github.com/northlatchlabs/kestrel/pull/71) for the fix.
+- **The fused QKV path now runs during generation.** Its matcher expected the projections in a different order, so the faster path was never selected; Gemma 3 4B with Turbo KV gains 1.7% on a Radeon RX 6700 XT. Thanks to [malzzz](https://github.com/0xda7/kestrel/pull/71) for the fix.
 
 ## [0.85.9] - 2026-08-26
 
 ### Added
 
-- **Audio is now a full workspace beside Chat, Images and Video.** Whisper.cpp transcribes microphone, audio and video on the Radeon; projects preserve editable original and translated tracks, synchronized playback, calibrated Silero VAD, recovery, subtitle exports and captioned MOV copies. Feature requested by [playexit](https://github.com/northlatchlabs/kestrel/issues/73).
+- **Audio is now a full workspace beside Chat, Images and Video.** Whisper.cpp transcribes microphone, audio and video on the Radeon; projects preserve editable original and translated tracks, synchronized playback, calibrated Silero VAD, recovery, subtitle exports and captioned MOV copies. Feature requested by [playexit](https://github.com/0xda7/kestrel/issues/73).
 - **Audio can translate with Whisper or the loaded chat model.** Chat translation resumes without rerunning Whisper and uses an explicit model, neighboring context, prior terminology and a glossary to keep segments consistent.
 
 ### Improved
@@ -392,7 +392,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.85.8] - 2026-08-24
 
 ### Added
-- **Dynamic MoE, a private experiment that runs a MoE model on far less video memory** by keeping every expert in system RAM and a small cache of slots on the card. It is off by default and hidden for internal testing; a 35B in Q2_K_XL ran on 2.78 GiB against the 6 GiB its usual setting needs, and generated faster. Read the [what it is and when it pays](https://github.com/northlatchlabs/kestrel#dynamic-moe-bounded-vram-expert-cache-private-experiment) section first, especially the RAM it asks for in exchange.
+- **Dynamic MoE, a private experiment that runs a MoE model on far less video memory** by keeping every expert in system RAM and a small cache of slots on the card. It is off by default and hidden for internal testing; a 35B in Q2_K_XL ran on 2.78 GiB against the 6 GiB its usual setting needs, and generated faster. Read the [what it is and when it pays](https://github.com/0xda7/kestrel#dynamic-moe-bounded-vram-expert-cache-private-experiment) section first, especially the RAM it asks for in exchange.
 
 ### Improved
 - **Models in BF16 read prompts about 30% faster.** 722 → 949 tokens per second on a 4B and 5211 → 6807 on a 0.6B, with generation speed and answers unchanged. Measured on a Radeon RX 6700 XT.
@@ -400,13 +400,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 - **A model or projector in BF16 no longer stops the engine on cards that lack BF16.** The load aborted before ever reaching the chat; those weights now run on the card like any other format. Reported by [Slice](https://www.insanelymac.com/forum/profile/112217-slice/).
 
-- **Conversations exported to Markdown are labelled in the language you picked.** The two headings the file writes were always in Spanish. Reported by [guylough](https://github.com/northlatchlabs/kestrel/issues/70).
+- **Conversations exported to Markdown are labelled in the language you picked.** The two headings the file writes were always in Spanish. Reported by [guylough](https://github.com/0xda7/kestrel/issues/70).
 
-- **Two Duo cards no longer read as four cards.** A Duo puts two GPUs behind one name, so the machine card counted devices and doubled them; it now says two cards and four GPUs. Reported by [chafey](https://github.com/northlatchlabs/kestrel/issues/67).
+- **Two Duo cards no longer read as four cards.** A Duo puts two GPUs behind one name, so the machine card counted devices and doubled them; it now says two cards and four GPUs. Reported by [chafey](https://github.com/0xda7/kestrel/issues/67).
 
-- **The Infinity Fabric Link switch is only offered when there is a link.** It could be turned on with nothing bridged, which read as if the app had found a bridge. Reported by [chafey](https://github.com/northlatchlabs/kestrel/issues/67).
+- **The Infinity Fabric Link switch is only offered when there is a link.** It could be turned on with nothing bridged, which read as if the app had found a bridge. Reported by [chafey](https://github.com/0xda7/kestrel/issues/67).
 
-- **TurboQuant cache types no longer stop the server when the model is split by tensors.** The split path did not know how to divide the rotation TurboQuant applies to attention, and the engine aborted while loading. Reported by [chafey](https://github.com/northlatchlabs/kestrel/issues/69).
+- **TurboQuant cache types no longer stop the server when the model is split by tensors.** The split path did not know how to divide the rotation TurboQuant applies to attention, and the engine aborted while loading. Reported by [chafey](https://github.com/0xda7/kestrel/issues/69).
 
 ## [0.85.7] - 2026-08-22
 
@@ -443,7 +443,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.85.5] - 2026-08-21
 
 ### Fixed
-- **Radeon RX 400/500, Radeon Pro 400/500 and Radeon Pro WX no longer write nonsense.** Since 0.84.4 the engine read Q6_K weights four bytes at a time, from addresses those cards need aligned, so half of them came back as neighbouring data. Almost every model keeps part of its layers in that format, the output head among them, which is why whole models turned to gibberish. Reported by [FreQRiDeR](https://github.com/northlatchlabs/kestrel/issues/1) and [Slice](https://www.insanelymac.com/forum/profile/112217-slice/).
+- **Radeon RX 400/500, Radeon Pro 400/500 and Radeon Pro WX no longer write nonsense.** Since 0.84.4 the engine read Q6_K weights four bytes at a time, from addresses those cards need aligned, so half of them came back as neighbouring data. Almost every model keeps part of its layers in that format, the output head among them, which is why whole models turned to gibberish. Reported by [FreQRiDeR](https://github.com/0xda7/kestrel/issues/1) and [Slice](https://www.insanelymac.com/forum/profile/112217-slice/).
 
 ### Improved
 - **Image and video models load about five times quicker.** The loader asked the drive for 4 KiB at a time, so 2.46 GB of weights took 7.8 seconds where the disk does it in 0.7. A cold start of Flux.2 klein 4B drops from 12.9 to 2.5 seconds, with the image unchanged.
@@ -456,8 +456,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.85.3] - 2026-08-20
 
 ### Fixed
-- **Separate MTP heads now attach to their base model** ([#60](https://github.com/northlatchlabs/kestrel/issues/60)). They stay out of the model menu and work in normal and router modes.
-- **Paused model downloads resume reliably after links expire** ([#61](https://github.com/northlatchlabs/kestrel/issues/61)). Servers that ignore the requested range restart the transfer instead of corrupting the partial file.
+- **Separate MTP heads now attach to their base model** ([#60](https://github.com/0xda7/kestrel/issues/60)). They stay out of the model menu and work in normal and router modes.
+- **Paused model downloads resume reliably after links expire** ([#61](https://github.com/0xda7/kestrel/issues/61)). Servers that ignore the requested range restart the transfer instead of corrupting the partial file.
 - **Models with 40- or 80-wide attention heads no longer write nonsense.** All 108 affected engine operator tests now pass.
 - **The image token cap also limits memory while a vision model loads.** At 512 tokens, a 2B vision model's largest warm-up block drops from 4372 to 228 MiB. Reported by [Slice](https://www.insanelymac.com/forum/profile/112217-slice/).
 - **The server log includes environment variables entered in Extra arguments.** Shared diagnostics now show the settings that were actually applied.
@@ -505,7 +505,7 @@ Measured on a Radeon RX 6700 XT with Wan 2.1 1.3B, Z-Image Turbo, SDXL Turbo and
 
 ### Improved
 - **Updated inference engine**, with the fixes and new model support released upstream since the last version.
-- **New web chat in the browser**: the llama.cpp interface, rebranded for Kestrel, with a model picker that works in router mode. Requested by [urfin78](https://github.com/northlatchlabs/kestrel/issues/59).
+- **New web chat in the browser**: the llama.cpp interface, rebranded for Kestrel, with a model picker that works in router mode. Requested by [urfin78](https://github.com/0xda7/kestrel/issues/59).
 - **Memory estimates read each model's real attention layout.** On a 7B with older attention at 16k context the old guess was 0.8 GB against a real 8 GB.
 - **The speculative decoding readout follows the answer as it is written.**
 
@@ -558,7 +558,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.84.2] - 2026-08-14
 
 ### Fixed
-- **A conversation with code blocks no longer freezes while you scroll it** ([#58](https://github.com/northlatchlabs/kestrel/issues/58))... every code block, and every panel of a tool call, carried a scroll view of its own, and each one re-tiled on every geometry change while scrolling. On macOS 15 that could leave the app unresponsive for half a minute. Long lines now wrap to the bubble and the expand button still opens the full-width view.
+- **A conversation with code blocks no longer freezes while you scroll it** ([#58](https://github.com/0xda7/kestrel/issues/58))... every code block, and every panel of a tool call, carried a scroll view of its own, and each one re-tiled on every geometry change while scrolling. On macOS 15 that could leave the app unresponsive for half a minute. Long lines now wrap to the bubble and the expand button still opens the full-width view.
 - **Quitting the app always stops the engine.** With the prompt cache enabled the engine was told to stop only after the app had finished saving its cached prefix, and that save could not finish once the app was on its way out, so the engine stayed running and holding video memory until you noticed it. The prefix is still saved on the way out, now with a time limit that the shutdown never waits past.
 
 ### Improved
@@ -569,7 +569,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 
 ### Fixed
 - **An upscaled image is saved next to the original**, instead of landing in the models folder. Upscaling a photo from anywhere on the disk left the result among the model weights, and upscaling a generated image produced a file the "delete images on app close" option then wiped. The name also states the size you asked for, ×2 or ×4, rather than always ×4, and an existing file is never overwritten.
-- **Scrolling the chat no longer gets stuck on an answer about code** ([#58](https://github.com/northlatchlabs/kestrel/issues/58))... a paragraph mentioning two shell variables, or two prices, was read as a formula and handed to the formula renderer, which turned the text into unreadable maths and swallowed the mouse wheel. Only what really looks like a formula is treated as one now, and a formula or diagram in the middle of a conversation passes the wheel through to the chat.
+- **Scrolling the chat no longer gets stuck on an answer about code** ([#58](https://github.com/0xda7/kestrel/issues/58))... a paragraph mentioning two shell variables, or two prices, was read as a formula and handed to the formula renderer, which turned the text into unreadable maths and swallowed the mouse wheel. Only what really looks like a formula is treated as one now, and a formula or diagram in the middle of a conversation passes the wheel through to the chat.
 - **Engine errors are shown in your language.** Every diagnostic the engine produces was being printed with the Spanish and the English text one after the other, separated by a slash, in the same line. There are thirty of these messages and all of them read that way.
 - **A failed engine no longer spills its whole explanation across the toolbar.** The state now shows a warning triangle and the word Error, with the full diagnosis when you hover it.
 - **The menu bar icon tells a crashed engine from a stopped one.** They looked identical, which mattered because a crash is the one thing worth noticing while you are working in another app. Starting has its own icon too, and the icon now announces its state to VoiceOver.
@@ -722,9 +722,9 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ### Improved
 - **Long prompts are much faster on GCN/Vega**... attention during prompt processing was decomposed into separate matrix multiplications there, because the blocked Flash Attention kernel had only been validated on 32-lane GPUs: on a Radeon RX Vega 64, Qwen3 4B went from 295 to 457 t/s at 8k of context, and Llama 3.2 1B from 917 to 1553 t/s, with identical perplexity.
 - **More operations run on the GPU on GCN/Vega**... sums, argmax, count-equal and the SSM scan were gated on a 32-lane reduction and fell back to the CPU: they now size their reductions and shared memory by the detected 64-lane width. Argmax matters for speculative decoding, and the SSM scan for Mamba-style models.
-- **Ternary Q1_0 and Q2_0 models generate on the GPU there too** ([#41](https://github.com/northlatchlabs/kestrel/issues/41))... they loaded and processed prompts on the GPU but decoded on the CPU, because their matrix-vector kernels split work across a fixed 32 lanes.
+- **Ternary Q1_0 and Q2_0 models generate on the GPU there too** ([#41](https://github.com/0xda7/kestrel/issues/41))... they loaded and processed prompts on the GPU but decoded on the CPU, because their matrix-vector kernels split work across a fixed 32 lanes.
 - **Fused Q/K/V decode covers Q2_K on GCN/Vega**... the specialization was held back to 32-lane GPUs while its matrix-vector kernel was ported, which finished in 0.83.9.
-- **Qwen3-VL, Qwen3.5 and Qwen3.6 models now reuse the prompt cache and can shift context** ([#52](https://github.com/northlatchlabs/kestrel/issues/52))... the engine refused every cache shift on these models, so editing the beginning of a prompt reprocessed all of it: an 821-token prompt whose opening note was deleted is now reused whole instead of processed again.
+- **Qwen3-VL, Qwen3.5 and Qwen3.6 models now reuse the prompt cache and can shift context** ([#52](https://github.com/0xda7/kestrel/issues/52))... the engine refused every cache shift on these models, so editing the beginning of a prompt reprocessed all of it: an 821-token prompt whose opening note was deleted is now reused whole instead of processed again.
 - **BF16 models and vision towers are faster on AMD GPUs**... their matrix multiplications now accumulate in float instead of emulated bfloat: prompt processing measured 77% faster on Qwen3 0.6B BF16, and a BF16 vision encoder went from 8.6 to 7.6 seconds per image on a Radeon RX Vega 64.
 
 ## [0.83.9] - 2026-08-02
@@ -854,8 +854,8 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.82.4] - 2026-07-18
 
 ### Added
-- **Ternary Q2_0 models now load** ([#41](https://github.com/northlatchlabs/kestrel/issues/41))... mainline's Q2_0 type runs Prism ML's Ternary Bonsai GGUFs on Metal instead of failing with "invalid ggml type 42".
-- **Manual vision projector selection** ([#35](https://github.com/northlatchlabs/kestrel/issues/35))... pick a specific `mmproj`, keep auto-pairing, or turn vision off, from each model card.
+- **Ternary Q2_0 models now load** ([#41](https://github.com/0xda7/kestrel/issues/41))... mainline's Q2_0 type runs Prism ML's Ternary Bonsai GGUFs on Metal instead of failing with "invalid ggml type 42".
+- **Manual vision projector selection** ([#35](https://github.com/0xda7/kestrel/issues/35))... pick a specific `mmproj`, keep auto-pairing, or turn vision off, from each model card.
 - **DFlash speculative decoding (experimental)**... a downloaded per-model draft with Off/Auto/Forced modes; Auto only engages on MoE with CPU-offloaded experts, up to +21% generation on an RX 6700 XT.
 - **DFlash sizes itself to the GPU**... Auto budgets the weights, both KV caches and the VRAM reserve before launch, then offloads draft layers or stays off, and warns if VRAM stays above 95%.
 
@@ -876,8 +876,8 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 - **Share your benchmarks to [northlatchlabs.com/kestrel](https://northlatchlabs.com/kestrel) from the app**... Benchmarks → Share with the community runs the standard workload and, after you review the exact data, submits it signed per-install (no account needed); opt-in, nothing leaves your machine until you confirm.
 
 ### Fixed
-- **Image generation no longer aborts on AMD GCN/Vega (wave64) GPUs** ([#39](https://github.com/northlatchlabs/kestrel/issues/39))... an op the wave64 backend has no kernel for (e.g. the VAE encode's small matmul in img2img) now falls to CPU instead of crashing the whole run.
-- **Added servers now follow the global Settings** ([#40](https://github.com/northlatchlabs/kestrel/issues/40))... they used to freeze a snapshot at creation, so changing e.g. Context never reached them; now they inherit everything except the fields you change on their own card (a pin-slash button restores full inheritance), and the card gained a Context row.
+- **Image generation no longer aborts on AMD GCN/Vega (wave64) GPUs** ([#39](https://github.com/0xda7/kestrel/issues/39))... an op the wave64 backend has no kernel for (e.g. the VAE encode's small matmul in img2img) now falls to CPU instead of crashing the whole run.
+- **Added servers now follow the global Settings** ([#40](https://github.com/0xda7/kestrel/issues/40))... they used to freeze a snapshot at creation, so changing e.g. Context never reached them; now they inherit everything except the fields you change on their own card (a pin-slash button restores full inheritance), and the card gained a Context row.
 
 ## [0.82.2] - 2026-07-17
 
@@ -914,7 +914,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ### Improved
 - **Conversation persistence now works on the bundled engine**, where it was limited to the experimental one... reopening an 8.6k-token prompt after an engine restart takes 0.9 s instead of 24.8 s.
 - **Vision models keep Flash Attention on the GPU**... describing an image costs 248-358 MB of VRAM instead of 3.4-4.7 GB.
-- **Browse reads each candidate's GGUF header** ([#36](https://github.com/northlatchlabs/kestrel/issues/36))... a Mixture-of-Experts model whose filename hides it is no longer sized against full VRAM.
+- **Browse reads each candidate's GGUF header** ([#36](https://github.com/0xda7/kestrel/issues/36))... a Mixture-of-Experts model whose filename hides it is no longer sized against full VRAM.
 - **The engine stamps the Kestrel version in its startup log**... llama.cpp's own build number only identifies the upstream commit.
 
 ### Fixed
@@ -926,7 +926,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.81.67] - 2026-07-14
 
 ### Improved
-- **MoE prompt processing on GCN/Vega now uses the tiled matmul** ([#29](https://github.com/northlatchlabs/kestrel/issues/29))... expert layers were still going through the mat-vec kernels during prefill; `TOSH_W64_MMID_PREFILL_DISABLE=1` in Extra arguments reverts to the old route.
+- **MoE prompt processing on GCN/Vega now uses the tiled matmul** ([#29](https://github.com/0xda7/kestrel/issues/29))... expert layers were still going through the mat-vec kernels during prefill; `TOSH_W64_MMID_PREFILL_DISABLE=1` in Extra arguments reverts to the old route.
 - **Model names and speed estimates are clearer**... local GGUFs show readable titles, capabilities and quantization, while estimates now account for quant size and active MoE parameters.
 
 ### Fixed
@@ -951,8 +951,8 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 
 ### Fixed
 - **Multi-GPU hand-off hardening** (candidate fix for #31)... the layer hand-off now drains the destination GPU before writing its input, and the fallback copy no longer issues an invalid cross-device blit.
-- **Image generation no longer times out on eGPUs** ([#33](https://github.com/northlatchlabs/kestrel/issues/33))... the image engine now gets the same private-VRAM buffer fix the LLM engine got in 0.81.30.
-- **Chat text no longer cuts off with "…" on indented lines** at certain window widths ([#32](https://github.com/northlatchlabs/kestrel/issues/32)).
+- **Image generation no longer times out on eGPUs** ([#33](https://github.com/0xda7/kestrel/issues/33))... the image engine now gets the same private-VRAM buffer fix the LLM engine got in 0.81.30.
+- **Chat text no longer cuts off with "…" on indented lines** at certain window widths ([#32](https://github.com/0xda7/kestrel/issues/32)).
 
 ## [0.81.65] - 2026-07-13
 
@@ -1105,7 +1105,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.81.50] - 2026-07-07
 
 ### Fixed
-- **Qwen-Image no longer crashes at the end of generation**... its 3D VAE uses an operation (`IM2COL_3D`) that Metal doesn't implement, so the run aborted right at the decode step after minutes of sampling ([#19](https://github.com/northlatchlabs/kestrel/issues/19)). The VAE now runs on the CPU for this model automatically: decoding takes a few extra seconds and the image comes out. A Metal kernel to put it back on the GPU is planned.
+- **Qwen-Image no longer crashes at the end of generation**... its 3D VAE uses an operation (`IM2COL_3D`) that Metal doesn't implement, so the run aborted right at the decode step after minutes of sampling ([#19](https://github.com/0xda7/kestrel/issues/19)). The VAE now runs on the CPU for this model automatically: decoding takes a few extra seconds and the image comes out. A Metal kernel to put it back on the GPU is planned.
 
 ### Changed
 - **Clearer offload label**... the image studio's "VAE on CPU" toggle is now "Offload to CPU", which is what it always did (keep weights in RAM and stream them to VRAM per stage, to save VRAM). The Qwen-Image VAE fix above is independent and automatic.
@@ -1122,7 +1122,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 
 ### Added
 - **Parallel image instances**... the image studio can now run several generations at once. Each instance is a collapsible accordion with its own full configuration (model, prompt, size, GPU, steps, seed, format, img2img), so a multi-GPU Mac renders up to one variation per card from a single Generate. New instances inherit instance 1's prompt until you type their own, and the canvas becomes a grid with per-instance progress and results. Two instances on the same GPU show a warning (that can hang the card on AMD Macs).
-- **Benchmark workload sizes**... two new fields choose how many prompt tokens (-p) and generated tokens (-n) the benchmark measures, while keeping every Kestrel optimization active ([#22](https://github.com/northlatchlabs/kestrel/issues/22)). Defaults stay at the comparable pp512/tg128; each result records its sizes and the history labels non-standard runs.
+- **Benchmark workload sizes**... two new fields choose how many prompt tokens (-p) and generated tokens (-n) the benchmark measures, while keeping every Kestrel optimization active ([#22](https://github.com/0xda7/kestrel/issues/22)). Defaults stay at the comparable pp512/tg128; each result records its sizes and the history labels non-standard runs.
 - **Flux 2 image models**... the catalog adds Flux.2 klein 9B (Apache license, 4 steps, for 16 GB GPUs) and Flux.2 dev (the 32B quality reference, for 24 GB+ GPUs, non-commercial license). Both download from non-gated mirrors and sample with euler as upstream recommends; dev offloads idle models to CPU to fit. Fresh additions, feedback welcome.
 
 ### Fixed

@@ -12,13 +12,13 @@ enum AppInfo {
     /// update channel so it never pulls an AVX2 DMG that would SIGILL on those CPUs.
     static let isNoAVX2 = Bundle.main.object(forInfoDictionaryKey: "KestrelNoAVX2") as? Bool ?? false
     static let developerName = "Northlatch Labs"
-    static let developerHandle = "northlatchlabs"
-    static let githubURL = "https://github.com/northlatchlabs"
-    static let repositoryURL = "https://github.com/northlatchlabs/kestrel"
+    static let developerHandle = "Northlatch-Labs-LLC"
+    static let githubURL = "https://github.com/Northlatch-Labs-LLC"
+    static let repositoryURL = "https://github.com/0xda7/kestrel"
     static let issuesURL = repositoryURL + "/issues"
     static let featureRequestURL = repositoryURL + "/issues/new?template=feature_request.yml"
     static let discussionsURL = repositoryURL + "/discussions"
-    static let sponsorURL = "https://github.com/northlatchlabs/kestrel#support-the-project"
+    static let sponsorURL = "https://github.com/0xda7/kestrel#support-the-project"
     static let donateNoteES = "Si Kestrel te resulta útil, puedes apoyar el desarrollo con una donación."
     static let donateNoteEN = "If Kestrel is useful to you, you can support development with a donation."
 }

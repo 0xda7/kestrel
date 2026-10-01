@@ -8,7 +8,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.21908524
     description: Concept DOI, always resolves to the latest version
-repository-code: "https://github.com/northlatchlabs/kestrel"
+repository-code: "https://github.com/0xda7/kestrel"
 url: "https://northlatchlabs.com/kestrel"
 license: GPL-3.0-or-later
 version: 0.83.21

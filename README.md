@@ -6,14 +6,14 @@
 
 Native macOS app · Metal acceleration · No cloud, no accounts, no per-token costs
 
-[![Build & Release](https://github.com/northlatchlabs/kestrel/actions/workflows/build.yml/badge.svg)](https://github.com/northlatchlabs/kestrel/actions/workflows/build.yml)
+[![Build & Release](https://github.com/0xda7/kestrel/actions/workflows/build.yml/badge.svg)](https://github.com/0xda7/kestrel/actions/workflows/build.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20(Intel%20%2B%20AMD%20GPU)-lightgrey)](#requirements)
-[![Status: Beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/northlatchlabs/kestrel/issues)
+[![Status: Beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/0xda7/kestrel/issues)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F%20support%20the%20project-ea4aaa)](#support-the-project)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21908524.svg)](https://doi.org/10.5281/zenodo.21908524)
 
-### [⬇️ Download the latest release](https://github.com/northlatchlabs/kestrel/releases/latest) · [📝 Changelog](CHANGELOG.md)
+### [⬇️ Download the latest release](https://github.com/0xda7/kestrel/releases/latest) · [📝 Changelog](CHANGELOG.md)
 
 *[Versión en español más abajo](#kestrel-en-español)*
 
@@ -123,7 +123,7 @@ A 2021 card holds its own: it trails the M3 Max on short prompts, leads it from 
 
 ## Install
 
-1. **[Download the latest `.dmg`](https://github.com/northlatchlabs/kestrel/releases/latest)**, open it, and drag **Kestrel** to Applications.
+1. **[Download the latest `.dmg`](https://github.com/0xda7/kestrel/releases/latest)**, open it, and drag **Kestrel** to Applications.
 2. The app is fully self-contained — the inference engines ship inside the bundle. No Homebrew, no Python, nothing else to install.
 
 > **First launch:** from 0.86.5 the app is signed with an Apple Developer ID and
@@ -144,7 +144,7 @@ A 2021 card holds its own: it trails the M3 Max on short prompts, leads it from 
 
 ## Good to know
 
-Kestrel is **beta** and under active development. It's solid for daily use, but you may still hit rough edges — please report anything you find in [Issues](https://github.com/northlatchlabs/kestrel/issues) (you can export diagnostics from **Settings → Server log**). Two limitations are worth knowing up front:
+Kestrel is **beta** and under active development. It's solid for daily use, but you may still hit rough edges — please report anything you find in [Issues](https://github.com/0xda7/kestrel/issues) (you can export diagnostics from **Settings → Server log**). Two limitations are worth knowing up front:
 
 - **External clients (VS Code Copilot, Cline, Continue…):** these send a fixed 15–19k-token prompt (system instructions + tool definitions) with *every* request. On GPUs without Metal Flash Attention that means minutes of prompt processing per cold request, which saturates the GPU and can thermally throttle it. Recent versions mitigate this (single slot with resumable prefill, prompt-cache reuse, inline reasoning) and more is on the way. The built-in chat isn't affected — it only sends your conversation.
 - **Vision cache:** `llama.cpp` does not support saving/restoring slots or cache-reuse while an `mmproj` is loaded. Kestrel disables those features automatically for vision models; normal in-memory prompt caching still works.
@@ -156,7 +156,7 @@ Kestrel is **beta** and under active development. It's solid for daily use, but 
 Prerequisites: Xcode Command Line Tools (`xcode-select --install`), CMake.
 
 ```bash
-git clone https://github.com/northlatchlabs/kestrel
+git clone https://github.com/0xda7/kestrel
 cd kestrel
 ./scripts/build-engines.sh      # clones llama.cpp, applies AMD patches, builds static engines
 ./make-app.sh                   # builds the SwiftUI app and packages dist/Kestrel.app
@@ -385,9 +385,9 @@ Which card needs it is read from `MTLDevice.architecture`, the ISA target: `amdg
 ggml_metal: aligned mat-vec reads off by amdgpu_gfx906 (override with TOSH_MV_ALIGN=1 or =0)
 ```
 
-`TOSH_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `TOSH_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `TOSH_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/northlatchlabs/kestrel/issues): the fast list can only grow from cards the project does not own.
+`TOSH_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `TOSH_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `TOSH_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/0xda7/kestrel/issues): the fast list can only grow from cards the project does not own.
 
-> The wave64 path is validated on RDNA (wave32) as a byte-exact no-op, so it never affects Apple Silicon or AMD RDNA cards. On real GCN/Vega hardware it is still being validated with testers — if you have one of these cards, [your benchmark and coherence reports](https://github.com/northlatchlabs/kestrel/issues) are exactly what moves it forward.
+> The wave64 path is validated on RDNA (wave32) as a byte-exact no-op, so it never affects Apple Silicon or AMD RDNA cards. On real GCN/Vega hardware it is still being validated with testers — if you have one of these cards, [your benchmark and coherence reports](https://github.com/0xda7/kestrel/issues) are exactly what moves it forward.
 
 ## Community benchmarks
 
@@ -437,13 +437,13 @@ Free to use, study, modify and redistribute. Any distributed derivative must rem
 - [llama.cpp](https://github.com/ggml-org/llama.cpp) (ggml-org) — inference engine
 - [iRon-Llama](https://github.com/Basten7/iRon-Llama-RC1) (Basten7) — Metal-on-AMD research for Intel Macs
 - [Chris Hafey](https://github.com/chafey) — the multi-GPU Mac Pros every split-model measurement runs on, and engine contributions
-- Developed by **Northlatch Labs** ([@northlatchlabs](https://github.com/northlatchlabs))
+- Developed by **Northlatch Labs** ([@Northlatch-Labs-LLC](https://github.com/Northlatch-Labs-LLC))
 
 ## Support the project
 
 Kestrel is free and open source, built in the open for the Mac AMD community. If it's useful to you, sponsoring keeps it independent and moving forward.
 
-### 💜 [Become a sponsor](https://github.com/northlatchlabs/kestrel#support-the-project)
+### 💜 [Become a sponsor](https://github.com/0xda7/kestrel#support-the-project)
 
 Quick and friendly. Every contribution funds continued development. Thank you for being part of this.
 
@@ -455,7 +455,7 @@ Donations help keep the project independent. See the support links above.
 
 **Ejecuta modelos de lenguaje grandes localmente en Macs Intel con GPU AMD.** Aceleración Metal. Sin nube, sin cuentas, sin costos por token.
 
-### [⬇️ Descarga la última versión](https://github.com/northlatchlabs/kestrel/releases/latest) · [📝 Cambios](CHANGELOG.md) · [💜 Apoya el proyecto](#apoya-el-proyecto)
+### [⬇️ Descarga la última versión](https://github.com/0xda7/kestrel/releases/latest) · [📝 Cambios](CHANGELOG.md) · [💜 Apoya el proyecto](#apoya-el-proyecto)
 
 ### ¿Qué es Kestrel?
 
@@ -495,7 +495,7 @@ Funciones nuevas, aún en validación — actívalas en Ajustes, pero pueden ten
 
 ### Instalación
 
-Descarga el `.dmg` desde [Releases](https://github.com/northlatchlabs/kestrel/releases/latest), ábrelo y arrastra **Kestrel** a Aplicaciones. Todo viene incluido — sin Homebrew, sin Python.
+Descarga el `.dmg` desde [Releases](https://github.com/0xda7/kestrel/releases/latest), ábrelo y arrastra **Kestrel** a Aplicaciones. Todo viene incluido — sin Homebrew, sin Python.
 
 > **Primer arranque:** desde la 0.86.5 la app va firmada con un Apple Developer ID y notarizada por Apple, así que se abre directamente, sin avisos ni nada que aprobar. En la **0.86.4 y anteriores** macOS bloquea la primera apertura: ve a **Ajustes del Sistema → Privacidad y Seguridad** y pulsa **"Abrir igualmente"**, o ejecuta `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
 
@@ -505,7 +505,7 @@ Descarga el `.dmg` desde [Releases](https://github.com/northlatchlabs/kestrel/re
 
 - macOS 14 o posterior · Mac Intel con GPU AMD compatible con Metal · 16 GB de RAM mínimo (32 GB recomendado para MoE de 35B).
 - **Hackintosh:** las GPUs AMD RDNA 2 funcionan muy bien con el kext [NootRX](https://github.com/ChefKissInc/NootRX).
-- **Beta:** funciona para uso diario pero pueden aparecer detalles por pulir; reporta lo que encuentres en [Issues](https://github.com/northlatchlabs/kestrel/issues) (exporta diagnósticos desde Ajustes → Registro del servidor).
+- **Beta:** funciona para uso diario pero pueden aparecer detalles por pulir; reporta lo que encuentres en [Issues](https://github.com/0xda7/kestrel/issues) (exporta diagnósticos desde Ajustes → Registro del servidor).
 - **Limitaciones conocidas:** los clientes externos (VS Code, Cline…) envían un prompt fijo de 15-19k tokens en cada petición, lo que en frío satura la GPU varios minutos (el chat integrado no se ve afectado). Los modelos MoE grandes con offload antes ahogaban al driver AMD y se estancaban a mitad de generación; **0.81.49 lo solucionó** con un buffer de staging persistente y ahora corren estables y planos (confirmado en RX 6700 XT y en el Mac Pro de dos GPUs de un tester). Queda un watchdog como red de seguridad.
 - **Caché con visión:** `llama.cpp` no permite guardar/restaurar slots ni usar cache-reuse mientras hay un `mmproj` cargado. Kestrel desactiva esas funciones automáticamente para modelos de visión; la caché normal en memoria sigue funcionando.
 
@@ -513,7 +513,7 @@ Descarga el `.dmg` desde [Releases](https://github.com/northlatchlabs/kestrel/re
 
 Kestrel es libre y de código abierto, hecho para la comunidad Mac AMD. Si te resulta útil, patrocinarlo lo mantiene independiente y avanzando.
 
-#### 💜 [Conviértete en patrocinador](https://github.com/northlatchlabs/kestrel#support-the-project)
+#### 💜 [Conviértete en patrocinador](https://github.com/0xda7/kestrel#support-the-project)
 
 Rápido y sencillo. Cada aporte financia el desarrollo. Gracias por ser parte de esto.
 

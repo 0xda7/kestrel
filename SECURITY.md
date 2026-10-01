@@ -27,6 +27,6 @@ There is no telemetry, no analytics, and no account system.
 
 ## Reporting a vulnerability
 
-Please open a [private security advisory](https://github.com/northlatchlabs/kestrel/security/advisories/new)
+Please open a [private security advisory](https://github.com/0xda7/kestrel/security/advisories/new)
 or contact the maintainer via GitHub. Do not open public issues for
 security-sensitive reports.

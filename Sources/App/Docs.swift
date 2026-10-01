@@ -274,7 +274,7 @@ La generación de modelos MoE híbridos está limitada por el ancho de banda de 
 **Desde VS Code u otro cliente se queda "pensando"** — El modelo está razonando o procesando un prompt enorme; el cliente no muestra esa fase. Ver la sección "API para desarrolladores".
 """),
         DocSection(title: "Créditos y licencias", icon: "heart", body: """
-Kestrel es desarrollado por **Northlatch Labs** ([@northlatchlabs](https://github.com/northlatchlabs)).
+Kestrel es desarrollado por **Northlatch Labs** ([@Northlatch-Labs-LLC](https://github.com/Northlatch-Labs-LLC)).
 
 Construido sobre el trabajo de:
 - **llama.cpp** (ggml-org) — el motor de inferencia
@@ -518,7 +518,7 @@ Hybrid MoE generation is RAM-bandwidth-bound: a faster GPU won't improve it, but
 **It hangs "thinking" from VS Code or another client** — The model is reasoning or processing a huge prompt; the client doesn't display that phase. See the "API for developers" section.
 """),
         DocSection(title: "Credits & licenses", icon: "heart", body: """
-Kestrel is developed by **Northlatch Labs** ([@northlatchlabs](https://github.com/northlatchlabs)).
+Kestrel is developed by **Northlatch Labs** ([@Northlatch-Labs-LLC](https://github.com/Northlatch-Labs-LLC)).
 
 Built on the work of:
 - **llama.cpp** (ggml-org) — the inference engine

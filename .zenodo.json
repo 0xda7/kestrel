@@ -23,7 +23,7 @@
   ],
   "related_identifiers": [
     {
-      "identifier": "https://github.com/northlatchlabs/kestrel",
+      "identifier": "https://github.com/0xda7/kestrel",
       "relation": "isSupplementTo",
       "scheme": "url"
     }
