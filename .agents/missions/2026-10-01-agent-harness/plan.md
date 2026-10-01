@@ -55,3 +55,15 @@ execution would have failed on every call. Adding --webui-mcp-proxy flips POST /
 Fix commit 36f991e (both arg sites in Server.swift), gate `Build complete! (8.80s)`, pushed.
 Evidence file: /tmp/g2_note.md (captured curl outputs). Engine half of G2 CLOSED; app-GUI
 half (SwiftUI loop end-to-end) still needs the operator's run of the 0.88.0 build.
+
+## AMENDMENT 3 (2026-10-01 16:47 PT) — CI RED → DIAGNOSED → FIXED → RETAGGED
+Run 36940659745 (v0.88.0) failed in make-app.sh on both variants. Captured root cause:
+"cp: Assets/rich-content/mermaid/dist/mermaid.min.js: No such file or directory" —
+.gitignore's blanket `dist/` rule had silently swallowed Assets/rich-content/{mermaid,katex}/dist/
+so the vendored rich-content bundles were never committed; a fresh CI clone lacked them and
+`set -e` killed the build. (The dylib "no matches found" line was separately neutralized.)
+Fix 5202d7e: force-add mermaid.min.js + katex.min.js/css + 60 KaTeX fonts; null_glob probe
+for dylibs; audited every other cp source in make-app.sh — all tracked. zsh -n passed.
+v0.88.0 deleted and re-anchored at 5202d7e (the failed run's release never published, so
+re-tagging is safe); new run 36942558831 in flight, watched by background job bash-8.
+Amendment 2's POST /tools fix (36f991e) is now inside the tag as intended.
