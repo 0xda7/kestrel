@@ -726,20 +726,16 @@ struct ServerSettings {
 
 
 
-    /// Default engine: the one bundled with the app (portable); falls back to the dev checkout.
+    /// Default engine: the one bundled with the app. There is deliberately no
+    /// fallback to a source checkout — if the bundle ships without an engine
+    /// (a CI packaging failure, an engineless local build), start() reports the
+    /// missing binary instead of silently launching whatever it finds elsewhere.
     static var defaultBinary: String {
-        // Cached: view bodies reach this through fromDefaults(), and hitting the
-        // filesystem on every render shows up as lag.
         if let resolved = cachedDefaultBinary { return resolved }
-        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("bin/llama-server").path,
-           FileManager.default.fileExists(atPath: bundled) {
-            cachedDefaultBinary = bundled
-            return bundled
-        }
-        // patched master build: supports recent architectures (qwen35moe / Qwen 3.6)
-        let fallback = NSString(string: "~/dev/repositorios/llama.cpp/build/bin/llama-server").expandingTildeInPath
-        cachedDefaultBinary = fallback
-        return fallback
+        let bundled = Bundle.main.resourceURL?.appendingPathComponent("bin/llama-server").path
+            ?? "Contents/Resources/bin/llama-server"
+        cachedDefaultBinary = bundled
+        return bundled
     }
 
     nonisolated(unsafe) private static var cachedDefaultBinary: String?
@@ -1839,7 +1835,12 @@ final class ServerController: ObservableObject {
     func start(_ settings: ServerSettings) {
         guard state == .stopped || isFailed else { return }
         guard FileManager.default.fileExists(atPath: settings.serverBinary) else {
-            state = .failed("No existe el binario llama-server en la ruta configurada")
+            let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
+            let msg = lang == "es"
+                ? "No se encontró el motor llama-server en:\n\(settings.serverBinary)\nReinstala Kestrel (debe incluir Resources/bin/llama-server) o elige otro motor en Ajustes."
+                : "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
+            fileLog.append("[start] \(msg.replacingOccurrences(of: "\n", with: " "))")
+            state = .failed(msg)
             return
         }
         if settings.routerMode {
@@ -2074,6 +2075,7 @@ final class ServerController: ObservableObject {
             NotificationCenter.default.post(name: .engineDidStart, object: nil)
             watchHealth(port: settings.port)
         } catch {
+            fileLog.append("[start] launch failed: \(error.localizedDescription)")
             state = .failed("No se pudo lanzar: \(error.localizedDescription)")
         }
     }

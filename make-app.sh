@@ -51,15 +51,18 @@ cp "$SWIFT_BIN" "$APP/Contents/MacOS/Kestrel"
 [ -f AppIcon.icns ] && cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # llama.cpp binaries (static build = portable): vendor/ first (reproducible,
-# produced by scripts/build-engines.sh), then the local development checkout.
+# produced by scripts/build-engines.sh), then a staged official release layout.
 LLAMA_STATIC="vendor/llama.cpp/build-static/bin"
-[ -x "$LLAMA_STATIC/llama-server" ] || LLAMA_STATIC="$HOME/dev/repositorios/llama.cpp/build-static/bin"
+if [ ! -x "$LLAMA_STATIC/llama-server" ] && [ -x "$HOME/.kestrel-engines/llama-server" ]; then
+    LLAMA_STATIC="$HOME/.kestrel-engines"
+fi
 if [ -x "$LLAMA_STATIC/llama-server" ]; then
-    if [ ! -d "$LLAMA_STATIC/kernels" ]; then
-        echo "ERROR: the precompiled kernels/ metal libraries are required; rebuild the engines" >&2
-        exit 1
-    fi
+    # Official llama.cpp releases embed the Metal shaders and compile them on
+    # first launch, so a missing kernels/ directory is not an error there.
     mkdir -p "$APP/Contents/Resources/bin"
+    if [ -d "$LLAMA_STATIC/kernels" ]; then
+        cp -R "$LLAMA_STATIC/kernels" "$APP/Contents/Resources/bin/"
+    fi
     # llama-perplexity ships so testers can run numeric A/Bs without building
     cp "$LLAMA_STATIC/llama-server" "$LLAMA_STATIC/llama-bench" "$LLAMA_STATIC/llama-perplexity" "$APP/Contents/Resources/bin/"
     # Drives the engine check in the Logs tab. Optional: an external engine may not
@@ -67,7 +70,8 @@ if [ -x "$LLAMA_STATIC/llama-server" ]; then
     if [ -f "$LLAMA_STATIC/test-backend-ops" ]; then
         cp "$LLAMA_STATIC/test-backend-ops" "$APP/Contents/Resources/bin/"
     fi
-    cp -R "$LLAMA_STATIC/kernels" "$APP/Contents/Resources/bin/"
+    # all @rpath dylibs travel alongside the binaries
+    cp "$LLAMA_STATIC"/*.dylib "$APP/Contents/Resources/bin/" 2>/dev/null || true
     echo "bundled static llama-server/llama-bench from $LLAMA_STATIC"
 else
     echo "WARNING: engines not built; run ./scripts/build-engines.sh first"
