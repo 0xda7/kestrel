@@ -3,6 +3,28 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.88.0] - 2026-10-01
+
+### Added
+
+- **Chat: the agent keeps going when the model writes its tool call as text.** Some answers put the tool call inside the message instead of using the function-call channel, and the tool never ran. Kestrel now reads those calls out of the finished answer (up to three per turn) and runs them like any other, so a "nothing happened" turn becomes work. Calls the model only contemplated, cancelled turns, and failed requests never fire anything.
+
+- **Chat: delegation to the latch agent as a tool.** With "Delegate to latch" on in Chat's advanced settings, the model can hand one self-contained task to the latch harness and put its final report to use. The latch binary path and the timeout are settings, and the tool asks for permission like every other tool that writes data.
+
+- **Chat: the turn-limit card says what the agent did.** It now reports how many turns were used and how many tool calls finished, instead of only asking whether to continue.
+
+- **Chat: agent guidance the model can follow.** When tools are mounted, the system prompt gains a short discipline block: use the function-call channel, one tool at a time, adjust after an error, verify before stating, and stop when the job is done.
+
+- **Servers: a Measure speed button on the server overview.** It runs the same short benchmark as the Benchmarks tab for the selected model and records the result, so the best ncmoe and thread count are recalled automatically the next time that model starts. It is disabled while the server is running or starting, and the running benchmark can be stopped from the same spot.
+
+- **Settings: the isolation setting says when it cannot work.** If tools are set to run in Docker, Podman, or over SSH and that program is not installed, Chat's advanced settings now say so instead of failing quietly the first time a tool runs.
+
+### Improved
+
+- **Chat: tool results no longer flood the model's context.** A tool output longer than 12,000 characters is cut with an explicit truncation marker before it goes back to the model.
+
+- **Chat: model-written tool calls parse even when the JSON is messy.** Byte-order marks, code fences, trailing commas, single quotes, and empty argument blocks are tolerated when reading a call.
+
 ## [0.87.9] - 2026-09-24
 
 ### Added
