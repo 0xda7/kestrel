@@ -264,3 +264,35 @@ These steps are reviewer-executed (GUI-driving tools are orchestrator-only); no 
 - TRANSFER RUNBOOK (operator, one command once org exists):
   gh repo transfer 0xda7/kestrel --to northlatchlabs  (then rename to kestrel if the
   org repo should be northlatchlabs/kestrel; the Donate URL expects that path).
+
+## 09:38 CORRECTION CYCLE — canonical repo location (operator input)
+- Operator: registered org handle is "Northlatch-Labs-LLC" (not the assumed
+  "northlatchlabs"); then: "On my personal github account is sufficient."
+- Evidence: org Northlatch-Labs-LLC exists (API), token owner 0xda7 is active ADMIN.
+- Detour executed + reverted: org repo Northlatch-Labs-LLC/kestrel created, pushed,
+  parity-checked (org HEAD == local HEAD 678b84c), deleted (HTTP 204, re-check 404).
+  0xda7/kestrel remains canonical, private.
+- URL truth pass (552be20): repo URLs -> 0xda7/kestrel (FUNDING, zenodo, CITATION.cff,
+  CONTRIBUTING, README, SECURITY, AboutTab, Docs en/es, KestrelApp, Updates.swift
+  releases API, CHANGELOG issue links, perf doc). Org-attribution links ->
+  github.com/Northlatch-Labs-LLC (README credit, AboutTab developerHandle, Docs).
+  Protected forms untouched: com.northlatchlabs.kestrel bundle id,
+  opensource@northlatchlabs.com, northlatchlabs.com. Final sweep: 0 non-protected
+  refs outside mission records. Sponsor anchor kept in-repo (#support-the-project);
+  github.com/sponsors/0xda7 redirects to profile (no native Sponsors — same as before).
+- Audit gate re-run: TRUE_RESIDUALS=0, BINARY_ART_MATCHES=0, ALLOWED_EXCEPTIONS=2315.
+- dist/ rebuild queued: shipped DMG still embeds dead northlatchlabs URLs.
+
+## 10:02 REBUILD + FINAL GATE (dist regenerated from corrected source)
+- Root cause found on rebuild: make-app.sh AUTO-INKREMENTS the VERSION file patch
+  digit on every run when TOSH_VERSION is unset (line 21); the 3 build attempts
+  drove 0.87.9 -> 0.87.12. Restored via git checkout; repackaged explicitly with
+  TOSH_VERSION=0.87.9. make-app.sh is zsh (shebang) — must run under zsh, not bash;
+  SwiftPM needs --disable-sandbox in this environment (session shim /tmp/swiftshim).
+- dist/Kestrel-v0.87.9.dmg rebuilt (16,545,453 B, sha256 a2d8950bcbe52c3a...);
+  stale 0.87.12 DMG deleted.
+- Final gate (mount-verified): bundle com.northlatchlabs.kestrel / 0.87.9; binary
+  0xda7/kestrel refs=8, dead northlatchlabs/kestrel refs=0 (worktree binary AND
+  on-DMG binary); DS_Store 0 x toshllm; detaches clean.
+- DELIVERY.md item 1 corrected: org handle is Northlatch-Labs-LLC (transfer cmd
+  updated); canonical repo remains 0xda7/kestrel per operator.
