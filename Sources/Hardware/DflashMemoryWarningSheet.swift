@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -23,8 +23,8 @@ struct DflashMemoryWarningSheet: View {
 
             Text(loc.t("El servidor mantiene %@ de %@ GiB ocupados (%@). Esta configuración puede perder rendimiento, paginar memoria o fallar cuando crezca el contexto.", "The server is holding %@ of %@ GiB (%@). This configuration can lose performance, page memory, or fail as the context grows.", "\(usedText)", "\(totalText)", "\(fractionText)"))
 
-            Text(loc.t("Recomendación: vuelve a Auto para que ToshLLM elija una configuración segura; también puedes desactivar DFlash o continuar y recordar esta decisión.",
-                       "Recommendation: return to Auto so ToshLLM can choose a safe configuration; you can also disable DFlash or continue and remember this decision."))
+            Text(loc.t("Recomendación: vuelve a Auto para que Kestrel elija una configuración segura; también puedes desactivar DFlash o continuar y recordar esta decisión.",
+                       "Recommendation: return to Auto so Kestrel can choose a safe configuration; you can also disable DFlash or continue and remember this decision."))
                 .foregroundStyle(.secondary)
 
             HStack {

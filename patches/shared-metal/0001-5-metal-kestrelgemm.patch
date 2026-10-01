@@ -112,7 +112,7 @@ index 969fddfa5..7e0d87a98 100644
 +    const bool loadA = !FC_mul_mm_manual || NLR == 8 || tiitg < 128;
 +
      for (int loop_k = 0; loop_k < args.ne00; loop_k += NK) {
-+        // ToshGEMM ping-pongs two 8 KiB tiles.  While a fast simdgroup starts
++        // KestrelGEMM ping-pongs two 8 KiB tiles.  While a fast simdgroup starts
 +        // filling the alternate tile, slower simdgroups can finish consuming
 +        // the current one; the barrier below then publishes the complete next
 +        // tile.  This removes the pre-load barrier from every K iteration.

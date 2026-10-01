@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -402,7 +402,7 @@ private struct ServerConfigurationWorkspace: View {
         DetailPanel(title: loc.t("Ajustes del servidor", "Server settings"),
                     subtitle: loc.t("Opciones principales de esta instancia.", "Core settings for this server instance."), icon: "server.rack", fill: true) {
             ServerSettingRow(icon: "shippingbox", title: loc.t("Modelo", "Model")) {
-                ToshDropdown(selection: modelSelection(settings), options: modelOptions,
+                KestrelDropdown(selection: modelSelection(settings), options: modelOptions,
                              placeholder: loc.t("Elige un modelo", "Choose a model"), listWidth: 390)
             }
             if showAdvanced {
@@ -413,7 +413,7 @@ private struct ServerConfigurationWorkspace: View {
                 }
             }
             ServerSettingRow(icon: "doc.plaintext", title: loc.t("Longitud de contexto", "Context length")) {
-                ToshDropdown(selection: contextChoice(settings), options: contextOptions, width: 180)
+                KestrelDropdown(selection: contextChoice(settings), options: contextOptions, width: 180)
             }
             ServerSettingRow(icon: "wifi", title: loc.t("Descubrible en red local", "Discoverable on local network")) {
                 Toggle(loc.t("Descubrible en red local", "Discoverable on local network"),
@@ -520,7 +520,7 @@ private struct ServerConfigurationWorkspace: View {
             if showAdvanced {
                 ServerSettingRow(icon: "square.stack.3d.down.right", title: loc.t("Micro-lote", "Micro-batch"),
                                  detail: loc.t("Equilibra velocidad y memoria", "Balances throughput and memory")) {
-                    ToshDropdown(selection: ubatch(settings), options: ubatchOptions, width: 184, listWidth: 250)
+                    KestrelDropdown(selection: ubatch(settings), options: ubatchOptions, width: 184, listWidth: 250)
                 }
             }
             if ServerSettings.modelIsMoE(at: settings.modelPath) {
@@ -553,7 +553,7 @@ private struct ServerConfigurationWorkspace: View {
                 if ServerSettings.mightSupportVision(modelPath: settings.modelPath) { Divider() }
                 ServerSettingRow(icon: "bolt.horizontal.fill", title: "Flash Attention",
                                  detail: loc.t("Configuración del motor externo", "External engine configuration")) {
-                    ToshDropdown(selection: flashAttention(settings), options: flashAttentionOptions, width: 150)
+                    KestrelDropdown(selection: flashAttention(settings), options: flashAttentionOptions, width: 150)
                 }
             }
             if showAdvanced && ServerSettings.modelUsesMTP(at: settings.modelPath) {
@@ -582,7 +582,7 @@ private struct ServerConfigurationWorkspace: View {
     }
 
     private var profileMenu: some View {
-        ToshDropdown(selection: $profileSelection, options: profileOptions)
+        KestrelDropdown(selection: $profileSelection, options: profileOptions)
         .onChange(of: profileSelection) { _, value in
             guard value != "current",
                   let profile = profileStore.profiles.first(where: { $0.id.uuidString == value }) else { return }
@@ -591,10 +591,10 @@ private struct ServerConfigurationWorkspace: View {
     }
 
     private func requestLimitMenu(_ settings: ServerSettings) -> some View {
-        ToshDropdown(selection: parallel(settings), options: requestLimitOptions)
+        KestrelDropdown(selection: parallel(settings), options: requestLimitOptions)
     }
 
-    private var modelOptions: [ToshDropdown<String>.Option] {
+    private var modelOptions: [KestrelDropdown<String>.Option] {
         [.init(value: "", title: loc.t("Sin modelo", "No model"), systemImage: "nosign")] +
         models.models.map { local in
             let parsed = ModelName.forPath(local.url.path)
@@ -604,12 +604,12 @@ private struct ServerConfigurationWorkspace: View {
         }
     }
 
-    private var profileOptions: [ToshDropdown<String>.Option] {
+    private var profileOptions: [KestrelDropdown<String>.Option] {
         [.init(value: "current", title: loc.t("Ajustes actuales", "Current settings"), systemImage: "slider.horizontal.3")] +
         profileStore.profiles.map { .init(value: $0.id.uuidString, title: $0.name, systemImage: "person.crop.circle") }
     }
 
-    private var contextOptions: [ToshDropdown<String>.Option] {
+    private var contextOptions: [KestrelDropdown<String>.Option] {
         [.init(value: "automatic", title: loc.t("Automático", "Automatic"),
                subtitle: loc.t("Recomendado · 16k", "Recommended · 16k"), systemImage: "wand.and.stars")] +
         [8192, 16384, 32768, 65536].map {
@@ -617,7 +617,7 @@ private struct ServerConfigurationWorkspace: View {
         }
     }
 
-    private var flashAttentionOptions: [ToshDropdown<String>.Option] {
+    private var flashAttentionOptions: [KestrelDropdown<String>.Option] {
         [
             .init(value: "auto", title: loc.t("Automático", "Automatic")),
             .init(value: "on", title: loc.t("Activado", "On")),
@@ -625,13 +625,13 @@ private struct ServerConfigurationWorkspace: View {
         ]
     }
 
-    private var requestLimitOptions: [ToshDropdown<Int>.Option] {
+    private var requestLimitOptions: [KestrelDropdown<Int>.Option] {
         [.init(value: 0, title: loc.t("Sin límite", "Unlimited"))] + (1...8).map { value in
             .init(value: value, title: value == 1 ? loc.t("1 petición", "1 request") : loc.t("%@ peticiones", "%@ requests", "\(value)"))
         }
     }
 
-    private var ubatchOptions: [ToshDropdown<Int>.Option] {
+    private var ubatchOptions: [KestrelDropdown<Int>.Option] {
         ServerSettings.ubatchOptions.map { .init(value: $0, title: ServerSettings.ubatchLabel($0, loc: loc)) }
     }
 

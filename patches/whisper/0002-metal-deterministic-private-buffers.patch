@@ -10,7 +10,7 @@ diff --git a/ggml/src/ggml-metal/ggml-metal-context.m b/ggml/src/ggml-metal/ggml
 -    res->use_concurrency = props_dev->has_unified_memory
 -        ? getenv("GGML_METAL_CONCURRENCY_DISABLE") == nil
 -        : getenv("GGML_METAL_CONCURRENCY_ENABLE")  != nil;
-+    // Match ToshLLM's deterministic Metal policy across every engine.
++    // Match Kestrel's deterministic Metal policy across every engine.
 +    // Concurrency is intentionally not configurable.
 +    res->use_concurrency = false;
 

@@ -1,9 +1,9 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import XCTest
-@testable import ToshLLM
+@testable import Kestrel
 
 final class WhisperTranscriptTests: XCTestCase {
     func testWhisperRuntimeForcesAMDFlashAttentionAndSafeMetalPolicy() {
@@ -224,14 +224,14 @@ final class WhisperTranscriptTests: XCTestCase {
         let document = AudioProjectDocument(
             version: 1, savedAt: .now, sourcePath: "/tmp/video.mp4",
             detectedLanguage: "en", targetLanguage: "Español",
-            translationModel: "qwen", glossary: "ToshLLM = ToshLLM",
+            translationModel: "qwen", glossary: "Kestrel = Kestrel",
             originalCues: [SubtitleCue(id: 1, start: 0, end: 1, text: "Hello")],
             translatedCues: [SubtitleCue(id: 1, start: 0, end: 1, text: "Hola")]
         )
         let data = try JSONEncoder.audioProject.encode(document)
         let decoded = try JSONDecoder.audioProject.decode(AudioProjectDocument.self, from: data)
         XCTAssertEqual(decoded.translationModel, "qwen")
-        XCTAssertEqual(decoded.glossary, "ToshLLM = ToshLLM")
+        XCTAssertEqual(decoded.glossary, "Kestrel = Kestrel")
         XCTAssertEqual(decoded.originalCues.first?.text, "Hello")
         XCTAssertEqual(decoded.translatedCues.first?.text, "Hola")
     }
@@ -357,8 +357,8 @@ final class DynamicMoeOptimizationTests: XCTestCase {
 
     func testHotMapValidatorAcceptsLegacyAndAdaptiveCounts() throws {
         let directory = FileManager.default.temporaryDirectory
-        let legacy = directory.appendingPathComponent("tosh-dmoe-legacy-\(UUID().uuidString).map")
-        let adaptive = directory.appendingPathComponent("tosh-dmoe-adaptive-\(UUID().uuidString).map")
+        let legacy = directory.appendingPathComponent("kestrel-dmoe-legacy-\(UUID().uuidString).map")
+        let adaptive = directory.appendingPathComponent("kestrel-dmoe-adaptive-\(UUID().uuidString).map")
         defer {
             try? FileManager.default.removeItem(at: legacy)
             try? FileManager.default.removeItem(at: adaptive)
@@ -992,7 +992,7 @@ final class ServerSettingsTests: XCTestCase {
 
     func testDynamicMoeIsCompiledButRequiresPrivateUIFlagAndToggle() throws {
         let model = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tosh-dynamic-moe-\(UUID().uuidString).gguf")
+            .appendingPathComponent("kestrel-dynamic-moe-\(UUID().uuidString).gguf")
         try writeMinimalMoEGGUF(model)
         defer { try? FileManager.default.removeItem(at: model) }
         var s = makeSettings()
@@ -1214,7 +1214,7 @@ final class ServerSettingsTests: XCTestCase {
 
     func testVisionModelDisablesCacheReuseAndDetectsMultimodal() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("toshllm-vision-\(UUID().uuidString)")
+            .appendingPathComponent("kestrel-vision-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let model = dir.appendingPathComponent("gemma-3-4b-it-Q4_K_M.gguf")
@@ -1236,7 +1236,7 @@ final class ServerSettingsTests: XCTestCase {
         // A text model must not borrow another model's projector sitting in the same
         // folder, even when names share a family prefix (and would share a KV dim).
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("toshllm-vision-\(UUID().uuidString)")
+            .appendingPathComponent("kestrel-vision-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let model = dir.appendingPathComponent("Qwen3-8B-Q4_K_M.gguf")
@@ -1256,7 +1256,7 @@ final class ServerSettingsTests: XCTestCase {
         // plus their two model-named projectors must each pair to the right one,
         // with no cross-pairing — the bug we're fixing.
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("toshllm-pair-\(UUID().uuidString)")
+            .appendingPathComponent("kestrel-pair-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -1599,7 +1599,7 @@ final class ServerSettingsTests: XCTestCase {
 
     func testMicroBatchOnlyAppliesToMoEModels() throws {
         let model = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tosh-ubatch-\(UUID().uuidString).gguf")
+            .appendingPathComponent("kestrel-ubatch-\(UUID().uuidString).gguf")
         try writeMinimalMoEGGUF(model)
         defer { try? FileManager.default.removeItem(at: model) }
 
@@ -1837,8 +1837,8 @@ final class ChatMessageTests: XCTestCase {
     }
 
     func testSettingsArchiveRoundTripFiltersRuntimeAndUnknownKeys() throws {
-        let sourceName = "ToshLLMTests.Settings.Source.\(UUID().uuidString)"
-        let targetName = "ToshLLMTests.Settings.Target.\(UUID().uuidString)"
+        let sourceName = "KestrelTests.Settings.Source.\(UUID().uuidString)"
+        let targetName = "KestrelTests.Settings.Target.\(UUID().uuidString)"
         let source = try XCTUnwrap(UserDefaults(suiteName: sourceName))
         let target = try XCTUnwrap(UserDefaults(suiteName: targetName))
         defer {
@@ -2331,7 +2331,7 @@ final class BenchAndProfileTests: XCTestCase {
             purpose: "benchmark", challengeId: "CID", nonce: "NONCE", payload: payload)
         let text = String(data: msg, encoding: .utf8)!
         let expectedHash = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        XCTAssertEqual(text, "toshllm-benchmark-v2\nbenchmark\nCID\nNONCE\n\(expectedHash)")
+        XCTAssertEqual(text, "kestrel-benchmark-v2\nbenchmark\nCID\nNONCE\n\(expectedHash)")
         XCTAssertFalse(text.hasSuffix("\n"))
     }
 
@@ -2564,12 +2564,12 @@ final class ReleaseNotesRangeTests: XCTestCase {
     let all = [("0.81.66", "c"), ("0.81.65", "b"), ("0.81.64", "a"), ("0.81.63", "z")]
 
     func testShowsEverythingNewerThanCurrentNewestFirst() {
-        let out = UpdateChecker.notesToShow(all: all, current: "0.81.64")
+        let out = UpdateChecker.notesToDisplay(all: all, current: "0.81.64")
         XCTAssertEqual(out.map(\.0), ["0.81.66", "0.81.65"])
     }
 
     func testUpToDateShowsOnlyTheCurrentVersion() {
-        let out = UpdateChecker.notesToShow(all: all, current: "0.81.66")
+        let out = UpdateChecker.notesToDisplay(all: all, current: "0.81.66")
         XCTAssertEqual(out.map(\.0), ["0.81.66"])
     }
 }

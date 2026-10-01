@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -14,9 +14,9 @@ import CryptoKit
 final class BenchmarkSharing: ObservableObject {
     static let shared = BenchmarkSharing()
 
-    static let baseURL = "https://toshllm.com"
+    static let baseURL = "https://northlatchlabs.com/kestrel"
     static let consentVersion = "benchmark-share-v1"
-    private static let bundleID = "dev.engel.toshllm"
+    private static let bundleID = "com.northlatchlabs.kestrel"
     private static let keyAccount = "benchmark-signing-key.v1"
 
     // Public identity from the server; the private key never leaves the Keychain.
@@ -437,7 +437,7 @@ final class BenchmarkSharing: ObservableObject {
             "app": [
                 "bundleIdentifier": Self.bundleID, "version": AppInfo.version,
                 "build": Self.buildNumber,
-                "engineVersion": "ToshLLM \(AppInfo.version)",
+                "engineVersion": "Kestrel \(AppInfo.version)",
             ],
             "model": modelObj,
             "hardware": [
@@ -512,7 +512,7 @@ final class BenchmarkSharing: ObservableObject {
     nonisolated static func signatureMessage(purpose: String, challengeId: String,
                                              nonce: String, payload: Data) -> Data {
         let hash = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
-        return Data("toshllm-benchmark-v2\n\(purpose)\n\(challengeId)\n\(nonce)\n\(hash)".utf8)
+        return Data("kestrel-benchmark-v2\n\(purpose)\n\(challengeId)\n\(nonce)\n\(hash)".utf8)
     }
 
     nonisolated static func base64URL(_ data: Data) -> String {
@@ -534,7 +534,7 @@ final class BenchmarkSharing: ObservableObject {
     // MARK: Process + parsing
 
     private func runProcess(_ path: String, _ args: [String], env: [String: String]) async throws -> String {
-        let outputURL = URL.temporaryDirectory.appending(path: "toshllm-benchmark-\(UUID().uuidString).log")
+        let outputURL = URL.temporaryDirectory.appending(path: "kestrel-benchmark-\(UUID().uuidString).log")
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
             throw ShareError.workloadFailed("could not create temporary benchmark log")
         }

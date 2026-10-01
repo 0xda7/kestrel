@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -288,8 +288,8 @@ struct ImageControls: View {
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .padding(.top, 8)
-                .help(loc.t("Al salir de la app borra las imágenes generadas (toshllm_*) de la carpeta de salida, para no acumular cientos con los nombres por fecha.",
-                            "On quitting the app, deletes the generated images (toshllm_*) from the output folder, so the date-named files don't pile up."))
+                .help(loc.t("Al salir de la app borra las imágenes generadas (kestrel_*) de la carpeta de salida, para no acumular cientos con los nombres por fecha.",
+                            "On quitting the app, deletes the generated images (kestrel_*) from the output folder, so the date-named files don't pile up."))
             }
             .font(.callout)
         }
@@ -2145,7 +2145,7 @@ struct ImageCanvas: View {
 
     private func saveAs(_ source: URL, format: ImageFormat) {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "toshllm.\(format.ext)"
+        panel.nameFieldStringValue = "kestrel.\(format.ext)"
         panel.allowedContentTypes = [format == .jpg ? .jpeg : .png]
         if panel.runModal() == .OK, let dest = panel.url {
             try? FileManager.default.removeItem(at: dest)

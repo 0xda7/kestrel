@@ -93,7 +93,7 @@ index d8319cd9a..bd3b10e1d 100644
 +    // releases that only touch the patch. No env var means a direct CLI run.
 +    {
 +        const char * app_version = std::getenv("TOSH_APP_VERSION");
-+        COM_INF("%s: ToshLLM engine %s (app %s)\n", __func__, common_tosh_version(),
++        COM_INF("%s: Kestrel engine %s (app %s)\n", __func__, common_tosh_version(),
 +                app_version ? app_version : "standalone");
 +    }
 +

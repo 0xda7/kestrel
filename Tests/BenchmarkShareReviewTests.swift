@@ -1,9 +1,9 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import XCTest
-@testable import ToshLLM
+@testable import Kestrel
 
 final class BenchmarkShareReviewTests: XCTestCase {
     func testReviewExtractsReadableBenchmarkSummaryWithoutChangingExactJSON() throws {

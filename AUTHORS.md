@@ -1,12 +1,13 @@
 # Authors
 
-ToshLLM is written by Engelbert Delgado (<engeldlgado@gmail.com>), except where noted.
+Kestrel is written by Northlatch Labs, except where noted.
+Contact opensource@northlatchlabs.com for licence questions.
 Contact that address for licence questions.
 
 The app under `Sources/` and the engine patches under `patches/` are original work,
 licensed GPL-3.0-or-later. They include, among others:
 
-- **ToshGEMM**, the tiled Metal matmul that replaces the simdgroup-matrix path AMD GPUs lack
+- **KestrelGEMM**, the tiled Metal matmul that replaces the simdgroup-matrix path AMD GPUs lack
 - **FA-AMD**, the flash-attention decode, tile and prefill kernels written for AMD
 - the **wave64 port** for GCN/Vega: reductions, quantized decode, batched mat-vec, prefill
 - the **multi-GPU** tensor split, its butterfly all-reduce and the peer/event transports

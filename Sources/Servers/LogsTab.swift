@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
@@ -23,7 +23,7 @@ struct LogsView: View {
                 HStack {
                     Label(loc.t("Instancia", "Instance"), systemImage: "server.rack")
                         .font(.callout.bold())
-                    ToshDropdown(selection: serverSelection,
+                    KestrelDropdown(selection: serverSelection,
                                  options: manager.servers.map {
                                      .init(value: $0.id,
                                            title: manager.displayName(for: $0, loc: loc),
@@ -443,17 +443,17 @@ struct ServerLogView: View {
     private func startEngineCheck() {
         checker.start(settings: ServerSettings.fromDefaults()) { result in
             guard !result.cancelled else { return }
-            saveDiagnostics(extra: EngineCheck.report(result, localized: loc.t), name: "toshllm-engine-check.txt")
+            saveDiagnostics(extra: EngineCheck.report(result, localized: loc.t), name: "kestrel-engine-check.txt")
             checkVerdict = EngineCheck.verdict(result, localized: loc.t)
         }
     }
-    private func exportDiagnostics() { saveDiagnostics(extra: nil, name: "toshllm-diagnostics.txt") }
+    private func exportDiagnostics() { saveDiagnostics(extra: nil, name: "kestrel-diagnostics.txt") }
     private func saveDiagnostics(extra: String?, name: String) {
         let currentSettings = ServerSettings.fromDefaults()
         let logTail = LogFileTail.read(server.logFileURL, maxBytes: 256 * 1024)
         let gpu = hardware.bestGPU.map { "\($0.name) (\($0.vramMB) MB VRAM)" } ?? "—"
         let report = """
-        ToshLLM \(AppInfo.version) — diagnostics
+        Kestrel \(AppInfo.version) — diagnostics
         Date: \(Date().formatted(.iso8601))
 
         ## Hardware

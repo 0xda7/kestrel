@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
@@ -72,7 +72,7 @@ struct LocalModelDetailsSheet: View {
         detailCard(title: loc.t("Procedencia", "Provenance"), icon: "arrow.down.circle") {
             if let source {
                 detailRow(loc.t("Registro", "Record"), source.isRecorded
-                          ? loc.t("Descargado con ToshLLM", "Downloaded with ToshLLM")
+                          ? loc.t("Descargado con Kestrel", "Downloaded with Kestrel")
                           : loc.t("Coincidencia del catálogo", "Catalog match"))
                 if let repository = source.repository {
                     detailRow(loc.t("Repositorio", "Repository"), repository)

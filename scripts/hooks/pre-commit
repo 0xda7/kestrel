@@ -1,5 +1,5 @@
 #!/bin/sh
-# ToshLLM pre-commit hook.
+# Kestrel pre-commit hook.
 #
 # Enable it once in your clone with:
 #     git config core.hooksPath scripts/hooks

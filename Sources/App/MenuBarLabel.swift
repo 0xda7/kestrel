@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -25,10 +25,10 @@ struct MenuBarLabel: View {
 
     private var stateLabel: String {
         switch server.state {
-        case .running:  return loc.t("ToshLLM: servidor activo", "ToshLLM: server running")
-        case .starting: return loc.t("ToshLLM: iniciando", "ToshLLM: starting")
-        case .failed:   return loc.t("ToshLLM: el motor falló", "ToshLLM: the engine failed")
-        case .stopped:  return loc.t("ToshLLM: servidor parado", "ToshLLM: server stopped")
+        case .running:  return loc.t("Kestrel: servidor activo", "Kestrel: server running")
+        case .starting: return loc.t("Kestrel: iniciando", "Kestrel: starting")
+        case .failed:   return loc.t("Kestrel: el motor falló", "Kestrel: the engine failed")
+        case .stopped:  return loc.t("Kestrel: servidor parado", "Kestrel: server stopped")
         }
     }
 

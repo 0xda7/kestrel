@@ -122,19 +122,19 @@ jobs:
             exit 0
           fi
           echo "$CERT_P12" | base64 -d > /tmp/cert.p12
-          security create-keychain -p ci tosh.keychain
-          security default-keychain -s tosh.keychain
-          security list-keychains -d user -s tosh.keychain login.keychain-db
-          security unlock-keychain -p ci tosh.keychain
-          security import /tmp/cert.p12 -k tosh.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k ci tosh.keychain
-          IDENTITY=$(security find-identity -v -p codesigning tosh.keychain | grep -oE '"Developer ID Application:[^"]+"' | head -1 | tr -d '"')
+          security create-keychain -p ci kestrel.keychain
+          security default-keychain -s kestrel.keychain
+          security list-keychains -d user -s kestrel.keychain login.keychain-db
+          security unlock-keychain -p ci kestrel.keychain
+          security import /tmp/cert.p12 -k kestrel.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci kestrel.keychain
+          IDENTITY=$(security find-identity -v -p codesigning kestrel.keychain | grep -oE '"Developer ID Application:[^"]+"' | head -1 | tr -d '"')
           [ -n "$IDENTITY" ] || { echo "::error::the .p12 holds no Developer ID Application identity"; exit 1; }
           echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
 
           # Sign inside out: --deep is deprecated and does not apply the hardened
           # runtime to the engine binaries, which notarization rejects.
-          APP=dist/ToshLLM.app
+          APP=dist/Kestrel.app
           for exe in "$APP/Contents/Resources/bin/"* "$APP/Contents/Resources/bin-image/"* "$APP/Contents/Resources/bin-audio/"*; do
             [ -f "$exe" ] || continue
             case "$exe" in *.metallib) continue;; esac
@@ -144,7 +144,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
 
           # Name it per variant: the notary history lists submissions by filename.
-          ZIP=/tmp/ToshLLM-${{ matrix.variant }}.zip
+          ZIP=/tmp/Kestrel-${{ matrix.variant }}.zip
           ditto -c -k --keepParent "$APP" "$ZIP"
           xcrun notarytool submit "$ZIP" \
             --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" \
@@ -172,7 +172,7 @@ jobs:
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
-          security unlock-keychain -p ci tosh.keychain
+          security unlock-keychain -p ci kestrel.keychain
           for dmg in dist/*.dmg; do
             codesign --force --timestamp -s "$IDENTITY" "$dmg"
             xcrun notarytool submit "$dmg" \

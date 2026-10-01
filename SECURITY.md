@@ -6,7 +6,7 @@ Only the latest release receives security fixes.
 
 ## Scope
 
-ToshLLM runs entirely on-device. The built-in server (`llama-server`) binds to
+Kestrel runs entirely on-device. The built-in server (`llama-server`) binds to
 `127.0.0.1` only and is never exposed to the network by default. The app makes
 outbound connections exclusively to:
 
@@ -27,6 +27,6 @@ There is no telemetry, no analytics, and no account system.
 
 ## Reporting a vulnerability
 
-Please open a [private security advisory](https://github.com/engeldlgado/toshllm/security/advisories/new)
+Please open a [private security advisory](https://github.com/northlatchlabs/kestrel/security/advisories/new)
 or contact the maintainer via GitHub. Do not open public issues for
 security-sensitive reports.

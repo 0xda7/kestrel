@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -31,7 +31,7 @@ final class UpdateChecker: ObservableObject {
     private var checksumsURL: URL?
     private var periodicTask: Task<Void, Never>?
 
-    static let releasesAPI = "https://api.github.com/repos/engeldlgado/toshllm/releases/latest"
+    static let releasesAPI = "https://api.github.com/repos/northlatchlabs/kestrel/releases/latest"
 
     /// Re-checks every hour while the app stays open, for people who never
     /// relaunch. Silent: it only lights up the existing update badge.
@@ -215,7 +215,7 @@ final class UpdateChecker: ObservableObject {
         guard !loadingNotes else { return }
         loadingNotes = true
         defer { loadingNotes = false }
-        guard let url = URL(string: "https://api.github.com/repos/engeldlgado/toshllm/releases?per_page=30"),
+        guard let url = URL(string: "https://api.github.com/repos/northlatchlabs/kestrel/releases?per_page=30"),
               let (data, response) = try? await URLSession.shared.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
@@ -224,11 +224,11 @@ final class UpdateChecker: ObservableObject {
             let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             return (version, obj["body"] as? String ?? "")
         }
-        releaseNotes = Self.notesToShow(all: all, current: AppInfo.version)
+        releaseNotes = Self.notesToDisplay(all: all, current: AppInfo.version)
             .map { ReleaseNote(version: $0.0, body: $0.1) }
     }
 
-    nonisolated static func notesToShow(all: [(String, String)], current: String) -> [(String, String)] {
+    nonisolated static func notesToDisplay(all: [(String, String)], current: String) -> [(String, String)] {
         let newer = all.filter { isVersion($0.0, newerThan: current) }
             .sorted { isVersion($0.0, newerThan: $1.0) }
         if !newer.isEmpty { return newer }
@@ -295,7 +295,7 @@ struct ReleaseNotesPopover: View {
             Divider()
             Button(loc.t("Ver en GitHub", "View on GitHub")) {
                 let tag = updates.releaseNotes?.first.map { "v\($0.version)" } ?? "v\(AppInfo.version)"
-                NSWorkspace.shared.open(URL(string: "https://github.com/engeldlgado/toshllm/releases/tag/\(tag)")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/northlatchlabs/kestrel/releases/tag/\(tag)")!)
             }
             .buttonStyle(.link).font(.caption)
         }

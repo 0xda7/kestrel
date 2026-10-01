@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -125,8 +125,8 @@ struct BenchmarkShareCard: View {
                 Text(AppCodeSignature.hasStableDeveloperIdentity
                      ? loc.t("La identidad estable permite reutilizar la clave del Llavero sin volver a pedir la contraseña normalmente.",
                              "The stable identity normally reuses the Keychain key without asking for your password again.")
-                     : loc.t("Al recompilar con una firma temporal, macOS podría pedir permiso para reutilizar la clave. ToshLLM nunca recibe tu contraseña.",
-                             "After rebuilding with a temporary signature, macOS may ask to reuse the key. ToshLLM never receives your password."))
+                     : loc.t("Al recompilar con una firma temporal, macOS podría pedir permiso para reutilizar la clave. Kestrel nunca recibe tu contraseña.",
+                             "After rebuilding with a temporary signature, macOS may ask to reuse the key. Kestrel never receives your password."))
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -175,7 +175,7 @@ struct ChatMainView: View {
         HStack(spacing: 7) {
             Image(systemName: "bubble.left.and.bubble.right.fill")
                 .foregroundStyle(Color.appAccent)
-            Text("ToshLLM")
+            Text("Kestrel")
                 .font(.system(size: 12, weight: .semibold))
             Circle()
                 .fill(serverStateColor)
@@ -239,8 +239,8 @@ struct ChatMainView: View {
                     Label(loc.t("Actualización", "Update"), systemImage: "arrow.down.app.fill")
                         .foregroundStyle(Color.appAccent)
                 }
-                .help(loc.t("ToshLLM %@ disponible... instálala desde Configuración → Inicio.",
-                            "ToshLLM %@ available... install it from Configuration → Home.", version))
+                .help(loc.t("Kestrel %@ disponible... instálala desde Configuración → Inicio.",
+                            "Kestrel %@ available... install it from Configuration → Home.", version))
             }
             ServerWebUIButton(server: server, presentation: .icon)
                 .buttonStyle(GlassIconButtonStyle())

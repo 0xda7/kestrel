@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AVFoundation
@@ -87,13 +87,13 @@ final class SpeechDictationController: ObservableObject {
             return
         }
         guard Self.engineInstalled else {
-            error = "No se encontró el motor de Whisper.cpp. Vuelve a instalar ToshLLM / the Whisper.cpp engine is missing. Reinstall ToshLLM."
+            error = "No se encontró el motor de Whisper.cpp. Vuelve a instalar Kestrel / the Whisper.cpp engine is missing. Reinstall Kestrel."
             onFailure()
             return
         }
 
         let converted = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ToshLLM-whisper-\(UUID().uuidString).wav")
+            .appendingPathComponent("Kestrel-whisper-\(UUID().uuidString).wav")
         audioURL = converted
         self.onText = onText
         self.onFailure = onFailure
@@ -134,7 +134,7 @@ final class SpeechDictationController: ObservableObject {
 
     private func start(onText: @escaping (String) -> Void) async {
         guard Self.engineInstalled else {
-            error = "No se encontró el motor de Whisper.cpp. Vuelve a instalar ToshLLM / the Whisper.cpp engine is missing. Reinstall ToshLLM."
+            error = "No se encontró el motor de Whisper.cpp. Vuelve a instalar Kestrel / the Whisper.cpp engine is missing. Reinstall Kestrel."
             return
         }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
@@ -143,7 +143,7 @@ final class SpeechDictationController: ObservableObject {
         }
 
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ToshLLM-whisper-\(UUID().uuidString).wav")
+            .appendingPathComponent("Kestrel-whisper-\(UUID().uuidString).wav")
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 16_000,
@@ -185,7 +185,7 @@ final class SpeechDictationController: ObservableObject {
             return
         }
         let outputBase = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ToshLLM-transcript-\(UUID().uuidString)")
+            .appendingPathComponent("Kestrel-transcript-\(UUID().uuidString)")
         transcriptBaseURL = outputBase
         timestampedOutput = withTimestamps
 
@@ -361,7 +361,7 @@ final class SpeechDictationController: ObservableObject {
     private func submitToServer(audioURL: URL, runID: UUID,
                                 withTimestamps: Bool) throws {
         let audio = try Data(contentsOf: audioURL)
-        let boundary = "ToshLLM-\(UUID().uuidString)"
+        let boundary = "Kestrel-\(UUID().uuidString)"
         var body = Data()
         func append(_ string: String) { body.append(Data(string.utf8)) }
         func field(_ name: String, _ value: String) {

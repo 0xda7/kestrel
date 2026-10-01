@@ -24,6 +24,6 @@ git add CHANGELOG.md VERSION Sources/App/AboutTab.swift
 git diff --cached --quiet || git commit -m "release: $V"
 
 # annotated so the tag is a real object and tag.gpgsign can sign it; a lightweight tag cannot be
-git tag -a "v$V" -m "ToshLLM v$V"
+git tag -a "v$V" -m "Kestrel v$V"
 git push origin main "v$V"
 echo "released v$V"

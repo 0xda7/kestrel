@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -41,8 +41,8 @@ struct AudioVADCalibrationView: View {
                     Text(modeName(item)).tag(item.rawValue)
                 }
             }
-            .help(loc.t("Desactiva VAD, usa los valores nativos de Whisper.cpp o aplica una calibración de ToshLLM.",
-                        "Disables VAD, uses Whisper.cpp native values, or applies a ToshLLM calibration."))
+            .help(loc.t("Desactiva VAD, usa los valores nativos de Whisper.cpp o aplica una calibración de Kestrel.",
+                        "Disables VAD, uses Whisper.cpp native values, or applies a Kestrel calibration."))
 
             Text(modeDescription)
                 .font(.caption)
@@ -96,8 +96,8 @@ struct AudioVADCalibrationView: View {
             loc.t("Silero VAD usa los valores predeterminados de Whisper.cpp, sin calibración añadida.",
                   "Silero VAD uses Whisper.cpp defaults with no added calibration.")
         case .calibrated:
-            loc.t("ToshLLM ajusta la sensibilidad y los cortes de voz con el perfil elegido.",
-                  "ToshLLM adjusts speech sensitivity and segmentation with the selected profile.")
+            loc.t("Kestrel ajusta la sensibilidad y los cortes de voz con el perfil elegido.",
+                  "Kestrel adjusts speech sensitivity and segmentation with the selected profile.")
         }
     }
 

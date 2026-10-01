@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -70,7 +70,7 @@ struct ModelFileIndex: Sendable {
         return nil
     }
 
-    /// LLM discovery ignores ToshLLM's managed media folders, whose GGUF files
+    /// LLM discovery ignores Kestrel's managed media folders, whose GGUF files
     /// are diffusion weights or conditioning encoders rather than chat models.
     var llmFiles: [URL] {
         let mediaFolders: Set<String> = ["imagen", "image", "images", "video", "videos", "whisper"]

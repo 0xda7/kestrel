@@ -1,37 +1,37 @@
 <div align="center">
 
-# ToshLLM
+# Kestrel
 
 **Run large language models locally on Intel Macs with AMD GPUs.**
 
 Native macOS app · Metal acceleration · No cloud, no accounts, no per-token costs
 
-[![Build & Release](https://github.com/engeldlgado/toshllm/actions/workflows/build.yml/badge.svg)](https://github.com/engeldlgado/toshllm/actions/workflows/build.yml)
+[![Build & Release](https://github.com/northlatchlabs/kestrel/actions/workflows/build.yml/badge.svg)](https://github.com/northlatchlabs/kestrel/actions/workflows/build.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20(Intel%20%2B%20AMD%20GPU)-lightgrey)](#requirements)
-[![Status: Beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/engeldlgado/toshllm/issues)
+[![Status: Beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/northlatchlabs/kestrel/issues)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F%20support%20the%20project-ea4aaa)](#support-the-project)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21908524.svg)](https://doi.org/10.5281/zenodo.21908524)
 
-### [⬇️ Download the latest release](https://github.com/engeldlgado/toshllm/releases/latest) · [📝 Changelog](CHANGELOG.md)
+### [⬇️ Download the latest release](https://github.com/northlatchlabs/kestrel/releases/latest) · [📝 Changelog](CHANGELOG.md)
 
-*[Versión en español más abajo](#toshllm-en-español)*
+*[Versión en español más abajo](#kestrel-en-español)*
 
-<img src="Assets/home.jpg" alt="ToshLLM home screen — hardware detection and model recommendations" width="760">
+<img src="Assets/home.jpg" alt="Kestrel home screen — hardware detection and model recommendations" width="760">
 
 </div>
 
 ---
 
-## What is ToshLLM?
+## What is Kestrel?
 
-ToshLLM lets you run modern open LLMs **entirely on your own Mac** — your chats never leave the machine, there are no accounts, and there's nothing to pay per token.
+Kestrel lets you run modern open LLMs **entirely on your own Mac** — your chats never leave the machine, there are no accounts, and there's nothing to pay per token.
 
 Most local-LLM tools on macOS only target Apple Silicon. Intel Macs with discrete AMD GPUs — including Hackintosh builds — get left behind: the stock engines produce **corrupted output** on AMD dGPUs and read model weights over PCIe at a fraction of the possible speed.
 
-**ToshLLM fixes that.** It bundles `llama.cpp` built with AMD-specific patches and wraps it in a polished native SwiftUI app — so a card like the RX 6700 XT goes from unusable to genuinely fast:
+**Kestrel fixes that.** It bundles `llama.cpp` built with AMD-specific patches and wraps it in a polished native SwiftUI app — so a card like the RX 6700 XT goes from unusable to genuinely fast:
 
-| | Stock llama.cpp on AMD dGPU | ToshLLM |
+| | Stock llama.cpp on AMD dGPU | Kestrel |
 |---|---|---|
 | Output | corrupted | correct |
 | Qwen3-8B generation | 0.6–2.6 t/s | **~61 t/s** |
@@ -73,15 +73,15 @@ These are new and still being validated — enable them in Settings, but expect 
 Persistent conversations, Markdown with one-click code copy, and a live tokens/sec readout so you always know how fast the model is going.
 
 <div align="center">
-  <img src="Assets/chat.jpg" alt="ToshLLM native chat" width="760">
+  <img src="Assets/chat.jpg" alt="Kestrel native chat" width="760">
 </div>
 
 ### Models picked for your machine
 
-ToshLLM reads your GPU and RAM and suggests models by use case — fastest, balanced, top quality, coding — each with an honest estimate of how it'll run. Browse a curated catalog or search Hugging Face directly.
+Kestrel reads your GPU and RAM and suggests models by use case — fastest, balanced, top quality, coding — each with an honest estimate of how it'll run. Browse a curated catalog or search Hugging Face directly.
 
 <div align="center">
-  <img src="Assets/models.jpg" alt="ToshLLM model manager" width="760">
+  <img src="Assets/models.jpg" alt="Kestrel model manager" width="760">
 </div>
 
 ### Measure it on your own hardware
@@ -89,7 +89,7 @@ ToshLLM reads your GPU and RAM and suggests models by use case — fastest, bala
 The built-in benchmark runs prompt and generation tests for any configuration and charts them side by side, so you can find the sweet spot for your card.
 
 <div align="center">
-  <img src="Assets/benchmarks.jpg" alt="ToshLLM benchmarks comparison" width="760">
+  <img src="Assets/benchmarks.jpg" alt="Kestrel benchmarks comparison" width="760">
 </div>
 
 Measured on the development card (**RX 6700 XT 12 GB**, RDNA 2, bundled engine 0.85.5, KV f16, `pp512` / `tg128`):
@@ -123,14 +123,14 @@ A 2021 card holds its own: it trails the M3 Max on short prompts, leads it from 
 
 ## Install
 
-1. **[Download the latest `.dmg`](https://github.com/engeldlgado/toshllm/releases/latest)**, open it, and drag **ToshLLM** to Applications.
+1. **[Download the latest `.dmg`](https://github.com/northlatchlabs/kestrel/releases/latest)**, open it, and drag **Kestrel** to Applications.
 2. The app is fully self-contained — the inference engines ship inside the bundle. No Homebrew, no Python, nothing else to install.
 
 > **First launch:** from 0.86.5 the app is signed with an Apple Developer ID and
 > notarized by Apple, so it opens straight away with no warning and nothing to
 > approve. On **0.86.4 and earlier** macOS blocks the first open: go to
 > **System Settings → Privacy & Security** and click **"Open Anyway"**, or run
-> `xattr -dr com.apple.quarantine /Applications/ToshLLM.app`.
+> `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
 
 > **Older Macs without AVX2 (e.g. Mac Pro 5,1 and other pre-2013 Xeons):** the normal build needs the AVX2 CPU instructions and will crash on launch with "illegal hardware instruction" on those machines. Each release also ships a dedicated **no-AVX2 build** — download the `.dmg` whose name ends in **`-noavx2`**. It updates on its own channel, so once installed it will only ever offer you no-AVX2 builds.
 
@@ -140,14 +140,14 @@ A 2021 card holds its own: it trails the M3 Max on short prompts, leads it from 
 - An Intel Mac with an AMD GPU that supports Metal (developed and tuned on an RX 6700 XT 12 GB)
 - 16 GB RAM minimum — 32 GB recommended for 35B-class MoE models
 
-> **Hackintosh note:** AMD RDNA 2 dGPUs work great with the [NootRX](https://github.com/ChefKissInc/NootRX) kext providing Metal support. ToshLLM runs on top of any working Metal setup.
+> **Hackintosh note:** AMD RDNA 2 dGPUs work great with the [NootRX](https://github.com/ChefKissInc/NootRX) kext providing Metal support. Kestrel runs on top of any working Metal setup.
 
 ## Good to know
 
-ToshLLM is **beta** and under active development. It's solid for daily use, but you may still hit rough edges — please report anything you find in [Issues](https://github.com/engeldlgado/toshllm/issues) (you can export diagnostics from **Settings → Server log**). Two limitations are worth knowing up front:
+Kestrel is **beta** and under active development. It's solid for daily use, but you may still hit rough edges — please report anything you find in [Issues](https://github.com/northlatchlabs/kestrel/issues) (you can export diagnostics from **Settings → Server log**). Two limitations are worth knowing up front:
 
 - **External clients (VS Code Copilot, Cline, Continue…):** these send a fixed 15–19k-token prompt (system instructions + tool definitions) with *every* request. On GPUs without Metal Flash Attention that means minutes of prompt processing per cold request, which saturates the GPU and can thermally throttle it. Recent versions mitigate this (single slot with resumable prefill, prompt-cache reuse, inline reasoning) and more is on the way. The built-in chat isn't affected — it only sends your conversation.
-- **Vision cache:** `llama.cpp` does not support saving/restoring slots or cache-reuse while an `mmproj` is loaded. ToshLLM disables those features automatically for vision models; normal in-memory prompt caching still works.
+- **Vision cache:** `llama.cpp` does not support saving/restoring slots or cache-reuse while an `mmproj` is loaded. Kestrel disables those features automatically for vision models; normal in-memory prompt caching still works.
 - **Large MoE models on AMD GPUs:** Mixture-of-Experts models that don't fully fit in VRAM (e.g. 26B/35B with `--n-cpu-moe` offload) cross the CPU↔GPU boundary many times per token. This used to slowly starve the AMD driver and stall generation mid-answer, but **0.81.49 fixed it** with a persistent staging buffer (see [Persistent staging](#persistent-staging-flat-sustained-generation) below) — these models now run flat and stable, confirmed on an RX 6700 XT and on a tester's dual-GPU Mac Pro, with no deadlock observed since. A **watchdog** stays in as a safety net, and dense models are still the simplest choice, but large MoE-with-offload is no longer something to avoid.
 - **Vision (image input):** works across the Qwen3-VL family (Qwen3-VL-2B, Qwen3.5-9B, Qwen3.6-14B/35B), Gemma 3 and Gemma 4. Since 0.82.0 the AMD attention kernel covers the vision encoders too (they attend bidirectionally, with no mask, at head dims 64 and 72), so describing an image costs ~250–360 MB of VRAM instead of 3.4–4.7 GB — the fallback path materializes the whole attention matrix. Note that reasoning models (Qwen 3.5/3.6) place the image description in their thinking output, which the in-app chat shows but some external clients may not.
 
@@ -156,10 +156,10 @@ ToshLLM is **beta** and under active development. It's solid for daily use, but 
 Prerequisites: Xcode Command Line Tools (`xcode-select --install`), CMake.
 
 ```bash
-git clone https://github.com/engeldlgado/toshllm
-cd toshllm
+git clone https://github.com/northlatchlabs/kestrel
+cd kestrel
 ./scripts/build-engines.sh      # clones llama.cpp, applies AMD patches, builds static engines
-./make-app.sh                   # builds the SwiftUI app and packages dist/ToshLLM.app
+./make-app.sh                   # builds the SwiftUI app and packages dist/Kestrel.app
 ./scripts/make-dmg.sh           # optional: create an installable DMG (version from the VERSION file)
 ./scripts/test.sh               # optional: run the unit tests (needs Xcode for XCTest)
 ```
@@ -170,11 +170,11 @@ The AMD patch lives in [`patches/`](patches/) — chunked staging transfers for 
 
 ### Dynamic MoE: bounded-VRAM expert cache (private experiment)
 
-`--n-cpu-moe` and ToshLLM's Dynamic MoE solve the same capacity problem in two different ways. Both keep llama.cpp, GGUF and the normal graph; Dynamic MoE is compiled into the bundled engine but is **off at runtime and hidden from the UI by default** while its model coverage is measured.
+`--n-cpu-moe` and Kestrel's Dynamic MoE solve the same capacity problem in two different ways. Both keep llama.cpp, GGUF and the normal graph; Dynamic MoE is compiled into the bundled engine but is **off at runtime and hidden from the UI by default** while its model coverage is measured.
 
 The experiment targets systems whose discrete GPU cannot hold the complete MoE model in VRAM, but which have substantial free system RAM. Its goal is to keep only the active expert working set in limited VRAM, use host RAM as the complete expert bank, and approach the normal prompt-processing and generation performance of a more GPU-resident `ncmoe` configuration while consuming materially less VRAM. It does not benefit a model that already fits completely in VRAM, and it trades that VRAM reduction for higher RAM use and PCIe traffic.
 
-The design is an independent llama.cpp/Metal implementation inspired by the publicly documented [FreeToken architecture](https://github.com/FlashML-org/FreeToken) and [paper](https://arxiv.org/abs/2608.16157). ToshLLM does not vendor or link the FreeToken runtime or source code. FreeToken is distributed under Apache-2.0; if its source is incorporated in the future, its license, notices and modification requirements must be retained.
+The design is an independent llama.cpp/Metal implementation inspired by the publicly documented [FreeToken architecture](https://github.com/FlashML-org/FreeToken) and [paper](https://arxiv.org/abs/2608.16157). Kestrel does not vendor or link the FreeToken runtime or source code. FreeToken is distributed under Apache-2.0; if its source is incorporated in the future, its license, notices and modification requirements must be retained.
 
 > **RAM warning:** Dynamic MoE reduces **VRAM** by keeping the expert pool addressable in host **RAM**, and Metal wires those pages so the system cannot page or compress them. That is why the usable share of installed memory is small: the rule is that the expert pool must fit in a third of physical RAM, which on a 32 GB machine is about 10.7 GiB and admits an 11.44 GiB GGUF but not a 19.45 GiB one. Measured on 32 GB, a 9.6 GiB pool runs flat while 12.7 and 16.9 GiB starve the compositor. If the headroom is unavailable, Automatic mode rejects Dynamic MoE and returns to normal `ncmoe` instead of relying on swap.
 
@@ -183,7 +183,7 @@ The design is an independent llama.cpp/Metal implementation inspired by the publ
 1. Select the bundled engine and a MoE GGUF.
 2. In **Settings → Extra arguments**, add `TOSH_MOE_UI=1`.
 3. The private **Dynamic MoE (experimental)** panel appears. Turn it on.
-4. Open **Benchmarks** and press **Optimize dMoE**. ToshLLM measures normal execution, learns a complete expert ranking, sweeps K, then tunes prompt prefetch without accepting more than a 3% TG regression at the chosen K.
+4. Open **Benchmarks** and press **Optimize dMoE**. Kestrel measures normal execution, learns a complete expert ranking, sweeps K, then tunes prompt prefetch without accepting more than a 3% TG regression at the chosen K.
 5. The resulting **Automatic** profile is activated for the integrated chat. **Manual cache** remains available to vary K and prefetch by hand.
 
 `TOSH_MOE_UI=1` only reveals the controls. Removing it, turning Dynamic MoE off, selecting a custom engine, or letting Auto reject the configuration returns the same binary to unmodified llama.cpp execution. The feature is not yet used by router or multi-GPU mode.
@@ -215,7 +215,7 @@ Bexpert_gpu = max(0, V - R - Wshared - C - KV)
 N ≈ ceil(L × max(0, Wexp - Bexpert_gpu) / Wexp)
 ```
 
-ToshLLM uses that estimate when a model is selected, then the benchmark's **Find optimum** sweep measures nearby `ncmoe` values because PCIe bandwidth, CPU memory bandwidth, quantization and the driver's real allocations cannot be inferred exactly from the file. Raising `ncmoe` saves VRAM but makes more active experts use the CPU path; lowering it does the reverse. `ncmoe 0` means no MoE layers are deliberately assigned to CPU and is only viable when the complete placement fits.
+Kestrel uses that estimate when a model is selected, then the benchmark's **Find optimum** sweep measures nearby `ncmoe` values because PCIe bandwidth, CPU memory bandwidth, quantization and the driver's real allocations cannot be inferred exactly from the file. Raising `ncmoe` saves VRAM but makes more active experts use the CPU path; lowering it does the reverse. `ncmoe 0` means no MoE layers are deliberately assigned to CPU and is only viable when the complete placement fits.
 
 #### The Dynamic MoE architecture
 
@@ -239,7 +239,7 @@ One slot represents one expert across every MoE layer, so its first-order byte c
 bytes_per_K ≈ Wexp / E
 ```
 
-For the UI's conservative VRAM estimate ToshLLM uses the same `Wshared ≈ min(W, 1.3 GiB)` split as its ncmoe planner. The widest per-layer bank is estimated from the fused gate/up tensors, and one such bank is reserved for staging plus one for every prefetch slot `P`:
+For the UI's conservative VRAM estimate Kestrel uses the same `Wshared ≈ min(W, 1.3 GiB)` split as its ncmoe planner. The widest per-layer bank is estimated from the fused gate/up tensors, and one such bank is reserved for staging plus one for every prefetch slot `P`:
 
 ```text
 Wstage ≈ (2/3) × Wexp / L
@@ -282,7 +282,7 @@ K8 does not mean that only 8 of the model's 256 experts exist or that the cache 
 
 A recurring limitation on discrete AMD GPUs under Metal is that **Flash Attention** is gated on hardware features these GPUs report as unavailable (`simdgroup matrix multiply`), and the upstream "vec" decode kernel miscompiles on RDNA 2 (it produces garbage even though each SIMD primitive is correct in isolation). The practical consequence: any quantized KV cache **requires** Flash Attention, so on AMD that attention silently falls back to the CPU and generation collapses at longer contexts.
 
-ToshLLM ships a from-scratch **AMD attention kernel** (Metal) as a toggle next to the standard Flash Attention setting. It keeps a deliberately simple structure (one `float4` slice of the head per SIMD lane, simdgroups splitting the KV stream, online-softmax merge) that was validated bit-for-bit against a CPU reference. It supports head dims **64, 72, 128, 256 and 512** (72 covers the vision encoders, which are bidirectional and carry no mask) and KV types **f16, q8_0, q4_0** in **any keys/values combination**, so you can compress keys while keeping values at full precision, all on the GPU. The distinction the toggle makes explicit: standard Flash Attention runs on the CPU on AMD GPUs, this kernel runs on the GPU.
+Kestrel ships a from-scratch **AMD attention kernel** (Metal) as a toggle next to the standard Flash Attention setting. It keeps a deliberately simple structure (one `float4` slice of the head per SIMD lane, simdgroups splitting the KV stream, online-softmax merge) that was validated bit-for-bit against a CPU reference. It supports head dims **64, 72, 128, 256 and 512** (72 covers the vision encoders, which are bidirectional and carry no mask) and KV types **f16, q8_0, q4_0** in **any keys/values combination**, so you can compress keys while keeping values at full precision, all on the GPU. The distinction the toggle makes explicit: standard Flash Attention runs on the CPU on AMD GPUs, this kernel runs on the GPU.
 
 The kernel splits the KV stream across as many simdgroups as the threadgroup-memory budget allows (32 for head dim 128, 16 for 256, 8 for 512 — the head dim Gemma 4's global layers use), turning the long serial decode loop into short parallel ones — a win that grows with context depth. On an RX 6700 XT with a quantized KV cache, generation at 4096 tokens of context improves from 19 → 33 t/s on an 8B (+75%) and 26 → 31 t/s on the 9B coder (+17%); at 2048 tokens, +42% and +11%. Prompt processing stays within ~3% and output is bit-for-bit unchanged.
 
@@ -327,11 +327,11 @@ Below `q8_0` the bundled engine also offers the **TurboQuant** KV types ([Google
 
 Quantizing the **keys** is what costs quality on dense models, and the smaller the model the more it costs: at equal budget, `q8_0` keys with Turbo3 values costs 0.5% on a 4B where Turbo3 on both costs 50%. Large MoE models behave the other way round — there the keys barely matter and the values set the floor. So **`q8_0` keys with Turbo4 values** is the setting to reach for: indistinguishable from `f16` at every size measured, a quarter less cache than `q8_0`, and generation within ~3% of it. Settings suggests it for you. Turbo on both is worth it only on large models, where it holds quality at half the bits.
 
-### ToshGEMM: tiled prefill matmul on AMD
+### KestrelGEMM: tiled prefill matmul on AMD
 
-Prompt processing on AMD was stuck on the slow matrix-vector path, because Metal's matrix-unit `mul_mm` kernel uses `simdgroup_matrix`, which AMD GPUs can't run (it crashes). **ToshGEMM** is a from-scratch tiled matrix-matrix kernel that restores the fast prefill without those cooperative ops. It is auto-selected on AMD RDNA (wave32); Apple Silicon and AMD GCN are unaffected, and it reverts with `GGML_METAL_MM_MANUAL_DISABLE=1`. Output is byte-identical and generation speed is unchanged.
+Prompt processing on AMD was stuck on the slow matrix-vector path, because Metal's matrix-unit `mul_mm` kernel uses `simdgroup_matrix`, which AMD GPUs can't run (it crashes). **KestrelGEMM** is a from-scratch tiled matrix-matrix kernel that restores the fast prefill without those cooperative ops. It is auto-selected on AMD RDNA (wave32); Apple Silicon and AMD GCN are unaffected, and it reverts with `GGML_METAL_MM_MANUAL_DISABLE=1`. Output is byte-identical and generation speed is unchanged.
 
-Prompt processing on an RX 6700 XT (Qwen3-8B Q4, pp512, t/s, before → ToshGEMM):
+Prompt processing on an RX 6700 XT (Qwen3-8B Q4, pp512, t/s, before → KestrelGEMM):
 
 | | with Flash Attention | without FA (raw matmul) |
 |---|---|---|
@@ -339,15 +339,15 @@ Prompt processing on an RX 6700 XT (Qwen3-8B Q4, pp512, t/s, before → ToshGEMM
 
 For a 1000-token prompt that cuts time-to-first-token from ~10 s to ~4 s.
 
-Later upgrades pushed it further. The kernel does its math in **packed half precision**, which AMD cards execute at twice the rate; its K tiles are double-buffered; and the AMD attention kernel prefills in blocks of 16 tokens that share the stored context instead of each token re-reading all of it. Measured on 0.83.12 on the same card, **pp512 on the 8B reaches 764 t/s** — 8× the pre-ToshGEMM baseline — so that 1000-token prompt is down to ~1.3 s to first token, and prompt processing stays fast deep into a conversation instead of degrading with context.
+Later upgrades pushed it further. The kernel does its math in **packed half precision**, which AMD cards execute at twice the rate; its K tiles are double-buffered; and the AMD attention kernel prefills in blocks of 16 tokens that share the stored context instead of each token re-reading all of it. Measured on 0.83.12 on the same card, **pp512 on the 8B reaches 764 t/s** — 8× the pre-KestrelGEMM baseline — so that 1000-token prompt is down to ~1.3 s to first token, and prompt processing stays fast deep into a conversation instead of degrading with context.
 
-That double buffering alternates two 8 KiB threadgroup tiles, so the synchronization that publishes the next tile also lets slower simdgroups finish consuming the current one: an interleaved A/B on Qwen3-8B Q4_K_M averaged **+2.49%**, and the image engine, which shares the path, cut warm SDXL Turbo sampling from 3.10 s to 3.01 s with byte-identical PNGs. Set `GGML_METAL_MM_DOUBLE_BUFFER_DISABLE=1` to keep ToshGEMM but disable only this. The expert (`mul_mm_id`) path stays single-buffered: it passed 790/790 correctness cases but measured 1.2% slower with the extra threadgroup memory at `--n-cpu-moe 20`.
+That double buffering alternates two 8 KiB threadgroup tiles, so the synchronization that publishes the next tile also lets slower simdgroups finish consuming the current one: an interleaved A/B on Qwen3-8B Q4_K_M averaged **+2.49%**, and the image engine, which shares the path, cut warm SDXL Turbo sampling from 3.10 s to 3.01 s with byte-identical PNGs. Set `GGML_METAL_MM_DOUBLE_BUFFER_DISABLE=1` to keep KestrelGEMM but disable only this. The expert (`mul_mm_id`) path stays single-buffered: it passed 790/790 correctness cases but measured 1.2% slower with the extra threadgroup memory at `--n-cpu-moe 20`.
 
-ToshGEMM now also covers **Mixture-of-Experts** prefill: the per-expert matmul (`mul_mm_id`) uses the same tiled kernel, so MoE models get the speedup on whatever experts are GPU-resident, not just their dense/attention layers. On a Qwen3-Coder-30B-A3B (Q4_K_M, pp512, RX 6700 XT, `--n-cpu-moe 20`):
+KestrelGEMM now also covers **Mixture-of-Experts** prefill: the per-expert matmul (`mul_mm_id`) uses the same tiled kernel, so MoE models get the speedup on whatever experts are GPU-resident, not just their dense/attention layers. On a Qwen3-Coder-30B-A3B (Q4_K_M, pp512, RX 6700 XT, `--n-cpu-moe 20`):
 
 | path | pp512 (t/s) |
 |---|---|
-| matrix-vector (no ToshGEMM) | 90 |
+| matrix-vector (no KestrelGEMM) | 90 |
 | dense layers only | 102 (+12%) |
 | dense **+ MoE experts** | **124 (+37%)** |
 
@@ -369,7 +369,7 @@ Dense models gain ~4% and were never at risk (too few copies per token). The pro
 
 ### AMD GCN / Vega cards (RX 500-series, Vega, Radeon VII)
 
-These older AMD GPUs use a 64-wide wavefront ("wave64"), while llama.cpp's Metal kernels assume 32 — that mismatch produced garbage output, and GCN has no simdgroup-matrix or simdgroup-reduction units, so it can't run the stock fast paths at all. ToshLLM ships a **custom wave64 GPU path**, turned on automatically when a wave64 card is detected, and it now covers the whole model: weight decode (K-quants including Q2_K/Q3_K, the IQ and MXFP4 types, the Q4_0/Q4_1/Q5_0/Q5_1 legacy quants, the ternary Q1_0/Q2_0, bf16, and Mixture-of-Experts expert math), the reductions (softmax and normalization, plus sums, argmax and the SSM scan that Mamba-style models and speculative decoding need), the Gated Delta Net layers the Qwen3.5/3.6 family is built on, **attention** (the AMD kernel has wave64 variants since 0.81.55, quantized KV included, and since 0.83.10 prompt processing uses the blocked kernel instead of decomposing attention), and the prompt matmul for both dense and expert layers.
+These older AMD GPUs use a 64-wide wavefront ("wave64"), while llama.cpp's Metal kernels assume 32 — that mismatch produced garbage output, and GCN has no simdgroup-matrix or simdgroup-reduction units, so it can't run the stock fast paths at all. Kestrel ships a **custom wave64 GPU path**, turned on automatically when a wave64 card is detected, and it now covers the whole model: weight decode (K-quants including Q2_K/Q3_K, the IQ and MXFP4 types, the Q4_0/Q4_1/Q5_0/Q5_1 legacy quants, the ternary Q1_0/Q2_0, bf16, and Mixture-of-Experts expert math), the reductions (softmax and normalization, plus sums, argmax and the SSM scan that Mamba-style models and speculative decoding need), the Gated Delta Net layers the Qwen3.5/3.6 family is built on, **attention** (the AMD kernel has wave64 variants since 0.81.55, quantized KV included, and since 0.83.10 prompt processing uses the blocked kernel instead of decomposing attention), and the prompt matmul for both dense and expert layers.
 
 The gains landed in three steps. `mul_mm_id` in 0.81.67 took a 35B MoE's prompt speed from 167 to **285 t/s (+70%)** on a Vega II. Then 0.83.9 moved the remaining quant types off the CPU: on a Radeon RX Vega 64, Qwen3 4B Q3_K_M went from **3.96 to 44 t/s** of generation, and gpt-oss 20B reached 18.2 t/s generation / 191 t/s prompt with the experts of 16 layers on the CPU. And 0.83.10 brought long prompts up on the same card, Qwen3 4B from **295 to 457 t/s at 8k of context** and Llama 3.2 1B from 917 to 1553, with identical perplexity.
 
@@ -385,9 +385,9 @@ Which card needs it is read from `MTLDevice.architecture`, the ISA target: `amdg
 ggml_metal: aligned mat-vec reads off by amdgpu_gfx906 (override with TOSH_MV_ALIGN=1 or =0)
 ```
 
-`TOSH_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `TOSH_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `TOSH_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/engeldlgado/toshllm/issues): the fast list can only grow from cards the project does not own.
+`TOSH_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `TOSH_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `TOSH_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/northlatchlabs/kestrel/issues): the fast list can only grow from cards the project does not own.
 
-> The wave64 path is validated on RDNA (wave32) as a byte-exact no-op, so it never affects Apple Silicon or AMD RDNA cards. On real GCN/Vega hardware it is still being validated with testers — if you have one of these cards, [your benchmark and coherence reports](https://github.com/engeldlgado/toshllm/issues) are exactly what moves it forward.
+> The wave64 path is validated on RDNA (wave32) as a byte-exact no-op, so it never affects Apple Silicon or AMD RDNA cards. On real GCN/Vega hardware it is still being validated with testers — if you have one of these cards, [your benchmark and coherence reports](https://github.com/northlatchlabs/kestrel/issues) are exactly what moves it forward.
 
 ## Community benchmarks
 
@@ -408,12 +408,12 @@ Testers with several cards go much bigger: a **122B-A10B** MoE (Q5_K_M) across f
 
 ### Share yours from the app
 
-From 0.82.3 you can publish your numbers straight from **Benchmarks → Share with the community**. It runs the standard workload (`pp512` / `tg128`, three repetitions), shows you a summary plus the exact JSON, and only after you confirm submits it to [toshllm.com](https://toshllm.com). No GitHub or account is needed... each install signs its own submissions with a key kept in your Keychain, and you can reset that identity anytime. ToshLLM sends only the model identity, hardware description, configuration and the measurements... never local paths, account names, or chat content. Community results stay labeled until reproduced, and the project's own verified runs are marked separately. Sharing your numbers in an issue still works too.
+From 0.82.3 you can publish your numbers straight from **Benchmarks → Share with the community**. It runs the standard workload (`pp512` / `tg128`, three repetitions), shows you a summary plus the exact JSON, and only after you confirm submits it to [northlatchlabs.com/kestrel](https://northlatchlabs.com/kestrel). No GitHub or account is needed... each install signs its own submissions with a key kept in your Keychain, and you can reset that identity anytime. Kestrel sends only the model identity, hardware description, configuration and the measurements... never local paths, account names, or chat content. Community results stay labeled until reproduced, and the project's own verified runs are marked separately. Sharing your numbers in an issue still works too.
 
 ## Architecture
 
 ```
-ToshLLM.app
+Kestrel.app
 ├── SwiftUI app (this repo) — UI, server lifecycle, downloads, estimator, benchmarks
 └── Resources/
     ├── bin/        llama-server + llama-bench + llama-perplexity + the image engine (AMD-patched, static)
@@ -437,36 +437,33 @@ Free to use, study, modify and redistribute. Any distributed derivative must rem
 - [llama.cpp](https://github.com/ggml-org/llama.cpp) (ggml-org) — inference engine
 - [iRon-Llama](https://github.com/Basten7/iRon-Llama-RC1) (Basten7) — Metal-on-AMD research for Intel Macs
 - [Chris Hafey](https://github.com/chafey) — the multi-GPU Mac Pros every split-model measurement runs on, and engine contributions
-- Developed by **Engelbert Delgado** ([@engeldlgado](https://github.com/engeldlgado))
+- Developed by **Northlatch Labs** ([@northlatchlabs](https://github.com/northlatchlabs))
 
 ## Support the project
 
-ToshLLM is free and open source, built in the open for the Mac AMD community. If it's useful to you, sponsoring keeps it independent and moving forward.
+Kestrel is free and open source, built in the open for the Mac AMD community. If it's useful to you, sponsoring keeps it independent and moving forward.
 
-### 💜 [Become a sponsor](https://youpay.me/engeldlgado/bio)
+### 💜 [Become a sponsor](https://github.com/northlatchlabs/kestrel#support-the-project)
 
 Quick and friendly. Every contribution funds continued development. Thank you for being part of this.
 
-Prefer crypto?
-
-- **Binance Pay**: alias `engeldlgado`
-- **USDT (TRC-20)**: `TFUG271bbbQEmFu4wkFHyvNNkYRZC5JDUf`
+Donations help keep the project independent. See the support links above.
 
 ---
 
-## ToshLLM en español
+## Kestrel en español
 
 **Ejecuta modelos de lenguaje grandes localmente en Macs Intel con GPU AMD.** Aceleración Metal. Sin nube, sin cuentas, sin costos por token.
 
-### [⬇️ Descarga la última versión](https://github.com/engeldlgado/toshllm/releases/latest) · [📝 Cambios](CHANGELOG.md) · [💜 Apoya el proyecto](#apoya-el-proyecto)
+### [⬇️ Descarga la última versión](https://github.com/northlatchlabs/kestrel/releases/latest) · [📝 Cambios](CHANGELOG.md) · [💜 Apoya el proyecto](#apoya-el-proyecto)
 
-### ¿Qué es ToshLLM?
+### ¿Qué es Kestrel?
 
-ToshLLM te permite ejecutar modelos LLM modernos **completamente en tu propio Mac** — tus chats nunca salen del equipo, no hay cuentas y no pagas por token.
+Kestrel te permite ejecutar modelos LLM modernos **completamente en tu propio Mac** — tus chats nunca salen del equipo, no hay cuentas y no pagas por token.
 
 Casi todas las herramientas de LLM locales en macOS apuntan a Apple Silicon; los Macs Intel con GPU AMD dedicada (incluidos los Hackintosh) quedan fuera: los motores estándar producen **texto corrupto** en estas GPUs y leen los pesos por PCIe a una fracción de la velocidad posible.
 
-**ToshLLM lo resuelve.** Empaqueta `llama.cpp` con parches específicos para AMD dentro de una app nativa SwiftUI, de modo que una tarjeta como la RX 6700 XT pasa de inservible a realmente rápida (Qwen3-8B: de 0.6–2.6 t/s a ~61 t/s). Al abrirla detecta tu hardware y te recomienda modelos que correrán bien, sin adivinar.
+**Kestrel lo resuelve.** Empaqueta `llama.cpp` con parches específicos para AMD dentro de una app nativa SwiftUI, de modo que una tarjeta como la RX 6700 XT pasa de inservible a realmente rápida (Qwen3-8B: de 0.6–2.6 t/s a ~61 t/s). Al abrirla detecta tu hardware y te recomienda modelos que correrán bien, sin adivinar.
 
 ### Funciones
 
@@ -494,13 +491,13 @@ Funciones nuevas, aún en validación — actívalas en Ajustes, pero pueden ten
 - **Recordar conversaciones (caché en disco)** — guarda la caché KV de cada chat, así al reabrirlo o reiniciar la app no se reprocesa el prompt; la restauración es byte-exacta y un chat de 8.6k tokens vuelve en 0.9 s en vez de 24.8 s. También pre-calienta la caché para clientes externos (VS Code/Cline), evitando el prefill frío de varios minutos en la primera petición.
 - **Generación de vídeo (experimental, primera versión)** — un modo Vídeo junto a Chat e Imágenes, sobre el mismo motor stable-diffusion.cpp, con Wan 2.1/2.2, LTX-2 y HunyuanVideo. Léelo antes de descargar 7 GB: unos segundos de vídeo tardan minutos, 49 fotogramas a 480p ya llenan una tarjeta de 12 GB y **solo entra Wan 2.1 1.3B**; los demás piden 24 GB o más. Pedir más fotogramas o más píxeles de los que caben falla, no degrada. El clip vuelve como fotogramas que puedes recorrer, y se exporta a mp4. El motor está medido; la interfaz es nueva y los valores por defecto van a cambiar.
 - **Repartir el modelo entre varias GPUs** — validado en un equipo con dos GPUs (RX 6900 XT + RX 6800 XT por eGPU): un MoE de 35B con todos los expertos en VRAM generó a ~3× la velocidad de una sola GPU con offload, y hay testers corriendo modelos de 122B repartidos en cuatro tarjetas. Puedes elegir el conjunto exacto de tarjetas por servidor; sigue marcado experimental mientras llegan más configuraciones.
-- **Tarjetas AMD GCN / Vega (RX 500, Vega, Radeon VII)** — usan wavefront de 64 (los kernels de Metal asumen 32), lo que producía salida corrupta. ToshLLM incluye un **path wave64 en GPU** que se activa solo al detectar una de estas tarjetas y ya cubre el modelo completo: decode de pesos (K-quants incluidos Q2_K/Q3_K, tipos IQ y MXFP4, quants legacy, ternarios Q1_0/Q2_0, bf16 y expertos MoE), las reducciones (softmax, normalización, sumas, argmax y el scan SSM), las capas Gated Delta Net de la familia Qwen3.5/3.6, la **atención** (variantes wave64 desde 0.81.55, con KV cuantizado, y desde 0.83.10 el prompt usa el kernel por bloques) y el matmul de prompt de capas densas y de expertos. En una Vega 64: Qwen3 4B Q3_K_M pasó de **3.96 a 44 t/s** de generación en 0.83.9, y sus prompts largos de **295 a 457 t/s** a 8k de contexto en 0.83.10. Un tester midió en una RX 580 un modelo K-quant pasar de **1.3 a ~51 t/s**, coherente. Recomendado: modelo K-quant, Flash Attention en **ON** y KV en f16. Es no-op verificado en RDNA (wave32); en GCN/Vega real sigue validándose con testers.
+- **Tarjetas AMD GCN / Vega (RX 500, Vega, Radeon VII)** — usan wavefront de 64 (los kernels de Metal asumen 32), lo que producía salida corrupta. Kestrel incluye un **path wave64 en GPU** que se activa solo al detectar una de estas tarjetas y ya cubre el modelo completo: decode de pesos (K-quants incluidos Q2_K/Q3_K, tipos IQ y MXFP4, quants legacy, ternarios Q1_0/Q2_0, bf16 y expertos MoE), las reducciones (softmax, normalización, sumas, argmax y el scan SSM), las capas Gated Delta Net de la familia Qwen3.5/3.6, la **atención** (variantes wave64 desde 0.81.55, con KV cuantizado, y desde 0.83.10 el prompt usa el kernel por bloques) y el matmul de prompt de capas densas y de expertos. En una Vega 64: Qwen3 4B Q3_K_M pasó de **3.96 a 44 t/s** de generación en 0.83.9, y sus prompts largos de **295 a 457 t/s** a 8k de contexto en 0.83.10. Un tester midió en una RX 580 un modelo K-quant pasar de **1.3 a ~51 t/s**, coherente. Recomendado: modelo K-quant, Flash Attention en **ON** y KV en f16. Es no-op verificado en RDNA (wave32); en GCN/Vega real sigue validándose con testers.
 
 ### Instalación
 
-Descarga el `.dmg` desde [Releases](https://github.com/engeldlgado/toshllm/releases/latest), ábrelo y arrastra **ToshLLM** a Aplicaciones. Todo viene incluido — sin Homebrew, sin Python.
+Descarga el `.dmg` desde [Releases](https://github.com/northlatchlabs/kestrel/releases/latest), ábrelo y arrastra **Kestrel** a Aplicaciones. Todo viene incluido — sin Homebrew, sin Python.
 
-> **Primer arranque:** desde la 0.86.5 la app va firmada con un Apple Developer ID y notarizada por Apple, así que se abre directamente, sin avisos ni nada que aprobar. En la **0.86.4 y anteriores** macOS bloquea la primera apertura: ve a **Ajustes del Sistema → Privacidad y Seguridad** y pulsa **"Abrir igualmente"**, o ejecuta `xattr -dr com.apple.quarantine /Applications/ToshLLM.app`.
+> **Primer arranque:** desde la 0.86.5 la app va firmada con un Apple Developer ID y notarizada por Apple, así que se abre directamente, sin avisos ni nada que aprobar. En la **0.86.4 y anteriores** macOS bloquea la primera apertura: ve a **Ajustes del Sistema → Privacidad y Seguridad** y pulsa **"Abrir igualmente"**, o ejecuta `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
 
 > **Macs antiguos sin AVX2 (p. ej. Mac Pro 5,1 y otros Xeon anteriores a 2013):** el build normal necesita las instrucciones AVX2 y arranca con "illegal hardware instruction" en esas máquinas. Cada versión publica además un **build sin AVX2** — descarga el `.dmg` cuyo nombre termina en **`-noavx2`**. Se actualiza por su propio canal, así que una vez instalado solo te ofrecerá builds sin AVX2.
 
@@ -508,19 +505,18 @@ Descarga el `.dmg` desde [Releases](https://github.com/engeldlgado/toshllm/relea
 
 - macOS 14 o posterior · Mac Intel con GPU AMD compatible con Metal · 16 GB de RAM mínimo (32 GB recomendado para MoE de 35B).
 - **Hackintosh:** las GPUs AMD RDNA 2 funcionan muy bien con el kext [NootRX](https://github.com/ChefKissInc/NootRX).
-- **Beta:** funciona para uso diario pero pueden aparecer detalles por pulir; reporta lo que encuentres en [Issues](https://github.com/engeldlgado/toshllm/issues) (exporta diagnósticos desde Ajustes → Registro del servidor).
+- **Beta:** funciona para uso diario pero pueden aparecer detalles por pulir; reporta lo que encuentres en [Issues](https://github.com/northlatchlabs/kestrel/issues) (exporta diagnósticos desde Ajustes → Registro del servidor).
 - **Limitaciones conocidas:** los clientes externos (VS Code, Cline…) envían un prompt fijo de 15-19k tokens en cada petición, lo que en frío satura la GPU varios minutos (el chat integrado no se ve afectado). Los modelos MoE grandes con offload antes ahogaban al driver AMD y se estancaban a mitad de generación; **0.81.49 lo solucionó** con un buffer de staging persistente y ahora corren estables y planos (confirmado en RX 6700 XT y en el Mac Pro de dos GPUs de un tester). Queda un watchdog como red de seguridad.
-- **Caché con visión:** `llama.cpp` no permite guardar/restaurar slots ni usar cache-reuse mientras hay un `mmproj` cargado. ToshLLM desactiva esas funciones automáticamente para modelos de visión; la caché normal en memoria sigue funcionando.
+- **Caché con visión:** `llama.cpp` no permite guardar/restaurar slots ni usar cache-reuse mientras hay un `mmproj` cargado. Kestrel desactiva esas funciones automáticamente para modelos de visión; la caché normal en memoria sigue funcionando.
 
 ### Apoya el proyecto
 
-ToshLLM es libre y de código abierto, hecho para la comunidad Mac AMD. Si te resulta útil, patrocinarlo lo mantiene independiente y avanzando.
+Kestrel es libre y de código abierto, hecho para la comunidad Mac AMD. Si te resulta útil, patrocinarlo lo mantiene independiente y avanzando.
 
-#### 💜 [Conviértete en patrocinador](https://youpay.me/engeldlgado/bio)
+#### 💜 [Conviértete en patrocinador](https://github.com/northlatchlabs/kestrel#support-the-project)
 
 Rápido y sencillo. Cada aporte financia el desarrollo. Gracias por ser parte de esto.
 
-¿Prefieres cripto? **Binance Pay**: alias `engeldlgado` · **USDT (TRC-20)**: `TFUG271bbbQEmFu4wkFHyvNNkYRZC5JDUf`
 
 ### Licencia
 

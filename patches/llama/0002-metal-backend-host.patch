@@ -3262,7 +3262,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +                            (unsigned long long) dev->mtl_device.peerGroupID,
 +                            dev->mtl_device.peerGroupID == 0 ? "not bridged" : "bridged",
 +                            dev->props.simd_width);
-+                    // Expose the measured width to ToshLLM's graph-level AMD FA policy.
++                    // Expose the measured width to Kestrel's graph-level AMD FA policy.
 +                    // A wave64 process records 64 and therefore never takes the RDNA-only
 +                    // head-64 prefill path below.
 +                    char simd_width_env[16];

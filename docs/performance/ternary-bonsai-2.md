@@ -46,7 +46,7 @@ pass through threadgroup memory covers the rest. On the RX 6700 XT, PQ2_0 genera
 second with the transform skipped. Unfused, the transform brought that down to 29.24 (7.4% slower).
 Fused, it gives 30.25 (4.2% slower).
 
-Weights stay packed in VRAM. Prompts go through ToshGEMM, with the wide tile on both widths. Its
+Weights stay packed in VRAM. Prompts go through KestrelGEMM, with the wide tile on both widths. Its
 PQ2_0 dequantization writes each 2-bit field into the mantissa of 1024.0h, so 16 weights cost
 eight `v_and_or` and sixteen packed half operations. Generation uses dedicated mat-vec kernels:
 PQ2_0 isolates one field of four bytes with a `0x03030303` mask and converts each byte straight to
@@ -87,19 +87,19 @@ Radeon RX 6700 XT, tokens a second:
 
 | | pp512 | pp1024 | pp2048 | tg128 |
 |---|---|---|---|---|
-| PQ2_0, ToshLLM | **258.1** | 256.1 | 253.3 | **33.35** |
+| PQ2_0, Kestrel | **258.1** | 256.1 | 253.3 | **33.35** |
 | PQ2_0, first port | 221.9 | 219.9 | 218.3 | 29.23 |
 | PQ2_0, Prism | 59.3 | 58.7 | 57.7 | 24.80 |
-| PTQ1_0, ToshLLM | **235.8** | 234.6 | 232.5 | **33.08** |
+| PTQ1_0, Kestrel | **235.8** | 234.6 | 232.5 | **33.08** |
 | PTQ1_0, Prism | 40.7 | 40.4 | 39.9 | 23.72 |
 
 Radeon Pro Vega II Duo, one die (Prism does not run there: `nan` perplexity):
 
 | | pp512 | pp1024 | pp2048 | tg128 |
 |---|---|---|---|---|
-| PQ2_0, ToshLLM | **203.6** | 202.1 | 200.8 | **36.94** |
+| PQ2_0, Kestrel | **203.6** | 202.1 | 200.8 | **36.94** |
 | PQ2_0, first port | 169.5 | 168.6 | 167.5 | 28.54 |
-| PTQ1_0, ToshLLM | **184.5** | 183.1 | 182.1 | **27.34** |
+| PTQ1_0, Kestrel | **184.5** | 183.1 | 182.1 | **27.34** |
 | PTQ1_0, first port | 126.0 | 125.6 | 124.9 | 23.07 |
 
 From the first port to the final build, with every change below applied:
@@ -137,7 +137,7 @@ weight mat-vecs, 2.3 ms gathering and copying the recurrent state, 2.0 ms of nor
 rather than by its 1 TB/s of memory, and the gated delta net kernel taking 3.9 ms per layer on a
 512-token prompt against 0.7 on the RX 6700 XT.
 
-Prompts are 87% GEMM, at 15.7 TFLOPS on the RX 6700 XT: the same efficiency ToshGEMM reaches with
+Prompts are 87% GEMM, at 15.7 TFLOPS on the RX 6700 XT: the same efficiency KestrelGEMM reaches with
 Q4_0, and the PQ2_0 dequantization is 24 of the 851 instructions of its loop. What changed:
 
 | Change | RX 6700 XT | Vega |
@@ -171,7 +171,7 @@ from 160.9 to 191.4 and from 23.8 to 25.9, and Qwen3.5-4B BF16 from 610 to 753 a
 
 ## Known limitations
 
-- The prompt speed is the ToshGEMM ceiling for these cards; making it faster means a faster GEMM
+- The prompt speed is the KestrelGEMM ceiling for these cards; making it faster means a faster GEMM
   for every quantization, not something specific to this model.
 - PTQ1_0 generates more slowly than PQ2_0 on the Vega (27.3 against 36.9): its mat-vec is limited
   by instructions there, and half products, which paid off for PQ2_0, made it slower.

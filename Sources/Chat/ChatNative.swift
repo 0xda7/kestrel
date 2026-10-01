@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -397,7 +397,7 @@ final class ChatStore: ObservableObject {
 
     private var fileURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ToshLLM")
+            .appendingPathComponent("Kestrel")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("conversations.json")
     }
@@ -473,7 +473,7 @@ final class ChatStore: ObservableObject {
     /// outlive the chat window, and then nothing holds them in memory.
     static func eraseStoredConversations() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ToshLLM")
+            .appendingPathComponent("Kestrel")
         try? FileManager.default.removeItem(at: dir.appendingPathComponent("conversations.json"))
         let slots = ServerSettings.primarySlotCacheDir
         guard let files = try? FileManager.default.contentsOfDirectory(at: slots,
@@ -852,7 +852,7 @@ final class ChatStore: ObservableObject {
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
-                    availableTools += await ToshMCPService.shared.discoverTools()
+                    availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
                     if let enabledToolNames {
                         let selected = Set(enabledToolNames)
@@ -1255,7 +1255,7 @@ final class ChatStore: ObservableObject {
                 let result: ToolExecutionResult
                 if let tool = context.tools.first(where: { $0.name == request.name }),
                    let serverID = tool.mcpServerID, let remoteName = tool.remoteName {
-                    result = try await ToshMCPService.shared.call(
+                    result = try await KestrelMCPService.shared.call(
                         serverID: serverID, name: remoteName, arguments: arguments)
                 } else if request.name == JavaScriptSandboxService.toolName {
                     result = await JavaScriptSandboxService.execute(arguments: arguments)
@@ -1910,7 +1910,7 @@ final class ChatStore: ObservableObject {
 
     // Serial queue: keeps writes ordered while encoding off the main thread,
     // since the full history JSON grows with use and would cause hitches.
-    private static let saveQueue = DispatchQueue(label: "dev.engel.toshllm.chat-save", qos: .utility)
+    private static let saveQueue = DispatchQueue(label: "com.northlatchlabs.kestrel.chat-save", qos: .utility)
 
     func save() {
         for i in conversations.indices {
@@ -3681,7 +3681,7 @@ struct NativeChatView: View {
             tools.append(JavaScriptSandboxService.tool)
         }
         if ChatMemoryService.isEnabled { tools += ChatMemoryService.tools }
-        tools += await ToshMCPService.shared.discoverTools()
+        tools += await KestrelMCPService.shared.discoverTools()
         var seen = Set<String>()
         availableTools = tools.filter { seen.insert($0.name).inserted }
         loadingTools = false
@@ -4442,7 +4442,7 @@ struct ConversationListView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
 
-            Text("ToshLLM · macOS")
+            Text("Kestrel · macOS")
                 .font(.system(size: 10, weight: .medium))
                 .tracking(1.5)
                 .foregroundStyle(.tertiary)
@@ -4607,7 +4607,7 @@ struct ConversationListView: View {
     private func exportArchive() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "ToshLLM-conversations.json"
+        panel.nameFieldStringValue = "Kestrel-conversations.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try chat.exportArchiveData().write(to: url, options: .atomic)
@@ -4621,7 +4621,7 @@ struct ConversationListView: View {
     private func exportJSONL() {
         let panel = NSSavePanel()
         if let jsonl = UTType(filenameExtension: "jsonl") { panel.allowedContentTypes = [jsonl] }
-        panel.nameFieldStringValue = "ToshLLM-conversations.jsonl"
+        panel.nameFieldStringValue = "Kestrel-conversations.jsonl"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try chat.exportJSONLData().write(to: url, options: .atomic)

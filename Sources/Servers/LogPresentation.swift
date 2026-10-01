@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -75,8 +75,8 @@ enum LogPresentationParser {
         let lower = line.lowercased()
         if lower.contains("ggml_metal") || lower.contains("metal") { return "Metal" }
         if lower.contains("llama_server") { return "Server" }
-        if lower.hasPrefix("toshllm ") || lower.hasPrefix("engine ") || lower.hasPrefix("model  ") ||
-            lower.hasPrefix("settings:") || lower.hasPrefix("args:") { return "ToshLLM" }
+        if lower.hasPrefix("kestrel ") || lower.hasPrefix("engine ") || lower.hasPrefix("model  ") ||
+            lower.hasPrefix("settings:") || lower.hasPrefix("args:") { return "Kestrel" }
         return fallback
     }
 

@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a focused improvement to ToshLLM
+description: Propose a focused improvement to Kestrel
 labels: ["type: feature", "status: needs triage"]
 body:
   - type: markdown
@@ -20,7 +20,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: Describe what you would like ToshLLM to do.
+      description: Describe what you would like Kestrel to do.
       placeholder: A concise example or mockup is welcome.
     validations:
       required: true

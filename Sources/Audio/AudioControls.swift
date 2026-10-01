@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -77,8 +77,8 @@ struct AudioControls: View {
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(studio.isBusy)
-                .help(loc.t("Admite audio y vídeo; ToshLLM extrae el audio localmente sin modificar el original.",
-                            "Accepts audio and video; ToshLLM extracts audio locally without changing the original."))
+                .help(loc.t("Admite audio y vídeo; Kestrel extrae el audio localmente sin modificar el original.",
+                            "Accepts audio and video; Kestrel extracts audio locally without changing the original."))
 
                 if let source = studio.sourceURL {
                     Text(source.lastPathComponent)
@@ -120,7 +120,7 @@ struct AudioControls: View {
                     HStack(spacing: 10) {
                         Text(loc.t("Idioma de destino", "Target language"))
                         Spacer(minLength: 8)
-                        ToshDropdown(selection: targetLanguageSelection,
+                        KestrelDropdown(selection: targetLanguageSelection,
                                      options: targetLanguageOptions,
                                      placeholder: loc.t("Elegir idioma", "Choose language"),
                                      width: 172,
@@ -574,7 +574,7 @@ struct AudioControls: View {
         }
     }
 
-    private var targetLanguageOptions: [ToshDropdown<String>.Option] {
+    private var targetLanguageOptions: [KestrelDropdown<String>.Option] {
         [
             .init(value: TranslationLanguageOption.customValue,
                   title: loc.t("Otro…", "Other…"),
@@ -662,7 +662,7 @@ private struct TranslationLanguageOption: Identifiable {
         all.first(where: { $0.id == "es" })?.value ?? "Spanish"
     }
 
-    static let customValue = "__toshllm_custom_language__"
+    static let customValue = "__kestrel_custom_language__"
 
     static func matching(_ value: String) -> TranslationLanguageOption? {
         all.first {

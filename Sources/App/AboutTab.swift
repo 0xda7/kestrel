@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -8,21 +8,19 @@ import SwiftUI
 
 enum AppInfo {
     static let version = "0.87.9"
-    /// True for the pre-AVX2 legacy build (Info.plist TOSHNoAVX2). Kept on its own
+    /// True for the pre-AVX2 legacy build (Info.plist KestrelNoAVX2). Kept on its own
     /// update channel so it never pulls an AVX2 DMG that would SIGILL on those CPUs.
-    static let isNoAVX2 = Bundle.main.object(forInfoDictionaryKey: "TOSHNoAVX2") as? Bool ?? false
-    static let developerName = "Engelbert Delgado"
-    static let developerHandle = "engeldlgado"
-    static let githubURL = "https://github.com/engeldlgado"
-    static let repositoryURL = "https://github.com/engeldlgado/toshllm"
+    static let isNoAVX2 = Bundle.main.object(forInfoDictionaryKey: "KestrelNoAVX2") as? Bool ?? false
+    static let developerName = "Northlatch Labs"
+    static let developerHandle = "northlatchlabs"
+    static let githubURL = "https://github.com/northlatchlabs"
+    static let repositoryURL = "https://github.com/northlatchlabs/kestrel"
     static let issuesURL = repositoryURL + "/issues"
     static let featureRequestURL = repositoryURL + "/issues/new?template=feature_request.yml"
     static let discussionsURL = repositoryURL + "/discussions"
-    static let sponsorURL = "https://youpay.me/engeldlgado/bio"
-    static let binancePayID = "engeldlgado"
-    static let usdtTRC20 = "TFUG271bbbQEmFu4wkFHyvNNkYRZC5JDUf"
-    static let donateNoteES = "Si ToshLLM te resulta útil, puedes apoyar el desarrollo con una donación."
-    static let donateNoteEN = "If ToshLLM is useful to you, you can support development with a donation."
+    static let sponsorURL = "https://github.com/northlatchlabs/kestrel#support-the-project"
+    static let donateNoteES = "Si Kestrel te resulta útil, puedes apoyar el desarrollo con una donación."
+    static let donateNoteEN = "If Kestrel is useful to you, you can support development with a donation."
 }
 
 struct AboutView: View {
@@ -55,9 +53,9 @@ struct AboutView: View {
                            startPoint: .leading, endPoint: .trailing)
                 .allowsHitTesting(false)
             HStack(spacing: 20) {
-                ToshLLMLogo(size: 92)
+                KestrelLogo(size: 92)
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("ToshLLM")
+                    Text("Kestrel")
                         .font(.system(size: 32, weight: .bold))
                     HStack(spacing: 9) {
                         Text(loc.t("Versión", "Version") + " " + AppInfo.version)
@@ -69,8 +67,8 @@ struct AboutView: View {
                                "Local language models with Metal acceleration on Intel Macs with AMD GPUs."))
                         .font(.system(size: 15, weight: .medium))
                         .lineLimit(2)
-                    Text(loc.t("Privado. Rápido. Potente. ToshLLM lleva la IA de código abierto a tu equipo con una experiencia nativa y limpia para macOS.",
-                               "Private. Fast. Powerful. ToshLLM brings open-source AI to your machine with a clean, native macOS experience."))
+                    Text(loc.t("Privado. Rápido. Potente. Kestrel lleva la IA de código abierto a tu equipo con una experiencia nativa y limpia para macOS.",
+                               "Private. Fast. Powerful. Kestrel brings open-source AI to your machine with a clean, native macOS experience."))
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -265,7 +263,7 @@ struct AboutView: View {
             ? "—"
             : hardware.gpus.map { "\($0.name) (\($0.vramGB) GB)" }.joined(separator: ", ")
         let value = """
-        ToshLLM \(AppInfo.version)\(AppInfo.isNoAVX2 ? " (no-AVX2)" : "")
+        Kestrel \(AppInfo.version)\(AppInfo.isNoAVX2 ? " (no-AVX2)" : "")
         \(hardware.osVersion)
         Model: \(hardware.model)
         CPU: \(hardware.cpuBrand) · \(hardware.physicalCores) cores / \(hardware.logicalCores) threads

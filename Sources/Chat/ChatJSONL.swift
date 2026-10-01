@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -58,17 +58,17 @@ enum ChatJSONL {
             "name": conversation.title, "lastModified": conversation.updated.timeIntervalSince1970 * 1000,
             "currNode": conversation.messages.last?.id.uuidString ?? rootID,
             "pinned": conversation.pinned ?? false,
-            "toshCreated": conversation.created.timeIntervalSince1970 * 1000,
+            "kestrelCreated": conversation.created.timeIntervalSince1970 * 1000,
         ]
-        if let value = conversation.systemPrompt { header["toshSystemPrompt"] = value }
-        if let value = conversation.summary { header["toshSummary"] = value }
-        if let value = conversation.summarizedCount { header["toshSummarizedCount"] = value }
+        if let value = conversation.systemPrompt { header["kestrelSystemPrompt"] = value }
+        if let value = conversation.summary { header["kestrelSummary"] = value }
+        if let value = conversation.summarizedCount { header["kestrelSummarizedCount"] = value }
         if let blocks = conversation.archived, !blocks.isEmpty,
            let data = try? JSONEncoder().encode(blocks),
            let json = try? JSONSerialization.jsonObject(with: data) {
-            header["toshArchived"] = json
+            header["kestrelArchived"] = json
         }
-        if let value = conversation.enabledToolNames { header["toshEnabledToolNames"] = value }
+        if let value = conversation.enabledToolNames { header["kestrelEnabledToolNames"] = value }
 
         let root: [String: Any] = [
             "id": rootID, "convId": conversation.id.uuidString, "type": "root",
@@ -151,7 +151,7 @@ enum ChatJSONL {
         let currentMessages = currentID.flatMap { byID[$0] == nil ? nil : path(to: $0) }
             ?? leaves.first.map(path) ?? []
         let allPaths = leaves.map(path).filter { !$0.isEmpty }
-        let createdMS = header["toshCreated"] as? Double
+        let createdMS = header["kestrelCreated"] as? Double
         let modifiedMS = header["lastModified"] as? Double
         var conversation = Conversation(
             id: UUID(uuidString: header["id"] as? String ?? "") ?? UUID(),
@@ -159,12 +159,12 @@ enum ChatJSONL {
             messages: currentMessages,
             created: createdMS.map { Date(timeIntervalSince1970: $0 / 1000) } ?? currentMessages.first?.date ?? .now,
             updated: modifiedMS.map { Date(timeIntervalSince1970: $0 / 1000) } ?? currentMessages.last?.date ?? .now,
-            summary: header["toshSummary"] as? String,
-            summarizedCount: header["toshSummarizedCount"] as? Int,
+            summary: header["kestrelSummary"] as? String,
+            summarizedCount: header["kestrelSummarizedCount"] as? Int,
             pinned: header["pinned"] as? Bool,
-            systemPrompt: header["toshSystemPrompt"] as? String,
-            enabledToolNames: header["toshEnabledToolNames"] as? [String])
-        if let json = header["toshArchived"],
+            systemPrompt: header["kestrelSystemPrompt"] as? String,
+            enabledToolNames: header["kestrelEnabledToolNames"] as? [String])
+        if let json = header["kestrelArchived"],
            let data = try? JSONSerialization.data(withJSONObject: json),
            let blocks = try? JSONDecoder().decode([ArchivedBlock].self, from: data) {
             conversation.archived = ChatMemoryService.clamped(blocks, toCount: currentMessages.count)

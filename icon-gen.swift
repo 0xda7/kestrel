@@ -1,4 +1,4 @@
-// Generates the ToshLLM app icon (macOS 26 style: gradient squircle with a chip glyph).
+// Generates the Kestrel app icon (macOS 26 style: gradient squircle with a chip glyph).
 // Usage: swift icon-gen.swift <output.png>
 import AppKit
 

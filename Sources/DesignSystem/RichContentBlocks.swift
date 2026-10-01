@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -234,7 +234,7 @@ struct RichWebView: NSViewRepresentable {
             const tokenized = raw.replace(/\\\(([^\n]{1,160}?)\\\)|(?<![\\$])\$(?![\s\d])([^\n$]{1,160}?)(?<![\s\\$])\$(?!\$)/g, (match, paren, dollar) => {
               const body = paren ?? dollar;
               if (body.length > 3 && !/[\\^_{}]/.test(body)) return match;
-              const token = `TOSHMATH${formulas.length}TOKEN`;
+              const token = `KESTRELMATH${formulas.length}TOKEN`;
               formulas.push(body);
               return token;
             });
@@ -243,11 +243,11 @@ struct RichWebView: NSViewRepresentable {
             const walker = document.createTreeWalker(document.getElementById('content'), NodeFilter.SHOW_TEXT);
             const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
             for (const node of nodes) {
-              const pieces = node.nodeValue.split(/(TOSHMATH\d+TOKEN)/g);
+              const pieces = node.nodeValue.split(/(KESTRELMATH\d+TOKEN)/g);
               if (pieces.length === 1) continue;
               const fragment = document.createDocumentFragment();
               for (const piece of pieces) {
-                const match = /^TOSHMATH(\d+)TOKEN$/.exec(piece);
+                const match = /^KESTRELMATH(\d+)TOKEN$/.exec(piece);
                 if (!match) { fragment.append(document.createTextNode(piece)); continue; }
                 const span = document.createElement('span'); span.className = 'inline-math';
                 katex.render(formulas[Number(match[1])], span, {displayMode:false, throwOnError:false});

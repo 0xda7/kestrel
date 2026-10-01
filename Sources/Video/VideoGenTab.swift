@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -814,7 +814,7 @@ private func reveal(_ result: GeneratedVideo) {
 }
 
 private func exportMP4(_ result: GeneratedVideo) {
-    let panel = NSSavePanel(); panel.allowedContentTypes = [.mpeg4Movie]; panel.nameFieldStringValue = "toshllm-video.mp4"
+    let panel = NSSavePanel(); panel.allowedContentTypes = [.mpeg4Movie]; panel.nameFieldStringValue = "kestrel-video.mp4"
     guard panel.runModal() == .OK, let destination = panel.url else { return }
     let urls = result.frameURLs; let fps = result.fps
     Task.detached {
@@ -824,7 +824,7 @@ private func exportMP4(_ result: GeneratedVideo) {
             await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([destination]) }
         } catch {
             await MainActor.run {
-                let alert = NSAlert(); alert.messageText = "ToshLLM"; alert.informativeText = error.localizedDescription
+                let alert = NSAlert(); alert.messageText = "Kestrel"; alert.informativeText = error.localizedDescription
                 alert.alertStyle = .warning; alert.runModal()
             }
         }

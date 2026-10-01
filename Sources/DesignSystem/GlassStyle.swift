@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -28,7 +28,7 @@ private struct GlassSurface<S: InsettableShape>: ViewModifier {
         } else {
             #if compiler(>=6.2) && !TOSH_LEGACY_UI
             if #available(macOS 26.0, *) {
-                content.glassEffect(makeToshGlass(tint: tint, interactive: interactive), in: shape)
+                content.glassEffect(makeKestrelGlass(tint: tint, interactive: interactive), in: shape)
             } else {
                 materialSurface(content)
             }
@@ -46,7 +46,7 @@ private struct GlassSurface<S: InsettableShape>: ViewModifier {
 
 #if compiler(>=6.2) && !TOSH_LEGACY_UI
 @available(macOS 26.0, *)
-private func makeToshGlass(tint: Color?, interactive: Bool) -> Glass {
+private func makeKestrelGlass(tint: Color?, interactive: Bool) -> Glass {
     var glass: Glass = .regular
     if let tint { glass = glass.tint(tint) }
     if interactive { glass = glass.interactive() }

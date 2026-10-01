@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -654,7 +654,7 @@ final class ImageGenerator: ObservableObject {
            FileManager.default.fileExists(atPath: bundled) {
             return bundled
         }
-        return NSString(string: "~/dev/repositorios/toshllm/vendor/stable-diffusion.cpp/build-static/bin/sd-cli")
+        return NSString(string: "~/dev/repositorios/kestrel/vendor/stable-diffusion.cpp/build-static/bin/sd-cli")
             .expandingTildeInPath
     }
 
@@ -723,7 +723,7 @@ final class ImageGenerator: ObservableObject {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd_HH.mm.ss"
         let token = String(UUID().uuidString.prefix(4)).lowercased()
-        let out = dir.appendingPathComponent("toshllm_\(fmt.string(from: Date()))_\(token).\(format.ext)")
+        let out = dir.appendingPathComponent("kestrel_\(fmt.string(from: Date()))_\(token).\(format.ext)")
 
         // Each component maps to its own sd-cli flag (a full checkpoint via --model,
         // or a diffusion model plus its VAE and text encoders).
@@ -762,7 +762,7 @@ final class ImageGenerator: ObservableObject {
         // `proj` needs no extra weights (it projects the latents), so the preview
         // costs a rescale per interval and never a second model download.
         let preview = FileManager.default.temporaryDirectory
-            .appendingPathComponent("toshllm-preview-\(token).png")
+            .appendingPathComponent("kestrel-preview-\(token).png")
         previewURL = preview
         args += ["--preview", "proj", "--preview-interval", "3", "--preview-path", preview.path]
         // img2img: seed the run with an existing image. Strength is how much to
@@ -1259,7 +1259,7 @@ final class ImageGenPool: ObservableObject {
         if queue.isEmpty && !anyBusy { queueActive = false }
     }
 
-    /// Deletes generated outputs (`toshllm_*`) from the imagen folder, when the
+    /// Deletes generated outputs (`kestrel_*`) from the imagen folder, when the
     /// user opts in. Upscales of those files are kept: they are the version the
     /// user asked to produce, not accumulated output.
     nonisolated static func cleanupOutputsIfEnabled() {
@@ -1268,7 +1268,7 @@ final class ImageGenPool: ObservableObject {
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         for f in files {
             let name = f.deletingPathExtension().lastPathComponent
-            guard name.hasPrefix("toshllm_"), !name.contains("-x2"), !name.contains("-x4") else { continue }
+            guard name.hasPrefix("kestrel_"), !name.contains("-x2"), !name.contains("-x4") else { continue }
             try? FileManager.default.removeItem(at: f)
         }
     }

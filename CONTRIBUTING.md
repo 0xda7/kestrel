@@ -1,4 +1,4 @@
-# Contributing to ToshLLM
+# Contributing to Kestrel
 
 Thanks for your interest! Contributions are welcome under the project's
 [GPL-3.0 license](LICENSE) — by submitting a pull request you agree that your
@@ -7,11 +7,11 @@ contribution is licensed under the same terms.
 ## Getting started
 
 ```bash
-git clone https://github.com/engeldlgado/toshllm
-cd toshllm
+git clone https://github.com/northlatchlabs/kestrel
+cd kestrel
 ./scripts/build-engines.sh   # one-time: builds the patched llama.cpp engines
-./make-app.sh                # builds and packages dist/ToshLLM.app
-open dist/ToshLLM.app
+./make-app.sh                # builds and packages dist/Kestrel.app
+open dist/Kestrel.app
 swift test                   # unit tests (needs full Xcode, see below)
 ```
 

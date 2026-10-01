@@ -10,7 +10,7 @@ set -uo pipefail
 MODEL="${1:?usage: $0 <model.gguf> [model-that-aborts.gguf]}"
 MODEL_ABORT="${2:-}"
 
-BIN="${TOSH_BIN:-/Applications/ToshLLM.app/Contents/Resources/bin}"
+BIN="${TOSH_BIN:-/Applications/Kestrel.app/Contents/Resources/bin}"
 [ -x "$BIN/llama-bench" ] || BIN="$(dirname "$0")/../vendor/llama.cpp/build-static/bin"
 [ -x "$BIN/llama-bench" ] || { echo "llama-bench not found; set TOSH_BIN to the app's Resources/bin" >&2; exit 1; }
 

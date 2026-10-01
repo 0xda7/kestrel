@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AVFoundation
@@ -63,7 +63,7 @@ final class AudioStudioController: ObservableObject {
 
     private static var recoveryURL: URL {
         URL.applicationSupportDirectory
-            .appending(path: "ToshLLM", directoryHint: .isDirectory)
+            .appending(path: "Kestrel", directoryHint: .isDirectory)
             .appending(path: "AudioRecovery.json")
     }
 
@@ -179,7 +179,7 @@ final class AudioStudioController: ObservableObject {
         startTicker()
 
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ToshLLM-audio-\(id.uuidString)", isDirectory: true)
+            .appendingPathComponent("Kestrel-audio-\(id.uuidString)", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
@@ -233,7 +233,7 @@ final class AudioStudioController: ObservableObject {
         progress = 0.05
         vadPreviewState = .running
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ToshLLM-vad-preview-\(id.uuidString)", isDirectory: true)
+            .appendingPathComponent("Kestrel-vad-preview-\(id.uuidString)", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {

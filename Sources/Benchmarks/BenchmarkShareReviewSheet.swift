@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import AppKit
@@ -72,8 +72,8 @@ struct BenchmarkShareReviewSheet: View {
                   systemImage: "lock.shield.fill")
                 .font(.headline)
                 .foregroundStyle(.green)
-            Text(loc.t("ToshLLM no incluye chats, prompts, nombres de cuenta ni rutas locales. Los archivos del modelo tampoco se suben: solo se incluyen su nombre, tamaño y SHA-256.",
-                       "ToshLLM does not include chats, prompts, account names, or local paths. Model files are not uploaded either: only their name, size, and SHA-256 are included."))
+            Text(loc.t("Kestrel no incluye chats, prompts, nombres de cuenta ni rutas locales. Los archivos del modelo tampoco se suben: solo se incluyen su nombre, tamaño y SHA-256.",
+                       "Kestrel does not include chats, prompts, account names, or local paths. Model files are not uploaded either: only their name, size, and SHA-256 are included."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Packages ToshLLM as a native .app bundle.
+# Packages Kestrel as a native .app bundle.
 # TOSH_ARCH=x86_64 ./make-app.sh  -> cross-compile (CI on Apple Silicon runners)
 set -e
 cd "$(dirname "$0")"
@@ -34,20 +34,20 @@ echo "no-AVX2 variant: $NOAVX2"
 
 if [ "$TOSH_ARCH" = "universal" ]; then
     swift build -c release --arch x86_64 --arch arm64
-    SWIFT_BIN=".build/apple/Products/Release/ToshLLM"
+    SWIFT_BIN=".build/apple/Products/Release/Kestrel"
 elif [ -n "$TOSH_ARCH" ]; then
     swift build -c release --arch "$TOSH_ARCH"
-    SWIFT_BIN=".build/$TOSH_ARCH-apple-macosx/release/ToshLLM"
+    SWIFT_BIN=".build/$TOSH_ARCH-apple-macosx/release/Kestrel"
 else
     swift build -c release
-    SWIFT_BIN=".build/release/ToshLLM"
+    SWIFT_BIN=".build/release/Kestrel"
 fi
 
-APP="dist/ToshLLM.app"
+APP="dist/Kestrel.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$SWIFT_BIN" "$APP/Contents/MacOS/ToshLLM"
+cp "$SWIFT_BIN" "$APP/Contents/MacOS/Kestrel"
 [ -f AppIcon.icns ] && cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # llama.cpp binaries (static build = portable): vendor/ first (reproducible,
@@ -113,8 +113,6 @@ fi
 mkdir -p "$APP/Contents/Resources/model-icons"
 cp Assets/model-icons/*.webp Assets/model-icons/sources.json "$APP/Contents/Resources/model-icons/"
 
-# Binance Pay QR (cropped) for the donations popup
-[ -f Assets/binance-qr.png ] && cp Assets/binance-qr.png "$APP/Contents/Resources/binance-qr.png"
 [ -f Assets/model-hero.jpg ] && cp Assets/model-hero.jpg "$APP/Contents/Resources/model-hero.jpg"
 [ -f Assets/model-hero-light.jpg ] && cp Assets/model-hero-light.jpg "$APP/Contents/Resources/model-hero-light.jpg"
 [ -f Assets/settings-guide.jpg ] && cp Assets/settings-guide.jpg "$APP/Contents/Resources/settings-guide.jpg"
@@ -156,13 +154,13 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>            <string>ToshLLM</string>
-    <key>CFBundleDisplayName</key>     <string>ToshLLM</string>
-    <key>CFBundleIdentifier</key>      <string>dev.engel.toshllm</string>
-    <key>CFBundleExecutable</key>      <string>ToshLLM</string>
+    <key>CFBundleName</key>            <string>Kestrel</string>
+    <key>CFBundleDisplayName</key>     <string>Kestrel</string>
+    <key>CFBundleIdentifier</key>      <string>com.northlatchlabs.kestrel</string>
+    <key>CFBundleExecutable</key>      <string>Kestrel</string>
     <key>CFBundleVersion</key>         <string>$VERSION</string>
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>
-    <key>TOSHNoAVX2</key>              <$NOAVX2/>
+    <key>KestrelNoAVX2</key>              <$NOAVX2/>
     <key>CFBundlePackageType</key>     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>NSHighResolutionCapable</key> <true/>
@@ -172,11 +170,11 @@ cat > "$APP/Contents/Info.plist" <<EOF
         <key>NSAllowsLocalNetworking</key> <true/>
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>ToshLLM can expose and advertise its local OpenAI-compatible API to devices on your trusted local network.</string>
+    <string>Kestrel can expose and advertise its local OpenAI-compatible API to devices on your trusted local network.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>ToshLLM records audio only when you press the microphone button, for local Whisper transcription or an audio-capable model.</string>
+    <string>Kestrel records audio only when you press the microphone button, for local Whisper transcription or an audio-capable model.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>ToshLLM uses Apple's on-device speech recognition only when you select Apple Dictation and press the microphone button.</string>
+    <string>Kestrel uses Apple's on-device speech recognition only when you select Apple Dictation and press the microphone button.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_http._tcp.</string>

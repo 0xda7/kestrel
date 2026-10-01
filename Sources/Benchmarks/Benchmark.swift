@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -162,7 +162,7 @@ final class BenchmarkController: ObservableObject {
     private func header(for settings: ServerSettings) -> String {
         let model = URL(fileURLWithPath: settings.modelPath).lastPathComponent
         return """
-        === ToshLLM benchmark · \(Date().formatted(.iso8601)) ===
+        === Kestrel benchmark · \(Date().formatted(.iso8601)) ===
         model:  \(model)
         GPU:    \(settings.gpuLabel)
         engine: \(settings.engineTag)\(settings.effectiveDynamicMoe ? " · dMoE K\(settings.effectiveDynamicMoeSlots)" : settings.ncmoe > 0 ? " · ncmoe \(settings.ncmoe)" : "") · K:\(settings.cacheTypeK) V:\(settings.cacheTypeV)
@@ -421,7 +421,7 @@ final class BenchmarkController: ObservableObject {
         }
         p.environment = environment
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("toshllm-sweep-\(UUID().uuidString).log")
+            .appendingPathComponent("kestrel-sweep-\(UUID().uuidString).log")
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil),
               let outputHandle = try? FileHandle(forWritingTo: outputURL) else { return nil }
         p.standardOutput = outputHandle

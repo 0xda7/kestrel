@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -17,7 +17,7 @@ enum SettingsArchive {
             all[key].map { (key, archiveValue($0)) }
         })
         return try JSONSerialization.data(withJSONObject: [
-            "format": "toshllm-settings",
+            "format": "kestrel-settings",
             "version": 1,
             "exported_at": ISO8601DateFormatter().string(from: Date()),
             "config": config

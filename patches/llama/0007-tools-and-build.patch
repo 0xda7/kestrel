@@ -11,7 +11,7 @@ index 4feaf083e..ddcc76265 100644
  option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
  
  # extra artifacts
-+option(TOSH_ENABLE_DYNAMIC_MOE "tosh: experimental MoE expert cache" OFF)
++option(TOSH_ENABLE_DYNAMIC_MOE "kestrel: experimental MoE expert cache" OFF)
 +
  option(LLAMA_BUILD_TESTS     "llama: build tests"                                                                ${LLAMA_STANDALONE})
  option(LLAMA_BUILD_TOOLS     "llama: build tools"                                                                ${LLAMA_STANDALONE})
@@ -866,7 +866,7 @@ index 6541bb507..fa5aaf30a 100644
      void print_footer() override {
 -        fprintf(fout, "\nbuild: %s (%d)\n", test::build_commit.c_str(), test::build_number);
 +        // the build number only tracks upstream, so name the engine version too
-+        fprintf(fout, "\nbuild: %s (%d), ToshLLM engine %s\n", test::build_commit.c_str(), test::build_number,
++        fprintf(fout, "\nbuild: %s (%d), Kestrel engine %s\n", test::build_commit.c_str(), test::build_number,
 +                common_tosh_version());
      }
  };

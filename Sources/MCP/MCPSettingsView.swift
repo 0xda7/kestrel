@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -123,7 +123,7 @@ struct MCPSettingsSection: View {
                     Keychain.set(headers, account: updated.credentialAccount)
                 }
                 persist()
-                Task { await ToshMCPService.shared.disconnect(updated.id) }
+                Task { await KestrelMCPService.shared.disconnect(updated.id) }
             }
             .environmentObject(loc)
         }
@@ -135,15 +135,15 @@ struct MCPSettingsSection: View {
         servers.removeAll { $0.id == server.id }
         MCPServerStore.deleteCredentials(for: server)
         persist()
-        Task { await ToshMCPService.shared.disconnect(server.id) }
+        Task { await KestrelMCPService.shared.disconnect(server.id) }
     }
 
     private func test(_ server: MCPServer) {
         testingID = server.id
         status[server.id] = loc.t("Conectando…", "Connecting…")
         Task {
-            await ToshMCPService.shared.disconnect(server.id)
-            let tools = await ToshMCPService.shared.discoverTools()
+            await KestrelMCPService.shared.disconnect(server.id)
+            let tools = await KestrelMCPService.shared.discoverTools()
             await MainActor.run {
                 testingID = nil
                 let count = tools.filter { $0.mcpServerID == server.id }.count
@@ -185,7 +185,7 @@ private struct MCPServerEditor: View {
                         SettingsRow(icon: "point.3.connected.trianglepath.dotted",
                                     title: loc.t("Transporte", "Transport"),
                                     help: transportHelp) {
-                            ToshDropdown(selection: $server.transport,
+                            KestrelDropdown(selection: $server.transport,
                                          options: transportOptions,
                                          width: 310,
                                          maximumListHeight: 250)
@@ -269,7 +269,7 @@ private struct MCPServerEditor: View {
         .background(WorkspaceStyle.surface)
     }
 
-    private var transportOptions: [ToshDropdown<MCPTransport>.Option] {
+    private var transportOptions: [KestrelDropdown<MCPTransport>.Option] {
         [
             .init(value: .automatic, title: loc.t("Automático", "Automatic"),
                   subtitle: loc.t("Detecta el protocolo", "Detects the protocol"), systemImage: "wand.and.stars"),

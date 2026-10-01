@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -43,7 +43,7 @@ private func defaultsMigrationExtraArgs() -> String? {
 }
 
 @main
-struct ToshLLMApp: App {
+struct KestrelApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let obj = AppObjects.shared
     @ObservedObject private var loc = AppObjects.shared.loc
@@ -93,12 +93,12 @@ struct ToshLLMApp: App {
             Divider()
         }
         CommandGroup(replacing: .help) {
-            Button(loc.t("Documentación de ToshLLM", "ToshLLM documentation")) {
+            Button(loc.t("Documentación de Kestrel", "Kestrel documentation")) {
                 obj.control.section = .docs
                 openWindow(id: "control")
             }
             Button(loc.t("Reportar un problema", "Report an issue")) {
-                NSWorkspace.shared.open(URL(string: "https://github.com/engeldlgado/toshllm/issues")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/northlatchlabs/kestrel/issues")!)
             }
         }
     }
@@ -110,7 +110,7 @@ struct ToshLLMApp: App {
     var body: some Scene {
         // Main window: the chat. A single Window (not WindowGroup) keeps ⌘N
         // for "new conversation" instead of "new window".
-        Window("ToshLLM", id: "chat") {
+        Window("Kestrel", id: "chat") {
             ChatMainView()
                 .environmentObject(obj.server)
                 .environmentObject(obj.manager)
@@ -192,7 +192,7 @@ struct MenuBarView: View {
             Divider()
 
             HStack {
-                Button(loc.t("Abrir ToshLLM", "Open ToshLLM")) {
+                Button(loc.t("Abrir Kestrel", "Open Kestrel")) {
                     NSApp.activate(ignoringOtherApps: true)
                     NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
                 }

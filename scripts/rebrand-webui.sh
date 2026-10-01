@@ -26,9 +26,9 @@ bundle, manifest, index = sys.argv[1], sys.argv[2], sys.argv[3]
 # `llama-ui` is the app name the document title interpolates; the other is the one
 # hardcoded title in the bundle.
 subs = [
-    ('VITE_PUBLIC_APP_NAME||"llama-ui"', 'VITE_PUBLIC_APP_NAME||"ToshLLM"'),
-    ('"Search · llama.cpp"',             '"Search · ToshLLM"'),
-    ('`llama_settings_${',               '`toshllm_settings_${'),
+    ('VITE_PUBLIC_APP_NAME||"llama-ui"', 'VITE_PUBLIC_APP_NAME||"Kestrel"'),
+    ('"Search · llama.cpp"',             '"Search · Kestrel"'),
+    ('`llama_settings_${',               '`kestrel_settings_${'),
 ]
 src = open(bundle, encoding="utf-8").read()
 for old, new in subs:
@@ -38,23 +38,23 @@ for old, new in subs:
 open(bundle, "w", encoding="utf-8").write(src)
 
 m = json.load(open(manifest, encoding="utf-8"))
-m["name"] = m["short_name"] = "ToshLLM"
-m["description"] = "Local AI chat interface. llama.cpp web UI, rebranded for ToshLLM."
+m["name"] = m["short_name"] = "Kestrel"
+m["description"] = "Local AI chat interface. llama.cpp web UI, rebranded for Kestrel."
 json.dump(m, open(manifest, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 
 # The UI is upstream's work, so credit it where a user can see it.
 badge = """<style>
-#tosh-upstream-credit{position:fixed;right:8px;bottom:6px;z-index:2147483647;
+#kestrel-upstream-credit{position:fixed;right:8px;bottom:6px;z-index:2147483647;
  font:11px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;opacity:.45;
  color:currentColor;text-decoration:none;pointer-events:auto}
-#tosh-upstream-credit:hover{opacity:.9}
-@media (max-width:640px){#tosh-upstream-credit{display:none}}
+#kestrel-upstream-credit:hover{opacity:.9}
+@media (max-width:640px){#kestrel-upstream-credit{display:none}}
 </style>
-<a id="tosh-upstream-credit" href="https://github.com/ggml-org/llama.cpp" target="_blank"
-   rel="noopener">llama.cpp web UI (MIT), rebranded for ToshLLM</a>
+<a id="kestrel-upstream-credit" href="https://github.com/ggml-org/llama.cpp" target="_blank"
+   rel="noopener">llama.cpp web UI (MIT), rebranded for Kestrel</a>
 """
 html = open(index, encoding="utf-8").read()
-if "tosh-upstream-credit" not in html:
+if "kestrel-upstream-credit" not in html:
     if "</body>" not in html:
         raise SystemExit("rebrand: no </body> in index.html")
     html = html.replace("</body>", badge + "</body>", 1)
@@ -148,11 +148,11 @@ k = target / max(bw, bh)
 ix = (512 - bw * k) / 2 - bx * k
 iy = (512 - bh * k) / 2 - by * k
 ours = ('`<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">'
-        '<defs><mask id="toshGlyphMask">'
+        '<defs><mask id="kestrelGlyphMask">'
         f'<image x="{ix:.1f}" y="{iy:.1f}" width="{sw_px * k:.1f}" height="{sh_px * k:.1f}" '
         'href="data:image/png;base64,' + base64.b64encode(png256).decode() + '"/>'
         '</mask></defs>'
-        '<rect width="512" height="512" fill="currentColor" mask="url(#toshGlyphMask)"/></svg>`')
+        '<rect width="512" height="512" fill="currentColor" mask="url(#kestrelGlyphMask)"/></svg>`')
 open(bundle, "w", encoding="utf-8").write(js[:m.start()] + ours + js[m.end():])
 
 sw = os.path.join(out, "sw.js")

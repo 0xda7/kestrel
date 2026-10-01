@@ -66,7 +66,7 @@ else
     echo "Metal compiler unavailable — embedded source only (slower first load)"
 fi
 
-# Stamped into the binaries so a log identifies the ToshLLM build, not just the
+# Stamped into the binaries so a log identifies the Kestrel build, not just the
 # upstream commit (which is unchanged across releases that only touch the patch).
 TOSH_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../VERSION")"
 

@@ -1,5 +1,5 @@
 import XCTest
-@testable import ToshLLM
+@testable import Kestrel
 
 final class ServerNavigationTests: XCTestCase {
     @MainActor func testSelectedInstanceIsTheOnlyVisibleServer() {

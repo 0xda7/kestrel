@@ -7,7 +7,7 @@ The CDN serves WebP regardless of the original source filename extension.
 
 Brand names and marks belong to their respective owners. Their inclusion identifies
 model provenance and does not imply endorsement. These third-party marks are not
-claimed as original ToshLLM artwork or relicensed under the application's GPL.
+claimed as original Kestrel artwork or relicensed under the application's GPL.
 
 The application bundles these assets and never fetches them while rendering.
 Unknown model families use an SF Symbol rather than an unrelated brand.

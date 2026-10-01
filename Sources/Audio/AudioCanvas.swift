@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -394,7 +394,7 @@ struct AudioCanvas: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         let base = studio.sourceURL?.deletingPathExtension().lastPathComponent ?? "audio"
-        panel.nameFieldStringValue = "\(base).tosh-audio.json"
+        panel.nameFieldStringValue = "\(base).kestrel-audio.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try studio.saveProject(to: url, targetLanguage: targetLanguage, glossary: glossary)

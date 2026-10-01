@@ -1749,7 +1749,7 @@
 +                // even when the ggml log callback filters init-time INFO messages.
 +                fprintf(stderr, "ggml_metal: probed SIMD-group width = %d (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)\n",
 +                        dev->props.simd_width);
-+                // Expose the measured width to ToshLLM's graph-level AMD FA policy.
++                // Expose the measured width to Kestrel's graph-level AMD FA policy.
 +                // A wave64 process records 64 and therefore never takes the RDNA-only
 +                // head-64 prefill path below.
 +                char simd_width_env[16];
@@ -3781,7 +3781,7 @@
      void print_footer() override {
 -        fprintf(fout, "\nbuild: %s (%d)\n", test::build_commit.c_str(), test::build_number);
 +        // the build number only tracks upstream, so name the engine version too
-+        fprintf(fout, "\nbuild: %s (%d), ToshLLM engine %s\n", test::build_commit.c_str(), test::build_number,
++        fprintf(fout, "\nbuild: %s (%d), Kestrel engine %s\n", test::build_commit.c_str(), test::build_number,
 +                common_tosh_version());
      }
  };

@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -7,7 +7,7 @@ import Metal
 
 extension Notification.Name {
     /// Posted when a fresh engine process has launched (KV slots are empty).
-    static let engineDidStart = Notification.Name("toshEngineDidStart")
+    static let engineDidStart = Notification.Name("kestrelEngineDidStart")
 }
 
 struct GPUDevice: Identifiable, Hashable {
@@ -272,7 +272,7 @@ struct ServerSettings {
     /// files in a shared folder.
     static func slotCacheDir(port: Int) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ToshLLM/slots/\(port)/\(slotKVSignature())")
+            .appendingPathComponent("Kestrel/slots/\(port)/\(slotKVSignature())")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -448,7 +448,7 @@ struct ServerSettings {
 
     static func routerPresetPath(port: Int) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ToshLLM/router")
+            .appendingPathComponent("Kestrel/router")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("preset-\(port).ini")
     }
@@ -1023,7 +1023,7 @@ struct ServerSettings {
         let mib = UInt64(1024 * 1024)
         let gib = UInt64(1024) * mib
         // The 1.3 GiB shared/non-MoE estimate is the same conservative split used by
-        // ToshLLM's ncmoe planner. The remainder is the quantized expert pool.
+        // Kestrel's ncmoe planner. The remainder is the quantized expert pool.
         let sharedBytes = min(modelBytes, UInt64(Double(gib) * 1.3))
         let expertBytes = modelBytes - sharedBytes
         guard expertBytes > 0 else { return nil }
@@ -1971,7 +1971,7 @@ final class ServerController: ObservableObject {
         }
         return """
         ========================================================
-         ToshLLM \(AppInfo.version) — server start (\(ServerSettings.isAppleSilicon ? "arm64" : "x86_64")\(AppInfo.isNoAVX2 ? " · no-AVX2 build" : ""))
+         Kestrel \(AppInfo.version) — server start (\(ServerSettings.isAppleSilicon ? "arm64" : "x86_64")\(AppInfo.isNoAVX2 ? " · no-AVX2 build" : ""))
          engine : \(engine)
          model  : \(settings.routerMode ? "router (autoload, max \(settings.routerModelsMax) loaded)" : (settings.modelPath as NSString).lastPathComponent)
          GPUs detected:
@@ -2052,7 +2052,7 @@ final class ServerController: ObservableObject {
                         }
                         self.retryWithoutMmproj = true
                         EngineLock.remove(pid: proc.processIdentifier)
-                        self.consume("\n[ToshLLM] el proyector (mmproj) no se pudo cargar — reintentando solo-texto (visión desactivada) / projector failed to load — retrying text-only (vision disabled)\n")
+                        self.consume("\n[Kestrel] el proyector (mmproj) no se pudo cargar — reintentando solo-texto (visión desactivada) / projector failed to load — retrying text-only (vision disabled)\n")
                         self.state = .starting
                         self.launch(settings)
                         return
@@ -2351,7 +2351,7 @@ final class ServerController: ObservableObject {
             }
             guard let self, let peak else { return }
             if peak.fraction >= 0.90 {
-                consume("\n[ToshLLM] DFlash runtime VRAM peak: \(Int(peak.fraction * 100))% (\(Int(peak.usedMB)) / \(Int(peak.totalMB)) MiB)\n")
+                consume("\n[Kestrel] DFlash runtime VRAM peak: \(Int(peak.fraction * 100))% (\(Int(peak.usedMB)) / \(Int(peak.totalMB)) MiB)\n")
             }
             guard DflashPolicy.shouldWarn(fractions: fractions) else { return }
             let signature = dflashWarningSignature(settings: settings)
@@ -2401,7 +2401,7 @@ final class ServerController: ObservableObject {
     private func startDiscoveryIfNeeded(port: Int) {
         guard discoveryEnabled else { return }
         stopDiscovery()
-        let service = NetService(domain: "local.", type: "_http._tcp.", name: "ToshLLM API", port: Int32(port))
+        let service = NetService(domain: "local.", type: "_http._tcp.", name: "Kestrel API", port: Int32(port))
         let txt: [String: Data] = [
             "path": Data("/v1".utf8),
             "protocol": Data("openai-compatible".utf8),

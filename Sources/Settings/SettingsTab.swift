@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -404,7 +404,7 @@ struct SettingsView: View {
     private func exportSettings() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "ToshLLM Settings.json"
+        panel.nameFieldStringValue = "Kestrel Settings.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try SettingsArchive.exportData().write(to: url, options: .atomic)
@@ -450,7 +450,7 @@ struct SettingsView: View {
                                 title: loc.t("Motor de inferencia", "Inference engine"),
                                 help: loc.t("Integrado: llama.cpp oficial con los kernels Metal para AMD, recomendado. Externo: cualquier llama-server tuyo.",
                                             "Bundled: official llama.cpp with the Metal kernels for AMD, recommended. External: any llama-server of yours.")) {
-                        ToshDropdown(selection: engineSelection, options: [
+                        KestrelDropdown(selection: engineSelection, options: [
                             .init(value: "bundled", title: loc.t("Integrado (oficial)", "Bundled (official)")),
                             .init(value: "custom", title: loc.t("Externo…", "External…"))
                         ], width: 200)
@@ -533,9 +533,9 @@ struct SettingsView: View {
                 SettingsRowGroup {
                     SettingsRow(icon: "globe",
                                 title: loc.t("Idioma", "Language"),
-                                help: loc.t("Idioma de toda la interfaz de ToshLLM. Los idiomas aportados por la comunidad aparecen automáticamente.",
-                                            "Language for the entire ToshLLM interface. Community-contributed languages appear here automatically.")) {
-                        ToshDropdown(selection: $loc.language, options: loc.availableLanguages.map {
+                                help: loc.t("Idioma de toda la interfaz de Kestrel. Los idiomas aportados por la comunidad aparecen automáticamente.",
+                                            "Language for the entire Kestrel interface. Community-contributed languages appear here automatically.")) {
+                        KestrelDropdown(selection: $loc.language, options: loc.availableLanguages.map {
                             .init(value: $0, title: loc.displayName($0))
                         })
                     }
@@ -543,7 +543,7 @@ struct SettingsView: View {
                                 title: loc.t("Color de la app", "App color"),
                                 help: loc.t("Color de marca de botones, iconos y controles de toda la app. Independiente del color de acento del sistema.",
                                             "Brand color for buttons, icons and controls across the app. Independent from the system accent color.")) {
-                        ToshDropdown(selection: $appAccentRaw, options: AppTheme.palette.map {
+                        KestrelDropdown(selection: $appAccentRaw, options: AppTheme.palette.map {
                             .init(value: $0.key, title: AppTheme.label($0.key, loc),
                                   swatch: AppTheme.swatchImage($0.color))
                         })
@@ -558,7 +558,7 @@ struct SettingsView: View {
                                 title: loc.t("VRAM de la GPU en la barra", "GPU VRAM in the menu bar"),
                                 help: loc.t("Dónde mostrar el uso de VRAM: junto al icono (porcentaje agregado) o como barras por GPU al abrir el panel.",
                                             "Where to show VRAM usage: next to the icon (aggregate percentage) or as per-GPU bars when the panel opens.")) {
-                        ToshDropdown(selection: $menuBarGPU, options: [
+                        KestrelDropdown(selection: $menuBarGPU, options: [
                             .init(value: "off", title: loc.t("Oculta", "Hidden")),
                             .init(value: "icon", title: loc.t("En el icono", "In the icon")),
                             .init(value: "panel", title: loc.t("En el panel", "In the panel"))
@@ -567,8 +567,8 @@ struct SettingsView: View {
                     }
                     SettingsRow(icon: "play.circle",
                                 title: loc.t("Iniciar servidor al abrir la app", "Start server on app launch"),
-                                help: loc.t("Arranca automáticamente el último modelo configurado al abrir ToshLLM.",
-                                            "Automatically starts the last configured model when ToshLLM opens.")) {
+                                help: loc.t("Arranca automáticamente el último modelo configurado al abrir Kestrel.",
+                                            "Automatically starts the last configured model when Kestrel opens.")) {
                         SettingsToggle(isOn: $autoStart)
                     }
                     SettingsRow(icon: "arrow.triangle.2.circlepath",
@@ -585,8 +585,8 @@ struct SettingsView: View {
                     }
                     SettingsRow(icon: "network",
                                 title: loc.t("Descubrible en red local", "Discoverable on local network"),
-                                help: loc.t("Hace que el servidor escuche en la red local y lo anuncia con Bonjour como 'ToshLLM API'. Actívalo solo en redes confiables; reinicia el servidor si está activo.",
-                                            "Makes the server listen on the local network and advertises it with Bonjour as 'ToshLLM API'. Enable only on trusted networks; restarts the server if it's running.")) {
+                                help: loc.t("Hace que el servidor escuche en la red local y lo anuncia con Bonjour como 'Kestrel API'. Actívalo solo en redes confiables; reinicia el servidor si está activo.",
+                                            "Makes the server listen on the local network and advertises it with Bonjour as 'Kestrel API'. Enable only on trusted networks; restarts the server if it's running.")) {
                         SettingsToggle(isOn: Binding(get: { localNetworkDiscovery },
                                                      set: setDiscoverable))
                     }
@@ -691,7 +691,7 @@ struct SettingsView: View {
 
             Section(loc.t("GPU y memoria", "GPU & memory")) {
                 LabeledContent(loc.t("GPU (Metal)", "GPU (Metal)")) {
-                    ToshDropdown(selection: $gpuIndex, options: [.init(value: -1, title: loc.t("Predeterminada", "Default"))]
+                    KestrelDropdown(selection: $gpuIndex, options: [.init(value: -1, title: loc.t("Predeterminada", "Default"))]
                         + hardware.gpus.map {
                             .init(value: $0.index, title: "\($0.index): \($0.name) · \($0.vramGB) GB")
                         }, width: 220)
@@ -711,7 +711,7 @@ struct SettingsView: View {
                                     "Splits the model across all detected GPUs (--split-mode) instead of using one, e.g. to load a model that doesn't fit on a single card. Overrides the picker above."))
                     if multiGPU && hardware.gpus.count > 2 && splitSelection.count < 2 {
                         LabeledContent(loc.t("GPUs a usar", "GPUs to use")) {
-                            ToshDropdown(selection: $multiGPUCount, options: [.init(value: 0, title: loc.t("Todas (%@)", "All (%@)", "\(hardware.gpus.count)"))]
+                            KestrelDropdown(selection: $multiGPUCount, options: [.init(value: 0, title: loc.t("Todas (%@)", "All (%@)", "\(hardware.gpus.count)"))]
                                 + (2...hardware.gpus.count).map { .init(value: $0, title: "\($0)") }, width: 130)
                         }
                         .settingsGlyph("number")
@@ -745,7 +745,7 @@ struct SettingsView: View {
                             .foregroundStyle(.orange)
                             .labelStyle(.titleAndIcon)
                         LabeledContent(loc.t("Cómo repartirlo", "How to split it")) {
-                            ToshDropdown(selection: $splitMode, options: [
+                            KestrelDropdown(selection: $splitMode, options: [
                                 .init(value: "layer", title: loc.t("Por capas", "By layers")),
                                 .init(value: "tensor", title: loc.t("Por tensores", "By tensors"))
                             ])
@@ -755,7 +755,7 @@ struct SettingsView: View {
                                     "By layers: each GPU keeps whole layers and they take turns. Fastest at generating, and the best tested. By tensors: both GPUs work at once inside every layer, so they read the prompt much faster, but they sync up on every layer and that wait costs the same on each generated token: on a small model it eats the gain, on a big one (tens of GB) it wins at both."))
                         if splitMode == "tensor" && !splitGroupOptions.isEmpty {
                             LabeledContent(loc.t("TensorMesh: ancho de la malla", "TensorMesh: mesh width")) {
-                                ToshDropdown(selection: $splitGroupSize, options: [.init(value: 0, title: loc.t("Sin malla", "No mesh"))]
+                                KestrelDropdown(selection: $splitGroupSize, options: [.init(value: 0, title: loc.t("Sin malla", "No mesh"))]
                                     + splitGroupOptions.map { .init(value: $0, title: "\($0)") }, width: 130)
                             }
                             .settingsGlyph("grid")
@@ -827,7 +827,7 @@ struct SettingsView: View {
                                     "Keeps all quantized experts in RAM and a small cache in VRAM. It is off by default. Enabling it applies ncmoe 1, mlock, and the required Metal override; turn it off to return to the normal path with the same binary."))
                     if dynamicMoe {
                         LabeledContent(loc.t("Política", "Policy")) {
-                            ToshDropdown(selection: $dynamicMoePolicy, options: [
+                            KestrelDropdown(selection: $dynamicMoePolicy, options: [
                                 .init(value: "auto", title: loc.t("Automática", "Automatic")),
                                 .init(value: "cache", title: loc.t("Caché manual", "Manual cache"))
                             ])
@@ -879,7 +879,7 @@ struct SettingsView: View {
                                     .font(.caption).foregroundStyle(.orange)
                             }
                             LabeledContent(loc.t("Prefetch de Dynamic MoE", "Dynamic MoE prefetch")) {
-                                ToshDropdown(selection: $dynamicMoePrefetch, options: [0, 1, 2, 3, 4, 5, 6, 8, 12, 16].map {
+                                KestrelDropdown(selection: $dynamicMoePrefetch, options: [0, 1, 2, 3, 4, 5, 6, 8, 12, 16].map {
                                     .init(value: $0, title: "\($0)")
                                 }, width: 130)
                             }
@@ -911,7 +911,7 @@ struct SettingsView: View {
                     .infoTip(loc.t("Impide que macOS mueva el modelo a swap o lo comprima: estabilidad de velocidad constante. Útil con modelos MoE grandes; requiere RAM suficiente.",
                                 "Prevents macOS from swapping or compressing the model: consistent speed. Useful with large MoE models; requires enough free RAM."))
                 LabeledContent(loc.t("Caché de prompts en RAM", "Prompt cache in RAM")) {
-                    ToshDropdown(selection: $cacheRAM, options: [
+                    KestrelDropdown(selection: $cacheRAM, options: [
                         .init(value: 0, title: loc.t("Desactivada", "Disabled")),
                         .init(value: 1024, title: "1 GB"), .init(value: 2048, title: "2 GB"),
                         .init(value: 4096, title: "4 GB"), .init(value: 8192, title: "8 GB")
@@ -922,7 +922,7 @@ struct SettingsView: View {
                             "Extra RAM where the engine remembers recent conversations to avoid reprocessing them when switching chats or clients. Unlimited, the engine uses up to 8 GB: next to a large model that pushes the machine into swap and speed degrades over time. 2 GB is a good balance."))
 
                 LabeledContent(loc.t("Tope de tokens por imagen", "Image token cap")) {
-                    ToshDropdown(selection: $imageMaxTokens, options: [
+                    KestrelDropdown(selection: $imageMaxTokens, options: [
                         .init(value: 0, title: loc.t("Del modelo", "Model's")),
                         .init(value: 4096, title: "4096"), .init(value: 2048, title: "2048"),
                         .init(value: 1024, title: "1024")
@@ -937,7 +937,7 @@ struct SettingsView: View {
             if settingsDestination == .inference {
             Section {
                 LabeledContent(loc.t("Contexto", "Context")) {
-                    ToshDropdown(selection: $ctx, options: [4096, 8192, 16384, 32768, 65536, 131072, 262144].map {
+                    KestrelDropdown(selection: $ctx, options: [4096, 8192, 16384, 32768, 65536, 131072, 262144].map {
                         .init(value: $0, title: "\($0 / 1024)k tokens")
                     })
                 }
@@ -952,7 +952,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 LabeledContent(loc.t("KV cache: claves (-ctk)", "KV cache: keys (-ctk)")) {
-                    ToshDropdown(selection: $cacheTypeK, options: availableKVTypes.map { .init(value: $0, title: $0) }, width: 120)
+                    KestrelDropdown(selection: $cacheTypeK, options: availableKVTypes.map { .init(value: $0, title: $0) }, width: 120)
                 }
                 .settingsGlyph("key")
                 .infoTip(amdFlashActive
@@ -961,7 +961,7 @@ struct SettingsView: View {
                     : loc.t("Cuantización de las claves del KV cache. En GPU AMD (sin el kernel Flash Attention AMD): q8_0 reduce las claves a la mitad casi sin costo de velocidad (recomendado), dejando los valores en f16; q4_0 a un cuarto.",
                             "Quantization for KV cache keys. On AMD GPUs (without the AMD Flash Attention kernel): q8_0 halves key memory at almost no speed cost (recommended), keeping values at f16; q4_0 quarters it."))
                 LabeledContent(loc.t("KV cache: valores (-ctv)", "KV cache: values (-ctv)")) {
-                    ToshDropdown(selection: $cacheTypeV, options: availableKVTypes.map { .init(value: $0, title: $0) }, width: 120)
+                    KestrelDropdown(selection: $cacheTypeV, options: availableKVTypes.map { .init(value: $0, title: $0) }, width: 120)
                 }
                 .settingsGlyph("number.square")
                 .infoTip(amdFlashActive
@@ -1031,7 +1031,7 @@ struct SettingsView: View {
                                 String(hardware.logicalCores), String(hardware.physicalCores)))
                     .onAppear { if threads > hardware.logicalCores { threads = max(1, hardware.logicalCores) } }
                 LabeledContent(loc.t("Flash Attention estándar (CPU)", "Standard Flash Attention (CPU)")) {
-                    ToshDropdown(selection: $flashAttn, options: ["auto", "on", "off"].map { .init(value: $0, title: $0) }, width: 120)
+                    KestrelDropdown(selection: $flashAttn, options: ["auto", "on", "off"].map { .init(value: $0, title: $0) }, width: 120)
                 }
                 .disabled(amdFlashActive || kvNeedsFlashAttention)
                 .infoTip(loc.t("Ruta Flash Attention estándar de llama.cpp. En GPU AMD cae en CPU; se fuerza a 'on' cuando el KV está cuantizado. Para atención en GPU usa el kernel AMD de abajo.",
@@ -1065,7 +1065,7 @@ struct SettingsView: View {
                                     "For MoE models with experts in RAM (ncmoe > 0): uploads expert weights to the GPU through a parallel Metal queue, overlapping the upload with compute. Measured 1.8×-4.4× prompt speed (35B, gemma-4-26B, gpt-oss) at no generation cost; the first prompt after loading the model is slightly slower while buffers warm up."))
                     if routerMode || ServerSettings.modelIsMoE(at: modelPath) {
                         LabeledContent(loc.t("Micro-lote del prompt", "Prompt micro-batch")) {
-                            ToshDropdown(selection: $ubatch, options: ServerSettings.ubatchOptions.map {
+                            KestrelDropdown(selection: $ubatch, options: ServerSettings.ubatchOptions.map {
                                 .init(value: $0, title: ServerSettings.ubatchLabel($0, loc: loc))
                             })
                         }
@@ -1074,7 +1074,7 @@ struct SettingsView: View {
                     }
                 }
                 LabeledContent(loc.t("Peticiones simultáneas", "Concurrent requests")) {
-                    ToshDropdown(selection: $parallelSlots, options: [
+                    KestrelDropdown(selection: $parallelSlots, options: [
                         .init(value: 1, title: loc.t("1 (recomendado)", "1 (recommended)")),
                         .init(value: 2, title: "2"), .init(value: 4, title: "4"),
                         .init(value: 0, title: "Auto")

@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -14,8 +14,8 @@ struct WorkspaceSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                ToshLLMLogo(size: 38)
-                Text("ToshLLM").font(.system(size: 21, weight: .semibold))
+                KestrelLogo(size: 38)
+                Text("Kestrel").font(.system(size: 21, weight: .semibold))
             }
             .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 26)
             ScrollView {
@@ -54,7 +54,7 @@ struct WorkspaceSidebar: View {
                 .font(.system(size: 14))
                 .padding(.horizontal, 16)
             }
-            Text("ToshLLM · macOS")
+            Text("Kestrel · macOS")
                 .font(.system(size: 10, weight: .medium)).tracking(1.6)
                 .foregroundStyle(.tertiary).padding(26)
         }

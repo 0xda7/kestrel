@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Creates an installable .dmg (drag to Applications) from dist/ToshLLM.app
+# Creates an installable .dmg (drag to Applications) from dist/Kestrel.app
 #
 # The window layout lives in a committed .DS_Store template, because CI builds
 # the release DMG and driving Finder from a runner does not work. Regenerate it
@@ -9,18 +9,18 @@ set -e
 cd "$(dirname "$0")/.."
 
 VERSION="${1:-v$(<VERSION)}"
-APP="dist/ToshLLM.app"
+APP="dist/Kestrel.app"
 
 [ -d "$APP" ] || { echo "$APP not found — run ./make-app.sh first"; exit 1; }
 
 # The no-AVX2 legacy build ships as a distinctly named DMG so it stays on its own
 # update channel. Read the variant straight from the built bundle (single source).
 SUFFIX=""
-if /usr/libexec/PlistBuddy -c "Print :TOSHNoAVX2" "$APP/Contents/Info.plist" 2>/dev/null | grep -qi true; then
+if /usr/libexec/PlistBuddy -c "Print :KestrelNoAVX2" "$APP/Contents/Info.plist" 2>/dev/null | grep -qi true; then
     SUFFIX="-noavx2"
 fi
-DMG="dist/ToshLLM-$VERSION$SUFFIX.dmg"
-VOLNAME="ToshLLM"
+DMG="dist/Kestrel-$VERSION$SUFFIX.dmg"
+VOLNAME="Kestrel"
 TEMPLATE="Assets/dmg/DS_Store"
 ARTWORK="Assets/dmg/obsidian-hardware.png"
 
@@ -90,7 +90,7 @@ on run argv
             set icon size of opts to 128
             set text size of opts to 13
             set background picture of opts to file ".background:background.tiff"
-            set position of item "ToshLLM.app" of container window to {165, 194}
+            set position of item "Kestrel.app" of container window to {165, 194}
             set position of item "Applications" of container window to {475, 194}
             update without registering applications
             delay 1

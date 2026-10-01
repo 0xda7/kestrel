@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
@@ -37,7 +37,7 @@ struct BenchmarkComparisonCard: View, Equatable {
             Card(title: loc.t("Comparar ejecuciones", "Compare runs"), icon: "arrow.left.arrow.right") {
                 VStack(spacing: 16) {
                     let options = history.map { result in
-                        ToshDropdown<UUID?>.Option(value: result.id,
+                        KestrelDropdown<UUID?>.Option(value: result.id,
                                                    title: "\(result.shortModel) · \(result.quantization)",
                                                    subtitle: result.date.formatted(date: .abbreviated, time: .shortened))
                     }
@@ -73,14 +73,14 @@ struct BenchmarkComparisonCard: View, Equatable {
 private struct ComparisonRunPicker: View {
     let title: String
     @Binding var selection: UUID?
-    let options: [ToshDropdown<UUID?>.Option]
+    let options: [KestrelDropdown<UUID?>.Option]
     @EnvironmentObject private var loc: Localizer
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             // Not a Picker: a native pop-up is as wide as its longest item, and this one lists the whole history.
-            ToshDropdown(selection: $selection, options: options, width: nil, listWidth: 420)
+            KestrelDropdown(selection: $selection, options: options, width: nil, listWidth: 420)
                 .help(loc.t("Elige la ejecución a comparar", "Choose the run to compare"))
         }
         .frame(maxWidth: .infinity)

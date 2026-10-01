@@ -1,5 +1,5 @@
-// ToshLLM - run LLMs locally on Intel Macs with AMD GPUs
-// Copyright (C) 2026 Engelbert Delgado <engeldlgado@gmail.com>
+// Kestrel - run LLMs locally on Intel Macs with AMD GPUs
+// Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
@@ -210,7 +210,7 @@ enum SettingsKeys {
     static let imagenStrength = "imagenStrength"
     /// Extra parallel generation instances (JSON: [ImageInstanceConfig]).
     static let imagenInstances = "imagenInstances"
-    /// Delete generated output images (toshllm_*) when the app quits.
+    /// Delete generated output images (kestrel_*) when the app quits.
     static let imagenCleanupOnClose = "imagenCleanupOnClose"
     static let videoModel = "videoModel"
     static let videoFrames = "videoFrames"
@@ -276,7 +276,7 @@ enum SettingsKeys {
 // MARK: - Logging
 
 enum AppLog {
-    private static let subsystem = "dev.engel.toshllm"
+    private static let subsystem = "com.northlatchlabs.kestrel"
     static let server = Logger(subsystem: subsystem, category: "server")
     static let downloads = Logger(subsystem: subsystem, category: "downloads")
     static let speech = Logger(subsystem: subsystem, category: "speech")
@@ -288,7 +288,7 @@ enum AppLog {
 enum AppSupport {
     static var directory: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ToshLLM")
+            .appendingPathComponent("Kestrel")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -305,7 +305,7 @@ final class RotatingFileLog: @unchecked Sendable {
     private let prefix: String
     private let maxBytes: UInt64
     private let retentionDays: Int
-    private let queue = DispatchQueue(label: "toshllm.filelog")
+    private let queue = DispatchQueue(label: "kestrel.filelog")
     private var handle: FileHandle?
     private var currentURL: URL
 
@@ -391,9 +391,9 @@ final class RotatingFileLog: @unchecked Sendable {
 final class BenchmarkLog: @unchecked Sendable {
     let url: URL
     let directory: URL
-    private let queue = DispatchQueue(label: "toshllm.benchlog")
+    private let queue = DispatchQueue(label: "kestrel.benchlog")
     private let retentionDays: Int
-    static let runMarker = "=== ToshLLM benchmark · "
+    static let runMarker = "=== Kestrel benchmark · "
 
     init(retentionDays: Int = 3) {
         self.retentionDays = retentionDays
@@ -513,8 +513,8 @@ enum EngineLock {
             guard length > 0 else { continue }
             let path = String(cString: buffer)
 
-            // Only processes from a ToshLLM bundle are ours to kill.
-            guard path.contains("ToshLLM.app/Contents/Resources/bin") else { continue }
+            // Only processes from a Kestrel bundle are ours to kill.
+            guard path.contains("Kestrel.app/Contents/Resources/bin") else { continue }
 
             AppLog.app.warning("Reaping orphaned engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
@@ -542,7 +542,7 @@ enum EngineLock {
             var buffer = [CChar](repeating: 0, count: 4096)
             guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { continue }
             let path = String(cString: buffer)
-            guard path.contains("ToshLLM.app/Contents/Resources/bin"), path.hasSuffix("/llama-server") else { continue }
+            guard path.contains("Kestrel.app/Contents/Resources/bin"), path.hasSuffix("/llama-server") else { continue }
             AppLog.app.warning("Reaping stray engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
@@ -570,7 +570,7 @@ enum FileHash {
 // MARK: - Keychain (API key storage)
 
 enum Keychain {
-    private static let service = "dev.engel.toshllm"
+    private static let service = "com.northlatchlabs.kestrel"
 
     static func get(_ account: String) -> String? {
         let query: [String: Any] = [

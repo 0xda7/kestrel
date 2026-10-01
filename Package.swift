@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "ToshLLM",
+    name: "Kestrel",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "ToshLLM", path: "Sources"),
-        .testTarget(name: "ToshLLMTests", dependencies: ["ToshLLM"], path: "Tests"),
+        .executableTarget(name: "Kestrel", path: "Sources"),
+        .testTarget(name: "KestrelTests", dependencies: ["Kestrel"], path: "Tests"),
     ]
 )
