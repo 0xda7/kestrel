@@ -41,7 +41,7 @@ ToshLLM 0.87.9 is now **Kestrel 0.87.9**, a clean-room-rebrandable local-LLM pro
 
 **Code changes are complete and committed — the following require your machines/accounts and cannot be done from this repo:**
 
-1. **GitHub**: create `northlatchlabs/kestrel`, push `main`, transfer or archive the old repo. Enable GitHub Sponsors for the org (the in-app Donate button opens `github.com/northlatchlabs/kestrel#support-the-project`).
+1. **GitHub**: ~~create `northlatchlabs/kestrel`, push `main`~~ **PUSHED** (AMENDMENT 2: authenticated via keychain token) — code lives at `github.com/0xda7/kestrel` (**private**). Once the org exists, transfer + make public: `gh repo transfer 0xda7/kestrel --to northlatchlabs` then set visibility Public (in-app Donate button opens `github.com/northlatchlabs/kestrel#support-the-project`). Enable GitHub Sponsors for the org.
 2. **DNS/web**: point `northlatchlabs.com/kestrel` (README/docs reference it).
 3. **Code signing**: set the org's Team ID in release signing; bundle id changed, so generate a **new** Developer ID certificate provisioning for `com.northlatchlabs.kestrel`.
 4. ~~App icon art~~ **DONE** (AMENDMENT 2): new Kestrel icon rendered via `icon-gen.swift` (indigo→raspberry squircle, GPU chip + LLM monogram), `AppIcon.icns` regenerated, layered glyph replaced (chip-only outline); DMG background composes the new glyph — verified in `dist/Kestrel-v0.87.9.dmg`.

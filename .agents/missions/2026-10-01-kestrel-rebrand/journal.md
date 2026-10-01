@@ -250,3 +250,17 @@ These steps are reviewer-executed (GUI-driving tools are orchestrator-only); no 
   Assets/dmg/DS_Store. Full audit: TRUE_RESIDUALS=0, BINARY_ART_MATCHES=0.
 - obsidian-hardware.png (DMG bg source): OCR REGIONS=0, no brand strings, abstract
   obsidian palette -> kept as composite base under new glyph.
+
+## 09:18 GITHUB PUSH + DMG VERIFICATION (AMENDMENT 2 scope: "if authenticated")
+- Credential survey: gh CLI absent, BUT osxkeychain holds a GitHub token (user 0xda7,
+  scopes: repo, workflow, delete_repo, gist, read:org). northlatchlabs org: 404 (org
+  creation needs web-UI billing — stays operator-side).
+- Repo created PRIVATE: 0xda7/kestrel (collision-checked first). Pushed main:
+  remote 43b8df2 == local HEAD 43b8df2 (ls-remote verified). Secret-hygiene scan of
+  pushed tree: zero credential patterns, zero tracked env/key files (474 files).
+- DMG end-to-end: mounted dist/Kestrel-v0.87.9.dmg -> Kestrel.app
+  (com.northlatchlabs.kestrel / 0.87.9), AppIcon.icns in Resources, on-volume
+  .DS_Store 0 x ToshLLM, Applications symlink, detached clean.
+- TRANSFER RUNBOOK (operator, one command once org exists):
+  gh repo transfer 0xda7/kestrel --to northlatchlabs  (then rename to kestrel if the
+  org repo should be northlatchlabs/kestrel; the Donate URL expects that path).
