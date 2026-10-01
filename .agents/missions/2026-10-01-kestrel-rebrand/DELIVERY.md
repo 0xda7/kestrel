@@ -1,0 +1,79 @@
+# Kestrel Rebrand — Delivery Package
+
+**Delivered:** 2026-10-01 · Commit `8e61ce7` · Baseline `28b653d` (rollback point) · Instrumentation `44165ca`
+**Operator objective:** Reproductize ToshLLM as a new brand under Northlatch Labs licensing, with 100% removal of obsolete personal details and the original random name. Amended: full personal-identity purge including financial identity.
+
+---
+
+## 1. Outcome (business terms)
+
+ToshLLM 0.87.9 is now **Kestrel 0.87.9**, a clean-room-rebrandable local-LLM product owned by **Northlatch Labs**:
+
+| Dimension | Before | After |
+|---|---|---|
+| Product name | ToshLLM | **Kestrel** |
+| Bundle ID / keychain | dev.engel.toshllm | **com.northlatchlabs.kestrel** |
+| Repo slug | engeldlgado/toshllm | **northlatchlabs/kestrel** |
+| Site refs | toshllm.com | **northlatchlabs.com/kestrel** |
+| Contact | engeldlgado@gmail.com | **opensource@northlatchlabs.com** |
+| Copyright | Engelbert Delgado | **Northlatch Labs** (file headers) |
+| Donations | Binance Pay ID + personal USDT TRC-20 QR | **Single sponsor link** (GitHub Sponsors anchor) |
+
+**Nothing functional changed.** Every behavioral surface the product spec guarantees survives:
+`TOSH_*` environment and build defines (254 distinct tokens, set-diff vs baseline = 0), `tosh_*` C symbols, the `tosh-moe` engine module, legacy `toshllm_*` on-disk image compatibility, VERSION 0.87.9, and Package.swift dependencies (diff-empty vs baseline).
+
+**Personal identity: zero.** Repo-wide sweep with the extended pattern (names, handles, both emails, wallet address `TFUG…JDUf`, ORCID, youpay.me) outside mission records: **0 lines**. Third-party credits (llama.cpp/ggml-org, iRon-Llama/Basten7, all contributors) fully preserved — README 17 credit lines, in-app docs 10.
+
+## 2. Verification evidence (all captured in journal.md)
+
+| Gate | Result |
+|---|---|
+| G2 `swiftc -parse`, all Swift | 198/198 files, 0 failures |
+| G3 brand residuals | TRUE_RESIDUALS=0 (241 earlier matches reclassified as plan exceptions; 6 binary art matches = operator gate) |
+| G4 personal sweep (extended) | 0 |
+| G5 patch hunk integrity | 0 drift, rename-aware |
+| G6 meta validity | .zenodo.json / CITATION.cff / build.yml all valid |
+| Runtime build | **exit 0, 298.53s clean**, binary links as `Kestrel`, incremental 0.60s |
+| Localization | 4 packs × 1859 keys, valid JSON, ImageGen key renamed with translated values |
+| Donor purge | Binance/USDT absent from Sources, docs, scripts, assets; only historical CHANGELOG line remains |
+
+## 3. Runbook (operator actions after pull)
+
+**Code changes are complete and committed — the following require your machines/accounts and cannot be done from this repo:**
+
+1. **GitHub**: create `northlatchlabs/kestrel`, push `main`, transfer or archive the old repo. Enable GitHub Sponsors for the org (the in-app Donate button opens `github.com/northlatchlabs/kestrel#support-the-project`).
+2. **DNS/web**: point `northlatchlabs.com/kestrel` (README/docs reference it).
+3. **Code signing**: set the org's Team ID in release signing; bundle id changed, so generate a **new** Developer ID certificate provisioning for `com.northlatchlabs.kestrel`.
+4. **App icon art** (`icon-gen.swift` pipeline is ready): produce replacement icon art — the glyph mask was renamed (`kestrelGlyphMask`) but still uses the original visual design.
+5. **Replacement screenshots** (old-brand text visible in pixels — flagged, not editable): `Assets/{home,chat,benchmarks,models,model-hero,model-hero-light,settings-guide,settings-guide-light}.jpg`, `Assets/dmg/obsidian-hardware.png`, `Assets/models.jpg`.
+6. **DMG assets**: rebuild `Assets/dmg/DS_Store` (contains old volume name) and regenerate the DMG (`scripts/make-dmg.sh`) after screenshots are replaced.
+7. **Release**: run `.github/workflows/build.yml` (keychain steps already renamed to `kestrel.keychain`), then `scripts/release.sh`.
+
+**User-facing BREAKING changes (no migration, by design):**
+- App support dir moves `~/Library/Application Support/ToshLLM` → `…/Kestrel`. Users with models in the old dir must move it manually.
+- Keychain entries under the old service are not read; re-authenticate providers once.
+- Settings archives exported by old builds (`toshllm-settings` format key) are rejected by the new `kestrel-settings` reader.
+- Old builds' `toshllm_*` generated-image files are still listed and deletable (compat kept); new files are written as `kestrel_*`.
+- Donation channels are reduced to the sponsor link.
+
+## 4. Rollback
+
+```bash
+git checkout 28b653d   # pristine ToshLLM 0.87.9, pre-rebrand
+```
+No data migrations were performed outside git; rollback is complete and lossless.
+
+## 5. Metrics
+
+- **245 files changed** across 1 atomic commit; 1634 insertions, 1108 deletions.
+- **Pass 1:** 5 agents (A1 core sources, A2 build/config, A3 UI/localization, A4b lean re-dispatch of A4's meta scope, A5 meta/CI/docs/assets) — all returns evidence-checked and accepted.
+- **Fix pass (B1–B3): closed without dispatch** — pass 1 + reviewer surgery left zero actionable residuals (rationale journaled 05:37).
+- **Reviewer surgery:** 1 structural identity leak (USDT wallet + QR) found outside all agent pattern scopes; fixed end-to-end (Sources, docs ES/EN, 4 lang packs, build script, asset deleted).
+- **Gate tooling hardened:** audit exception list corrected (241 → 0 true residuals), rename-aware hunk gate, extended personal pattern, validator fallback. G4 gap lesson institutionalized: reviewer runs full-pattern sweeps across all dirs after every pass.
+- **Budget:** within plan; 1 re-dispatch (A4→A4b, context-death cause), 1 mid-flight steer (A5), 0 budget-stop events.
+
+## 6. Known limitations
+
+- 6 binary-art old-brand matches remain until operator supplies replacement art (§3.5–3.6).
+- `vendor/` engine sources and upstream patches intentionally keep `tosh`-prefixed C symbols — renaming them would break the patch series against upstream llama.cpp.
+- Web-ui bundle (`Assets/web-ui/…/bundle.js`) renamed at the 3 branded physical lines only; a rebuild from the webui source with `scripts/rebrand-webui.sh` is advised before public release.
