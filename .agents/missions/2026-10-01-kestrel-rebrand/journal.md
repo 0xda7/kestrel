@@ -191,3 +191,62 @@
 | 2 | A3 Models/Benchmarks/Images/Audio/Workspace/MoE/Hardware | glm-5.3-flash | T1 | running | 731be412 |
 | 2 | A4 App/DesignSystem/Dashboard/Settings/Tests/Package.swift | glm-5.3-flash | T1 | running | f3f77ba3 |
 | 2 | A5 scripts/CI/docs/Assets/meta | glm-5.3-flash | T1 | running | 9db088f0 |
+
+## 05:51 AMENDMENT 2 — OPERATOR APPROVED FULL EXECUTION OF OPERATOR-GATE FIXES
+Operator: "you have permission to proceed with all the fixes you proposed." Scope added:
+in-repo art + packaging + repo actions. Machine survey results:
+- `gh` NOT installed -> GitHub repo creation/push stays operator-side.
+- `screencapture` + `osascript` present -> app-drive screenshots FEASIBLE.
+- `actool` ABSENT (CLT-only) -> Liquid Glass Assets.car not buildable; legacy icns path is
+  (iconutil + iconset). AppIcon.icon/ exists with Assets/glyph.png consumed by make-dmg.
+- vendor/ EMPTY (no engines, no webui dist) -> make-app runs engineless (warning path);
+  rebrand-webui rebuild impossible; web-ui bundle stays as-is (already 3-line rebranded).
+- Codesign is ad-hoc (-s -) -> full app bundle + DMG buildable locally, no Apple identity.
+Execution order: icon art -> icns -> release app (TOSH_NO_BUMP=1, VERSION must stay 0.87.9)
+-> drive app for screenshots -> DMG w/ layout regen (DS_Store) -> art re-audit -> commit.
+These steps are reviewer-executed (GUI-driving tools are orchestrator-only); no subagents.
+
+## 06:00 ART PIPELINE PHASE 1 — ICON + GLYPH REGENERATED (evidence-captured)
+- Traced ALL old-brand art to baseline 28b653d (glyph.png + 4 README JPGs predate rebrand).
+- Old JPGs carry NO metadata strings (probes empty) -> audit hits are PIXELS; only real
+  re-captures fix them. DS_Store hit = /Volumes/ToshLLM path strings -> layout regen replaces.
+- New icon rendered via icon-gen.swift (indigo->raspberry squircle, GPU chip + LLM monogram);
+  pixel probe: opaque center, white glyph, transparent margins. AppIcon.icns built via
+  iconset 16..512@2x + iconutil (1.0MB, repo root; picked up by make-app.sh:51).
+- Layered glyph replaced: chip-only derivation (shadow+bg blocks excised, margin 240),
+  9.7% opaque coverage = stroked outline art, normalized to native 1024px. dmg-background
+  composer accepts it: bg 1280x800 @1x + 2x rendered clean.
+- Screenshot plan: launch dist/Kestrel.app engineless; drive sidebar sections
+  dashboard/chat/models/benchmarks; capture per-window PNG (CUA, a11y-tree-free), encode
+  JPEG to match originals (~1265x820, quality default). make-app under TOSH_NO_BUMP=1 keeps
+  VERSION 0.87.9 (success criterion).
+
+## 09:12 ART PIPELINE PHASE 2 — SCREENSHOTS, IN-APP ART, DMG (all evidence-captured)
+- make-app.sh line 211 zsh glob fix: "no matches found: .../bin/*" aborted engineless
+  packaging BEFORE codesign. Null-glob qualifiers *(N)/*(.N) on bin{,-image,-audio} loops
+  (lines 211, 222-224). zsh -n clean. Repackage SUCCESS: dist/Kestrel.app, VERSION 0.87.9
+  unchanged, bundle id com.northlatchlabs.kestrel, icns bundled, ad-hoc codesign valid.
+- Screenshots (CUA-driven, session kestrel-shots): Welcome sheet dismissed via
+  foreground Escape after bring_to_front. Captured at native 1568x951 (chat 1037):
+  /tmp/shots/{home,chat,models,benchmarks}.png. Section navigation verified by AX text
+  ("Discover, download and manage your local models.") and by hash-distinct captures.
+  Encoded sips -> Assets/{home,chat,models,benchmarks}.jpg (jpeg default quality).
+- OCR verification (Vision framework, /tmp/ocr): all four captures show Kestrel UI text,
+  BRAND_HIT=NO on every one. Old captures had zero real brand strings but old-brand
+  PIXELS; new captures are new-brand pixels.
+- DECORATIVE ART regenerated (spec-legal: hero/guide are accessibilityHidden artwork):
+  /tmp/art-gen.swift (CoreGraphics, brand palette indigo 0.349/0.318/0.498 -> raspberry
+  0.753/0.306/0.482, chip-motif) -> Assets/model-hero{,-light}.jpg 2000x722,
+  Assets/settings-guide{,-light}.jpg 1440x1612. Pixel-probed: band/ring/arc land on
+  designed values (CG bottom-origin accounted).
+- AUDIT FINDING (instrumentation upgrade v4): JFIF "Photoshop 3.0" resource marker inside
+  EVERY Apple-encoder JPEG contains bare substring "tosh" -> BINARY_ART_MATCHES was a
+  FALSE-POSITIVE class (originals baseline 28b653d also contained ONLY the marker).
+  audit-brand.sh now content-verifies binaries via strings|grep real brand tokens.
+  Result: binary hits 6 -> 1 (only genuinely-branded DS_Store) -> 0 after regen.
+- DMG: TOSH_DMG_LAYOUT=1 ./scripts/make-dmg.sh -> "Done: dist/Kestrel-v0.87.9.dmg"
+  (16.3MB UDZO). DS_Store regenerated on live volume via Finder AppleScript: ToshLLM
+  strings 8 -> 0 (xxd confirms /Kestrel records present); layout committed to
+  Assets/dmg/DS_Store. Full audit: TRUE_RESIDUALS=0, BINARY_ART_MATCHES=0.
+- obsidian-hardware.png (DMG bg source): OCR REGIONS=0, no brand strings, abstract
+  obsidian palette -> kept as composite base under new glyph.

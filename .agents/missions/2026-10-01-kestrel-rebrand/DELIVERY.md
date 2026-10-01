@@ -29,7 +29,7 @@ ToshLLM 0.87.9 is now **Kestrel 0.87.9**, a clean-room-rebrandable local-LLM pro
 | Gate | Result |
 |---|---|
 | G2 `swiftc -parse`, all Swift | 198/198 files, 0 failures |
-| G3 brand residuals | TRUE_RESIDUALS=0 (241 earlier matches reclassified as plan exceptions; 6 binary art matches = operator gate) |
+| G3 brand residuals | TRUE_RESIDUALS=0, BINARY_ART_MATCHES=0 (audit v4 content-verifies binaries; JFIF "Photoshop 3.0" marker is a false-positive class) |
 | G4 personal sweep (extended) | 0 |
 | G5 patch hunk integrity | 0 drift, rename-aware |
 | G6 meta validity | .zenodo.json / CITATION.cff / build.yml all valid |
@@ -44,9 +44,10 @@ ToshLLM 0.87.9 is now **Kestrel 0.87.9**, a clean-room-rebrandable local-LLM pro
 1. **GitHub**: create `northlatchlabs/kestrel`, push `main`, transfer or archive the old repo. Enable GitHub Sponsors for the org (the in-app Donate button opens `github.com/northlatchlabs/kestrel#support-the-project`).
 2. **DNS/web**: point `northlatchlabs.com/kestrel` (README/docs reference it).
 3. **Code signing**: set the org's Team ID in release signing; bundle id changed, so generate a **new** Developer ID certificate provisioning for `com.northlatchlabs.kestrel`.
-4. **App icon art** (`icon-gen.swift` pipeline is ready): produce replacement icon art — the glyph mask was renamed (`kestrelGlyphMask`) but still uses the original visual design.
-5. **Replacement screenshots** (old-brand text visible in pixels — flagged, not editable): `Assets/{home,chat,benchmarks,models,model-hero,model-hero-light,settings-guide,settings-guide-light}.jpg`, `Assets/dmg/obsidian-hardware.png`, `Assets/models.jpg`.
-6. **DMG assets**: rebuild `Assets/dmg/DS_Store` (contains old volume name) and regenerate the DMG (`scripts/make-dmg.sh`) after screenshots are replaced.
+4. ~~App icon art~~ **DONE** (AMENDMENT 2): new Kestrel icon rendered via `icon-gen.swift` (indigo→raspberry squircle, GPU chip + LLM monogram), `AppIcon.icns` regenerated, layered glyph replaced (chip-only outline); DMG background composes the new glyph — verified in `dist/Kestrel-v0.87.9.dmg`.
+5. ~~Replacement screenshots~~ **DONE** (AMENDMENT 2): `Assets/{home,chat,benchmarks,models}.jpg` re-captured from the running Kestrel app (1568×951/1037) and Vision-OCR-verified Kestrel-branded; `Assets/model-hero{,-light}.jpg` + `Assets/settings-guide{,-light}.jpg` regenerated as brand-styled CoreGraphics art (they are decorative `accessibilityHidden` artwork — no pixels of the old brand remain in `Assets/`).
+6. ~~DMG assets~~ **DONE** (AMENDMENT 2): `Assets/dmg/DS_Store` regenerated on a live volume (ToshLLM strings 8 → 0, `/Kestrel` records confirmed); `TOSH_DMG_LAYOUT=1 ./scripts/make-dmg.sh` → `dist/Kestrel-v0.87.9.dmg`. `Assets/dmg/obsidian-hardware.png` OCR-scanned: zero text, zero brand strings — kept.
+   - Audit instrumentation note: Apple JPEG encoders embed a JFIF "Photoshop 3.0" marker containing the bare substring "tosh"; `audit-brand.sh` v4 now content-verifies binary hits so this false-positive class (also present in the originals) no longer masks real residuals. Final: `TRUE_RESIDUALS=0`, `BINARY_ART_MATCHES=0`.
 7. **Release**: run `.github/workflows/build.yml` (keychain steps already renamed to `kestrel.keychain`), then `scripts/release.sh`.
 
 **User-facing BREAKING changes (no migration, by design):**

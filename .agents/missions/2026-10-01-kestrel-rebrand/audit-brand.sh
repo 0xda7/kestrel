@@ -16,7 +16,19 @@ for p in "${PATHS[@]}"; do
   [ -e "$p" ] || continue
   while IFS= read -r line; do
     if echo "$line" | grep -q '^Binary file .* matches'; then
-      binaries=$((binaries+1)); echo "$line" >> "$BIN_FILE"; total=$((total+1)); continue   # operator-gate art (screenshots, DS_Store): tracked, not text-fixable
+      # v4: content-verify the binary hit. The JFIF "Photoshop 3.0" resource
+      # marker injected by Apple's JPEG encoders contains the bare substring
+      # "tosh" — same false-positive family as Hackintosh/Macintosh. A binary
+      # is a TRUE residual only if it carries a real brand token
+      # (toshllm|engeld(e|l)gado|delgado) outside that marker.
+      binpath="${line#Binary file }"; binpath="${binpath% matches}"
+      real=$(strings "$binpath" 2>/dev/null | grep -iE 'toshllm|engel' | grep -viE 'photoshop' | head -3)
+      if [ -z "$real" ]; then
+        exceptions=$((exceptions+1))   # JFIF-marker false positive
+      else
+        binaries=$((binaries+1)); echo "$line" >> "$BIN_FILE"; total=$((total+1))
+      fi
+      continue   # binary art: content-verified, not text-fixable
     fi
     total=$((total+1))
     if echo "$line" | grep -qE 'TOSH_[A-Z0-9_]+'; then exceptions=$((exceptions+1));            # TOSH_* env / -D defines
