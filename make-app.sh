@@ -208,7 +208,7 @@ fi
 
 # a binary built for a newer macOS than the app's floor fails to launch on the testers'
 # systems with a dyld symbol error, and only there, so refuse to package it
-for exe in "$APP/Contents/Resources/bin/"* "$APP/Contents/Resources/bin-image/"* "$APP/Contents/Resources/bin-audio/"*; do
+for exe in "$APP/Contents/Resources/bin/"*(N) "$APP/Contents/Resources/bin-image/"*(N) "$APP/Contents/Resources/bin-audio/"*(N); do
     [ -f "$exe" ] || continue
     case "$exe" in *.metallib) continue;; esac
     minos=$(otool -l "$exe" 2>/dev/null | awk '/LC_BUILD_VERSION/{f=1} f&&/^ *minos/{print $2; exit}')
@@ -219,8 +219,8 @@ for exe in "$APP/Contents/Resources/bin/"* "$APP/Contents/Resources/bin-image/"*
     fi
 done
 
-[ -x "$APP/Contents/Resources/bin/llama-server" ] && codesign --force -s - "$APP/Contents/Resources/bin/"*(.)
-[ -x "$APP/Contents/Resources/bin-image/sd-cli" ] && codesign --force -s - "$APP/Contents/Resources/bin-image/"*
-[ -x "$APP/Contents/Resources/bin-audio/whisper-cli" ] && codesign --force -s - "$APP/Contents/Resources/bin-audio/"*
+[ -x "$APP/Contents/Resources/bin/llama-server" ] && codesign --force -s - "$APP/Contents/Resources/bin/"*(.N)
+[ -x "$APP/Contents/Resources/bin-image/sd-cli" ] && codesign --force -s - "$APP/Contents/Resources/bin-image/"*(N)
+[ -x "$APP/Contents/Resources/bin-audio/whisper-cli" ] && codesign --force -s - "$APP/Contents/Resources/bin-audio/"*(N)
 codesign --force -s - "$APP"
 echo "Done: $APP"
