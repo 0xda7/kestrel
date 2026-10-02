@@ -8,3 +8,10 @@
 - Deployed: TOSH_VERSION=0.88.0 TOSH_NO_BUMP=1 make-app.sh → distto /Applications, xattr -dr quarantine, relaunch (pid 50391).
 - GATE CLOSED: cua-driver AX snapshot of Configuration window (id=control, window 1314): `AXStaticText = "GPU, 33%, AMD Radeon Pro 5500M"`. The 33% is max-across-GPUs (Intel compositing); the card NAME is the discrete GPU as requested.
 - Note: fix is on main (abd99cb) but NOT in v0.88.0 release DMGs; next tag carries it.
+
+## 2026-10-02 ~07:30 PT — Mission opened: remote-inference-providers
+- Operator request: "most optimized method for integration of a Custom Provider for the Inference. The provider is OpenAI and Anthropic compatible."
+- Scout (captured this session): inference call sites = ChatNative.swift:881 (main stream), :1749 (compaction summarize), AudioStudioController.swift:685 (caption), ChatStreamProtocol.swift:99/108 (UI stream readback — local-only concern), ChatToolsService.swift:105/117/140 (engine /tools). ChatStreamAccumulator already parses OpenAI SSE incl. delta.tool_calls/usage/[DONE] → OpenAI-dialect remote needs no new parser.
+- Operator decisions: build now, endpoint supplied by operator (key to Keychain via Settings, never chat), OpenAI-compatible dialect first.
+- Goal goal-7fcd52da-b3b2-4292-9c06-fcea446fb08f armed, 12 rounds.
+- Directive reaffirmed: engine fork untouched; remote requests bypass llama-server entirely; no hardcoded model ids.
