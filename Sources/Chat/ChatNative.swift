@@ -396,6 +396,9 @@ final class ChatStore: ObservableObject {
     private var watchdog: Task<Void, Never>?
     /// Where the running reply is streamed from, so Stop can cancel it on the engine too.
     private var activeStream: (port: Int, identity: String)?
+    /// True while the current generation flows through a remote provider:
+    /// engine-only paths (stream resume, engine stop, stall-kills-engine) stand down.
+    private var activeStreamRemote = false
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
@@ -724,6 +727,10 @@ final class ChatStore: ObservableObject {
         let toolCwd = effectiveWorkingDirectory(for: convID)
         activeStream = (port, ChatStreamIdentity.value(conversationID: convID,
                                                        model: ServerSettings.activeRouterModel()))
+        // Read once per send: a configured remote route bypasses llama-server
+        // for this generation (engine stop/resume/stall paths stand down).
+        let sendRoute = InferenceRoutes.active()
+        activeStreamRemote = sendRoute?.isConfigured == true
         let toolsEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled)
         let javaScriptEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled)
         let latchEnabled = LatchDelegateService.isEnabled
@@ -854,12 +861,18 @@ final class ChatStore: ObservableObject {
             }
 
             do {
-                // Restore this conversation's persisted KV (if any) so the slot
-                // holds the unchanged history and only the new turn is prefilled.
-                await self?.prepareSlot(convID: convID, port: port)
+                // A configured remote route bypasses llama-server entirely:
+                // no slot prep, no engine tool discovery, no engine resume.
+                let route = InferenceRoutes.active()
+                let remote = route?.isConfigured == true
+                if !remote {
+                    // Restore this conversation's persisted KV (if any) so the slot
+                    // holds the unchanged history and only the new turn is prefilled.
+                    await self?.prepareSlot(convID: convID, port: port)
+                }
 
                 if availableTools.isEmpty {
-                    if toolsEnabled {
+                    if toolsEnabled, !remote {
                         availableTools = try await ChatToolsService.list(port: port)
                         // without a folder these write wherever the engine happens to run,
                         // and the model invents paths for text that is not a file at all
@@ -878,16 +891,10 @@ final class ChatStore: ObservableObject {
                     }
                 }
 
-                var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
-                req.httpMethod = "POST"
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                req.timeoutInterval = 600
-                if let key = ServerSettings.activeAPIKey() {
-                    req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-                }
                 let activeModel = ServerSettings.activeRouterModel()
+                // The engine keys resume/stop by this header; remote routes have
+                // no engine to key, so it stays local-only.
                 let streamIdentity = ChatStreamIdentity.value(conversationID: convID, model: activeModel)
-                req.setValue(streamIdentity, forHTTPHeaderField: "X-Conversation-Id")
                 var body: [String: Any] = [
                     "messages": history,
                     "stream": true,
@@ -953,6 +960,17 @@ final class ChatStore: ObservableObject {
                    let custom = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     body.merge(custom) { _, customValue in customValue }
                 }
+                let wire = RouteWire.wire(body: body, port: port, route: remote ? route : nil,
+                                          localAPIKey: ServerSettings.activeAPIKey())
+                var req = URLRequest(url: wire.url)
+                req.httpMethod = "POST"
+                for (field, value) in wire.headers {
+                    req.setValue(value, forHTTPHeaderField: field)
+                }
+                req.timeoutInterval = 600
+                if !remote {
+                    req.setValue(streamIdentity, forHTTPHeaderField: "X-Conversation-Id")
+                }
                 req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (bytes, response) = try await ChatStore.streamingSession.bytes(for: req)
@@ -978,7 +996,10 @@ final class ChatStore: ObservableObject {
                 }
 
                 var attempts = 0
-                while !completed, attempts < 3, !Task.isCancelled {
+                // The engine can replay a keyed stream from a byte offset; a
+                // remote provider cannot, so a dropped remote stream just fails.
+                let canResume = !remote
+                while !completed, canResume, attempts < 3, !Task.isCancelled {
                     attempts += 1
                     let before = bytesReceived
                     do {
@@ -1461,6 +1482,17 @@ final class ChatStore: ObservableObject {
                 let idle = Date().timeIntervalSince(self.lastStreamActivity)
                 let limit: TimeInterval = self.sawFirstToken ? 30 : 180
                 if idle > limit {
+                    // A remote provider stall must not stop the local engine.
+                    if self.activeStreamRemote {
+                        AppLog.chat.error("remote stream stalled")
+                        self.lastError = "La respuesta remota dejó de llegar / The remote response stopped arriving"
+                        self.generating = false
+                        self.generatingConvID = nil
+                        self.live.reset()
+                        self.save()
+                        self.watchdog = nil
+                        return
+                    }
                     self.handleStreamStall()
                     return
                 }
@@ -1824,7 +1856,8 @@ final class ChatStore: ObservableObject {
         watchdog?.cancel()
         watchdog = nil
         task?.cancel()
-        if let stream = activeStream, let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
+        if let stream = activeStream, !activeStreamRemote,
+           let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
             var req = URLRequest(url: url)
             req.httpMethod = "DELETE"

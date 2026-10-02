@@ -1091,6 +1091,8 @@ struct SettingsView: View {
                     .infoTip(loc.t("Usa la plantilla de chat oficial del modelo (formato de mensajes, herramientas). Déjalo activado salvo problemas con un modelo concreto.",
                                 "Uses the model's official chat template (message format, tools). Keep it on unless a specific model misbehaves."))
             }
+
+            RemoteProvidersSection()
             }
 
         }

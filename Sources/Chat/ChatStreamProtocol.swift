@@ -62,6 +62,12 @@ struct ChatStreamAccumulator {
                 reasoning += text
                 event.receivedContent = true
             }
+            // OpenRouter-style gateways (and the XLaunch gateway) send reasoning
+            // as `reasoning` with an optional `reasoning_details` sidecar.
+            if let text = (delta["reasoning"] as? String) ?? (delta["reasoning_details"] as? [String: Any]).flatMap({ $0["text"] as? String }), !text.isEmpty {
+                reasoning += text
+                event.receivedContent = true
+            }
             if let text = delta["content"] as? String, !text.isEmpty {
                 visible += text
                 event.receivedContent = true
