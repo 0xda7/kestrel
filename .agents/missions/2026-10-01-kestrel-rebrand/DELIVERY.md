@@ -88,3 +88,55 @@ No data migrations were performed outside git; rollback is complete and lossless
   current main for the installable DMG, or (b) delete + retag v0.88.0 at 36f991e
   (`git tag -d v0.88.0 && git push origin :refs/tags/v0.88.0` then re-tag) so the release
   carries the fix. Recommended: (b) — nothing has been consumed from the release yet.
+
+## WAVE-2 DELIVERY (2026-10-01 17:08 PT) — v0.88.0 released and verified
+
+**Outcome.** Kestrel 0.88.0 is published at github.com/0xda7/kestrel/releases/tag/v0.88.0:
+a freshly CI-compiled, Kestrel-branded app for both x86_64 variants (AVX2 + noavx2 DMGs,
+70.5/69.7 MB) carrying the hardened agent harness — tolerant tool-call parsing, text-side
+tool-call rescue, latch delegation, discipline prompt, per-model speed benchmark button,
+and measured-first ncmoe/threads pre-fill. The engine is untouched; nothing is wired
+through it; no models are hardcoded.
+
+**What changed** (commits f826a27 → cb649ed):
+- Agent harness H1–H4 in Chat (f826a27): rescue of text-form tool calls (max 3/turn, visible
+  text only, never on cancel/error), 12k-char result clamp, latch_delegate tool
+  (settings-driven path/timeout), 5-rule discipline prompt, continuation card now shows
+  turns used + tools executed.
+- Live-fire fixes found only by running the operator's real 9B model: POST /tools was
+  404-disabled without --webui-mcp-proxy (36f991e); CI packaging failed because
+  .gitignore's `dist/` rule silently swallowed vendored mermaid/katex bundles (5202d7e).
+- Release chain: CHANGELOG [0.88.0] section → release.sh → tag v0.88.0 → CI green
+  (run 36942558831) → release published with checksums.
+
+**How to use it.** Download `Kestrel-v0.88.0.dmg` from the release page (noavx2 variant
+only for pre-2013 Macs), drag to Applications, launch. Verify the checksum first:
+`shasum -a 256 Kestrel-v0.88.0.dmg` must print `9b515b72…175579f`. For the agent stack:
+enable tools in Chat settings, then ask the model something requiring a tool — the call now
+survives text-form output and the continuation card reports turns/tools used.
+
+**Runbook.** Health: app Logs tab shows engine args (look for `--jinja --tools all
+--webui-mcp-proxy` when agent tools are on). Failure 1 — tool call "does nothing": check
+the log for `--webui-mcp-proxy`; if absent you are on ≤0.87.x, upgrade. Failure 2 — CI
+red on a future tag: read the make-app.sh step first; every cp source must be git-tracked
+(audit loop is in the wave-2 journal). Failure 3 — latch_delegate errors: verify the
+binary path in Chat advanced settings (`~/.latch/bin/latch-harness`) is executable.
+Escalation: mission journal + harness plan amendments 1–4 hold the full evidence chain.
+
+**Rollback.** `git tag -d v0.88.0 && git push origin :refs/tags/v0.88.0 && git push origin :refs/tags/v0.88.0` (tested pattern — executed once today at 16:46 PT) then delete the release
+in the UI; the previous installable is v0.87.9 in dist/. The app itself rolls back by
+deleting Kestrel.app and reinstalling the older DMG. Local `~/Library/Application
+Support/Kestrel` is unaffected by downgrades.
+
+**Impact & measurement.** Baseline: tool calls silently lost on reasoning models (~356
+thinking tokens per trivial prompt observed); POST /tools broken in shipped builds; no
+per-model speed feedback. Target: calls execute every turn, POST /tools 200, speed
+measured per model. Actual (captured): native tool_calls round-trip ✓, POST /tools
+read_file/exec/grep ✓ after fix, DMG checksum-verified ✓. Watch live: repo Actions tab;
+in-app Benchmarks tab.
+
+**Limitations & follow-ups.** The app-GUI half of the agent loop (SwiftUI end-to-end with
+the model in the window) remains operator-run — every API/engine-level link is verified
+here, the last inch is yours. Notarization secrets, repo visibility, DNS, and Sponsors
+stay operator-side as listed above. Next highest-value move: your GUI run of 0.88.0 on
+the 9B model, then Chat & Studio llm-space phases 1–5.
