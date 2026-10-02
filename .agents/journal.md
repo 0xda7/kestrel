@@ -15,3 +15,7 @@
 - Operator decisions: build now, endpoint supplied by operator (key to Keychain via Settings, never chat), OpenAI-compatible dialect first.
 - Goal goal-7fcd52da-b3b2-4292-9c06-fcea446fb08f armed, 12 rounds.
 - Directive reaffirmed: engine fork untouched; remote requests bypass llama-server entirely; no hardcoded model ids.
+
+### AMENDMENT 1 (plan: remote-inference-providers)
+- Step 2 delivered as design.md with one refinement: ChatInferenceRoute protocol replaced by enum InferenceDialect + Codable InferenceRoute + InferenceRoutes resolver. Reason: 3 known dialects, JSONEncoder→UserDefaults is the established persistence pattern (measuredBenchByModel), no dynamic registration anywhere. Step 4 request-boundary extraction unchanged; local byte-identity gate unchanged.
+- Keychain account chosen: "remote-api-key" (single key per install, matching the single local-key model; per-route keys = amendment candidate).
