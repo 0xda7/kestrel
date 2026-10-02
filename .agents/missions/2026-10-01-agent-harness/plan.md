@@ -67,3 +67,16 @@ for dylibs; audited every other cp source in make-app.sh — all tracked. zsh -n
 v0.88.0 deleted and re-anchored at 5202d7e (the failed run's release never published, so
 re-tagging is safe); new run 36942558831 in flight, watched by background job bash-8.
 Amendment 2's POST /tools fix (36f991e) is now inside the tag as intended.
+
+## AMENDMENT 4 (2026-10-01 17:05 PT) — RELEASE GATE CLOSED ON CAPTURED EVIDENCE
+CI run 36942558831: completed / success (Build standard ✓, Build noavx2 ✓, Publish release ✓).
+Release v0.88.0 published 2026-10-02T00:01:56Z with checksums.txt, Kestrel-v0.88.0.dmg (70.5 MB),
+Kestrel-v0.88.0-noavx2.dmg (69.7 MB); notes built from the CHANGELOG [0.88.0] section.
+Downloaded Kestrel-v0.88.0.dmg by asset id (200, 73,927,622 bytes): sha256
+9b515b72…175579f matches checksums.txt byte-for-byte; hdiutil imageinfo = UDZO; mounts clean.
+Mounted bundle: CFBundleIdentifier com.northlatchlabs.kestrel, CFBundleShortVersionString 0.88.0,
+Resources/bin has kernels/ + all five binaries; bundled engine answers --version and contains
+the webui-mcp-proxy string (POST /tools fix inside the shipped engine's host app args);
+rich-content/mermaid/dist/mermaid.min.js present (the CI fix landed in the artifact).
+Remaining (operator-side, cannot be done from here): install the DMG, run the app-GUI half of
+G2 (agent loop end-to-end on the real 9B model), notarization secrets, repo visibility/DNS.
