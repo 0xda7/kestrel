@@ -30,7 +30,7 @@ struct DashboardMetricsView: View {
                         value: activity.map { String(format: "%.0f%%", $0) } ?? "—",
                         detail: activity == nil
                             ? loc.t("El controlador no reporta actividad", "Activity unavailable from driver")
-                            : (vram.gpus.first?.name ?? "GPU"),
+                            : (primaryGPU?.name ?? "GPU"),
                         history: gpuHistory)
             .frame(minWidth: 150)
         DashboardMetric(title: "VRAM", icon: "memorychip",
@@ -55,6 +55,19 @@ struct DashboardMetricsView: View {
                             ? "Metal · Apple Silicon"
                             : loc.t("Metal · build AMD parcheado", "Metal · patched AMD build")))
             .frame(minWidth: 150)
+    }
+
+    /// The GPU this card is about: the busiest one while anything is rendering,
+    /// otherwise the biggest card (the discrete GPU on mixed iGPU+dGPU Macs) —
+    /// never just `first`, which on this class of machine is always the iGPU.
+    private var primaryGPU: GPUStat? {
+        let gpus = vram.gpus
+        guard !gpus.isEmpty else { return nil }
+        if let busiest = gpus.max(by: { ($0.activityPercent ?? 0) < ($1.activityPercent ?? 0) }),
+           (busiest.activityPercent ?? 0) > 0 {
+            return busiest
+        }
+        return gpus.max { $0.totalMB < $1.totalMB }
     }
 
     private func record(_ sample: SystemTelemetrySample) {
