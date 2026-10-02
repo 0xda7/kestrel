@@ -100,6 +100,9 @@ enum SettingsKeys {
     static let latchBinaryPath = "latchBinaryPath"
     static let latchDelegateEnabled = "latchDelegateEnabled"
     static let latchDelegateTimeout = "latchDelegateTimeout"
+    /// When on, new conversations answer through the latch harness instead of
+    /// the model engine. Per-conversation overrides can still flip back.
+    static let latchPrimaryEnabled = "latchPrimaryEnabled"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
     /// external memory server already covers the job and the model mixes the two.
     static let memoryToolsEnabled = "memoryToolsEnabled"
@@ -255,7 +258,7 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
-        latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout,
+        latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,

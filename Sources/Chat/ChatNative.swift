@@ -144,6 +144,10 @@ struct Conversation: Identifiable, Codable {
     /// Last exchange's context tokens, per chat so the bar follows the open
     /// conversation and persists with the KV cache. Optional for old JSON.
     var contextUsed: Int? = nil
+    /// Assistant backend for this conversation: "latch" answers through the
+    /// latch harness, nil uses the model engine. Optional so older JSON decodes
+    /// and older builds ignore the extra key.
+    var assistantMode: String? = nil
 }
 
 struct ChatBranch: Identifiable, Codable, Equatable {
@@ -399,6 +403,10 @@ final class ChatStore: ObservableObject {
     /// True while the current generation flows through a remote provider:
     /// engine-only paths (stream resume, engine stop, stall-kills-engine) stand down.
     private var activeStreamRemote = false
+    /// Running latch-harness process while a latch-mode reply streams; Stop
+    /// terminates it. Latch mode never sets `activeStream`, so the engine
+    /// DELETE below is naturally inert for these runs.
+    private var latchProcess: Process?
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
@@ -621,6 +629,13 @@ final class ChatStore: ObservableObject {
         save()
     }
 
+    /// Per-conversation assistant backend: "latch" or nil (model engine).
+    func setConversationAssistantMode(_ c: Conversation, _ mode: String?) {
+        guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
+        conversations[i].assistantMode = (mode?.isEmpty ?? true) ? nil : mode
+        save()
+    }
+
     /// Folder picker for a project, so the menu entry is one line at each call site.
     func pickProjectWorkingDirectory(_ p: ChatProject) {
         let panel = NSOpenPanel()
@@ -711,6 +726,61 @@ final class ChatStore: ObservableObject {
                continuationInstruction: "Continue exactly where the previous response stopped. Do not repeat any text.")
     }
 
+    /// Global "latch as primary assistant" toggle (Chat advanced settings).
+    var globalLatchPrimary: Bool {
+        UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
+    }
+
+    /// True when this conversation should be answered by the latch harness:
+    /// an explicit per-conversation choice wins; otherwise the global
+    /// "latch as primary assistant" toggle decides for new/default chats.
+    func latchWanted(for c: Conversation) -> Bool {
+        if let mode = c.assistantMode { return mode == "latch" }
+        return UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
+    }
+
+    /// One-shot prompt for a latch run: the conversation's system prompt, a
+    /// char-bounded recent transcript (attachments already ride inline inside
+    /// wireContent) and the standing instruction. Bounded so a long history can
+    /// never push argv past the kernel limit; newest messages are kept.
+    private func latchPrompt(for i: Int, system: String,
+                             continuationInstruction: String?) -> String {
+        let maximumContextCharacters = 24_000
+        var budget = maximumContextCharacters
+        var lines: [String] = []
+        for message in conversations[i].messages.reversed() {
+            guard message.role == "user" || message.role == "assistant" else { continue }
+            if message.role == "assistant", message.content.isEmpty { continue } // reply slot
+            let body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { continue }
+            let line = (message.role == "user" ? "User: " : "Assistant: ") + body
+            if line.count > budget {
+                lines.insert("… " + line.prefix(budget), at: 0)
+                break
+            }
+            budget -= line.count + 1
+            lines.insert(line, at: 0)
+            if budget <= 0 { break }
+        }
+        var prompt = ""
+        let trimmedSystem = system.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSystem.isEmpty { prompt += trimmedSystem + "\n\n" }
+        if !lines.isEmpty {
+            prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
+        }
+        if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
+        prompt += "Answer as the assistant directly; your reply becomes the next assistant message."
+        return prompt
+    }
+
+    nonisolated static var latchUnavailableMessage: String {
+        "latch no está disponible: no se encontró el binario latch-harness (ruta por omisión ~/.latch/bin/latch-harness). No se ha usado el motor como sustituto silencioso; cambia el modo de este chat o instala latch. / latch is unavailable: the latch-harness binary was not found (default path ~/.latch/bin/latch-harness). The engine was not silently used instead; switch this chat's mode or install latch."
+    }
+
+    nonisolated static func latchExitMessage(status: Int32) -> String {
+        "latch terminó de forma anómala (estado \(status)). / latch exited abnormally (status \(status))."
+    }
+
     private func stream(into i: Int, port: Int, temperature: Double, maxTokens: Int,
                         system: String, thinking: Bool,
                         sampling: ChatSamplingSettings = ChatSamplingSettings(),
@@ -720,6 +790,88 @@ final class ChatStore: ObservableObject {
         generating = true
         generatingConvID = conversations[i].id
         live.reset()
+        // Latch mode answers through the harness process: no engine, no
+        // gateway, no port. The branch returns BEFORE startWatchdog so the
+        // engine idle watchdog (30/180 s) never fires against latch's
+        // multi-minute runs, and activeStream stays nil so stop() never sends
+        // an engine DELETE for these runs.
+        if latchWanted(for: conversations[i]) {
+            guard LatchDelegateService.isInstalled else {
+                conversations[i].messages.append(
+                    ChatMessage(role: "assistant", content: Self.latchUnavailableMessage))
+                conversations[i].updated = Date()
+                generating = false
+                generatingConvID = nil
+                live.reset()
+                save()
+                return
+            }
+            conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
+            let convID = conversations[i].id
+            let toolCwd = effectiveWorkingDirectory(for: convID)
+            let prompt = latchPrompt(for: i, system: system,
+                                     continuationInstruction: continuationInstruction)
+            let buffer = StreamBuffer()
+            let pump = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    guard let snap = buffer.take() else {
+                        try? await Task.sleep(for: .milliseconds(40))
+                        continue
+                    }
+                    if snap.done { break }   // finish() publishes the final transcript
+                    self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: snap.speed)
+                    try? await Task.sleep(for: .milliseconds(40))
+                }
+            }
+            let store = self
+            task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump] in
+                let tSent = Date()
+                var streamedText = ""
+                let outcome = await LatchDelegateService.runStreaming(
+                    argv: [LatchDelegateService.binaryPath, "-p", prompt],
+                    workingDirectory: toolCwd,
+                    timeout: LatchDelegateService.maximumTimeoutSeconds,
+                    onLaunch: { proc in
+                        Task { @MainActor in store.latchProcess = proc }
+                    },
+                    onOutput: { _, fullSoFar in
+                        // StreamBuffer is snapshot-replace: hand it the full
+                        // text so far, never a fragment.
+                        streamedText = fullSoFar
+                        buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
+                    })
+                if Task.isCancelled {
+                    // stop() terminated the process; keep whatever streamed.
+                    let partial = streamedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    buffer.finish()
+                    await MainActor.run {
+                        store.finish(conversation: convID, text: partial, speed: nil,
+                                     model: "latch")
+                    }
+                    pump.cancel()
+                    return
+                }
+                let reply: String
+                switch outcome {
+                case .completed(let output):
+                    reply = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                case .exited(let status, let output):
+                    let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    reply = partial.isEmpty
+                        ? Self.latchExitMessage(status: status)
+                        : partial + "\n\n" + Self.latchExitMessage(status: status)
+                case .failed(let reason):
+                    reply = reason
+                }
+                buffer.finish()
+                await MainActor.run {
+                    store.finish(conversation: convID, text: reply, speed: nil,
+                                 model: "latch")
+                }
+                pump.cancel()
+            }
+            return
+        }
         startWatchdog(port: port)
         // The user can switch or delete conversations mid-stream; the result
         // must land in the one this request started from, found by id.
@@ -1132,7 +1284,8 @@ final class ChatStore: ObservableObject {
 
     private func finish(conversation id: UUID, text: String, speed: Double?,
                         mtpAccept: Double? = nil, timings: ChatTimings? = nil,
-                        toolCalls: [ChatToolCall] = []) {
+                        toolCalls: [ChatToolCall] = [],
+                        model: String? = nil) {
         if let i = conversations.firstIndex(where: { $0.id == id }) {
             if let j = conversations[i].messages.indices.last,
                conversations[i].messages[j].role == "assistant" {
@@ -1145,7 +1298,7 @@ final class ChatStore: ObservableObject {
                     conversations[i].messages[j].mtpAccept = mtpAccept
                     conversations[i].messages[j].timings = timings
                     conversations[i].messages[j].toolCalls = toolCalls.isEmpty ? nil : toolCalls
-                    conversations[i].messages[j].model = ServerSettings.activeRouterModel()
+                    conversations[i].messages[j].model = model ?? ServerSettings.activeRouterModel()
                 }
             }
             conversations[i].updated = Date()
@@ -1860,6 +2013,11 @@ final class ChatStore: ObservableObject {
         watchdog?.cancel()
         watchdog = nil
         task?.cancel()
+        // A latch run owns no engine slot: terminating its process is the stop.
+        if let proc = latchProcess {
+            latchProcess = nil
+            proc.terminate()
+        }
         if let stream = activeStream, !activeStreamRemote,
            let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
@@ -2468,6 +2626,81 @@ struct NativeChatView: View {
 
     /// Shows the folder the tools are actually using, own or inherited, so it is
     /// readable without opening the chat parameters. Clicking it changes the chat's.
+    /// Per-conversation assistant backend chip: Latch (harness process) or the
+    /// model engine. A third "Automatic" state clears the explicit choice so
+    /// the conversation follows the global toggle again. Choosing latch while
+    /// the binary is missing is allowed — the send path finishes an explicit
+    /// bilingual error into the chat — but the chip turns warning-colored so
+    /// the cause is visible before sending.
+    @ViewBuilder private var assistantModeChip: some View {
+        if let conversation = chat.current {
+            let selected = conversation.assistantMode
+            let latchSelected = selected == "latch"
+            let automatic = selected == nil
+            let latch = chat.latchWanted(for: conversation)
+            let latchBroken = latch && !LatchDelegateService.isInstalled
+            Menu {
+                Button {
+                    chat.setConversationAssistantMode(conversation, "latch")
+                } label: {
+                    if latchSelected {
+                        Label(loc.t("Latch", "Latch"), systemImage: "checkmark")
+                    } else {
+                        Text(loc.t("Latch", "Latch"))
+                    }
+                }
+                Button {
+                    chat.setConversationAssistantMode(conversation, "engine")
+                } label: {
+                    if selected == "engine" {
+                        Label(loc.t("Asistente del modelo", "Model assistant"), systemImage: "checkmark")
+                    } else {
+                        Text(loc.t("Asistente del modelo", "Model assistant"))
+                    }
+                }
+                Button {
+                    chat.setConversationAssistantMode(conversation, nil)
+                } label: {
+                    if automatic {
+                        Label(loc.t("Automática (ajuste global)", "Automatic (global setting)"),
+                              systemImage: "checkmark")
+                    } else {
+                        Text(loc.t("Automática (ajuste global)", "Automatic (global setting)"))
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: latch ? "bird" : "cpu")
+                        .font(.system(size: 10, weight: .medium))
+                    Text(automatic
+                         ? (latch ? loc.t("Auto · Latch", "Auto · Latch")
+                                  : loc.t("Auto · Modelo", "Auto · Model"))
+                         : latchSelected ? loc.t("Latch", "Latch")
+                         : loc.t("Asistente del modelo", "Model assistant"))
+                        .lineLimit(1)
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(latchBroken ? AnyShapeStyle(Color.orange)
+                                             : AnyShapeStyle(HierarchicalShapeStyle.secondary))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .glassSurface(in: Capsule(), interactive: true)
+                .overlay(Capsule().strokeBorder(.primary.opacity(0.07)))
+                .contentShape(Capsule())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .tint(latchBroken ? .orange : .secondary)
+            .help(latchBroken
+                  ? loc.t("latch está seleccionado pero falta el binario latch-harness; el envío mostrará el error.",
+                          "latch is selected but the latch-harness binary is missing; sending will show the error.")
+                  : loc.t("Quién responde en esta conversación: latch o el asistente del modelo.",
+                          "Who answers in this conversation: latch or the model assistant."))
+        }
+    }
+
     @ViewBuilder private var workingDirectoryChip: some View {
         let own = chat.current?.workingDirectory
         let inherited = chat.current.flatMap { chat.project(id: $0.projectID)?.workingDirectory }
@@ -2585,6 +2818,7 @@ struct NativeChatView: View {
                 .help(loc.t("Haz clic para renombrar la conversación (Enter guarda).",
                             "Click to rename the conversation (Enter saves)."))
             Spacer()
+            assistantModeChip
             workingDirectoryChip
             if let branches = chat.current?.branches, branches.count > 1,
                let position = chat.currentBranchPosition {
@@ -3095,9 +3329,12 @@ struct NativeChatView: View {
     }
 
     private var canSend: Bool {
-        // A configured remote route replaces the local engine entirely.
+        // A configured remote route replaces the local engine entirely, and a
+        // latch-mode conversation needs neither: the harness process is the
+        // whole backend.
         let remoteReady = InferenceRoutes.active()?.isConfigured == true
-        return (server.state == .running || remoteReady)
+        let latchReady = LatchDelegateService.isInstalled
+        return (server.state == .running || remoteReady || latchReady)
             && ocrPending == 0 && transcriptionPending == 0
             && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !attachments.isEmpty || !images.isEmpty)

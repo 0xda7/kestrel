@@ -104,6 +104,49 @@ enum LatchDelegateService {
 
     private static func run(argv: [String], workingDirectory: String?,
                             timeout: Int) async -> ToolExecutionResult {
+        var report = ""
+        let outcome = await runStreaming(argv: argv, workingDirectory: workingDirectory,
+                                         timeout: timeout, onLaunch: nil,
+                                         onOutput: { _, fullSoFar in report = fullSoFar })
+        switch outcome {
+        case .failed(let reason): return ToolExecutionResult(content: reason, isError: true)
+        case .exited(let status, let output):
+            let detail = output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "" : " Partial output:\n" + String(output.prefix(2_000))
+            return ToolExecutionResult(
+                content: "latch harness exited with status \(status).\(detail)", isError: true)
+        case .completed(let output):
+            var trimmed = (output.isEmpty ? report : output)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                trimmed = "The delegate finished without producing output."
+            }
+            return ToolExecutionResult(content: ChatToolsService.clampedToolResult(trimmed),
+                                       isError: false)
+        }
+    }
+
+    /// Outcome of a streaming latch run. `failed` covers launch errors and
+    /// timeouts (reason already carries the user-facing text); the other cases
+    /// carry the accumulated stdout so callers can show partial output.
+    enum RunOutcome {
+        case failed(reason: String)
+        case exited(status: Int32, output: String)
+        case completed(output: String)
+    }
+
+    /// Streams a latch run: mirrors `run()`'s Process/Pipe machinery, but hands
+    /// the accumulated stdout to `onOutput` as it arrives so the UI can render
+    /// the reply live while latch's agent loop works. `onOutput` receives the
+    /// raw chunk and then the FULL output so far (copied under the same lock),
+    /// so callers can snapshot-replace instead of racing accumulation of their
+    /// own. The pipe still accumulates under a lock — a full 64 KiB pipe
+    /// deadlocks the child mid-run. Stderr is drained and discarded here (it is
+    /// agent-loop chatter, including transient API errors latch retries
+    /// through); the reply is stdout only.
+    static func runStreaming(argv: [String], workingDirectory: String?, timeout: Int,
+                             onLaunch: (@Sendable (Process) -> Void)?,
+                             onOutput: (@Sendable (String, String) -> Void)?) async -> RunOutcome {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: argv[0])
         process.arguments = Array(argv.dropFirst())
@@ -118,22 +161,26 @@ enum LatchDelegateService {
         // 64 KiB pipe buffer deadlocks the child mid-run.
         let lock = NSLock()
         var outData = Data()
-        var errData = Data()
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
             lock.lock(); outData.append(chunk); lock.unlock()
+            if let onOutput {
+                lock.lock()
+                let full = String(decoding: outData, as: UTF8.self)
+                lock.unlock()
+                onOutput(String(decoding: chunk, as: UTF8.self), full)
+            }
         }
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock(); errData.append(chunk); lock.unlock()
         }
 
         do { try process.run() } catch {
-            return ToolExecutionResult(
-                content: "Failed to launch latch harness: \(error.localizedDescription)", isError: true)
+            return .failed(reason: "Failed to launch latch harness: \(error.localizedDescription)")
         }
+        onLaunch?(process)
 
         let timedOut = await withTaskGroup(of: Bool.self) { group in
             group.addTask { @Sendable in
@@ -150,31 +197,21 @@ enum LatchDelegateService {
             return first
         }
 
+        if timedOut {
+            lock.lock()
+            let partial = String(String(decoding: outData, as: UTF8.self)
+                .prefix(maximumOutputCharacters))
+            lock.unlock()
+            return .failed(reason: "latch exceeded its \(timeout)s budget and was stopped. Partial output:\n\(partial)")
+        }
         lock.lock()
-        let out = String(decoding: outData, as: UTF8.self)
-        let err = String(decoding: errData, as: UTF8.self)
+        let finalOutput = String(decoding: outData, as: UTF8.self)
+        outData.removeAll()
         lock.unlock()
         stdout.fileHandleForReading.readabilityHandler = nil
         stderr.fileHandleForReading.readabilityHandler = nil
-
-        if timedOut {
-            let partial = String(out.prefix(maximumOutputCharacters))
-            return ToolExecutionResult(
-                content: "latch_delegate exceeded its \(timeout)s budget and was stopped. Partial output:\n\(partial)",
-                isError: true)
-        }
-        if process.terminationStatus != 0 {
-            let detail = String((err.isEmpty ? out : err).prefix(2_000))
-            return ToolExecutionResult(
-                content: "latch harness exited with status \(process.terminationStatus): \(detail)",
-                isError: true)
-        }
-        var report = out.trimmingCharacters(in: .whitespacesAndNewlines)
-        if report.isEmpty { report = err.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if report.isEmpty {
-            report = "The delegate finished without producing output."
-        }
-        return ToolExecutionResult(content: ChatToolsService.clampedToolResult(report),
-                                   isError: false)
+        return process.terminationStatus == 0
+            ? .completed(output: finalOutput)
+            : .exited(status: process.terminationStatus, output: finalOutput)
     }
 }

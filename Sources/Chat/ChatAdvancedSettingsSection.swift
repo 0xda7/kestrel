@@ -14,6 +14,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
     @AppStorage(SettingsKeys.latchDelegateEnabled) private var latchDelegateEnabled = false
+    @AppStorage(SettingsKeys.latchPrimaryEnabled) private var latchPrimaryEnabled = false
     @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
     @AppStorage(SettingsKeys.latchDelegateTimeout) private var latchDelegateTimeout = 300
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
@@ -272,6 +273,12 @@ struct ChatAdvancedSettingsSection: View {
                                        "Adds a tool that hands a self-contained task to the latch agent and waits for its final report. Requires the latch binary to be installed.")) {
                         SettingsToggle(isOn: $latchDelegateEnabled)
                     }
+                    SettingsRow(icon: "bird",
+                                title: loc.t("Latch como asistente principal", "Latch as primary assistant"),
+                                help: loc.t("Las conversaciones nuevas responden con latch (proceso independiente, sin motor ni pasarela). Se puede cambiar por conversación desde el chip de la cabecera. Requiere el binario de latch instalado.",
+                                       "New conversations are answered by latch (its own process, no engine or gateway). Switchable per conversation from the header chip. Requires the latch binary to be installed.")) {
+                        SettingsToggle(isOn: $latchPrimaryEnabled)
+                    }
                     if latchDelegateEnabled {
                         SettingsRow(icon: "wrench.and.screwdriver",
                                     title: loc.t("Binario de latch", "Latch binary"),
@@ -491,7 +498,8 @@ struct ChatAdvancedSettingsSection: View {
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
-        latchDelegateEnabled = false; latchBinaryPath = ""; latchDelegateTimeout = 300
+        latchDelegateEnabled = false; latchPrimaryEnabled = false
+        latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; archiveHookSecret = ""
     }
