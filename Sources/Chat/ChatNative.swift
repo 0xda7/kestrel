@@ -2966,27 +2966,41 @@ struct NativeChatView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(modelPath.isEmpty)
             case .stopped:
-                Image(systemName: "circle")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(modelPath.isEmpty
-                     ? loc.t("Elige un modelo para poder enviar mensajes.",
-                             "Choose a model before sending messages.")
-                     : loc.t("El servidor está detenido. Puedes consultar y organizar tus chats.",
-                             "The server is stopped. You can browse and organize your chats."))
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                if modelPath.isEmpty {
-                    Button(loc.t("Elegir modelo", "Choose model")) {
-                        control.section = .models
-                        openWindow(id: "control")
+                // A configured remote route serves chat without the local engine.
+                if InferenceRoutes.active()?.isConfigured == true {
+                    HStack(spacing: 10) {
+                        Image(systemName: "cloud.fill")
+                            .foregroundStyle(.secondary)
+                        Text(loc.t("Respondiendo vía proveedor remoto.",
+                                   "Answering via the remote provider."))
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .font(.callout)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
                 } else {
-                    Button(loc.t("Iniciar servidor", "Start server"), systemImage: "play.fill") {
-                        server.start(.fromDefaults())
+                    Image(systemName: "circle")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(modelPath.isEmpty
+                         ? loc.t("Elige un modelo para poder enviar mensajes.",
+                                 "Choose a model before sending messages.")
+                         : loc.t("El servidor está detenido. Puedes consultar y organizar tus chats.",
+                                 "The server is stopped. You can browse and organize your chats."))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if modelPath.isEmpty {
+                        Button(loc.t("Elegir modelo", "Choose model")) {
+                            control.section = .models
+                            openWindow(id: "control")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(loc.t("Iniciar servidor", "Start server"), systemImage: "play.fill") {
+                            server.start(.fromDefaults())
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             case .running:
                 EmptyView()
@@ -3077,7 +3091,9 @@ struct NativeChatView: View {
     }
 
     private var canSend: Bool {
-        server.state == .running
+        // A configured remote route replaces the local engine entirely.
+        let remoteReady = InferenceRoutes.active()?.isConfigured == true
+        return (server.state == .running || remoteReady)
             && ocrPending == 0 && transcriptionPending == 0
             && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !attachments.isEmpty || !images.isEmpty)
