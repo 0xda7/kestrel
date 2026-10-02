@@ -19,6 +19,11 @@ struct ChatStreamAccumulator {
     var mtpAccept: Double?
     var finishReason: String?
     private(set) var toolCalls: [ChatToolCall] = []
+    // Anthropic streams key deltas by content-block index; tool_use blocks
+    // map to positions in `toolCalls` through this table.
+    private var anthropicToolBlocks: [Int: Int] = [:]
+    private var anthropicPromptTokens: Int?
+    private var anthropicCompletionTokens: Int?
 
     mutating func consume(_ line: String) throws -> ChatStreamEvent? {
         guard line.hasPrefix("data: ") else { return nil }
@@ -30,6 +35,14 @@ struct ChatStreamAccumulator {
 
         if let message = ChatStore.streamedError(from: object) {
             throw StreamError(message: message)
+        }
+
+        // Anthropic dialect: every event carries a top-level "type"
+        // (message_start, content_block_delta, ...). Translated here so the
+        // UI and the tool loop read the same accumulator state for both
+        // dialects; OpenAI chunks have no such "type" and fall through.
+        if let type = object["type"] as? String {
+            return try consumeAnthropic(type, object)
         }
 
         if let value = object["usage"] as? [String: Any],
@@ -90,6 +103,107 @@ struct ChatStreamAccumulator {
             guard let function = fragment["function"] as? [String: Any] else { continue }
             if let name = function["name"] as? String { toolCalls[index].name += name }
             if let arguments = function["arguments"] as? String { toolCalls[index].arguments += arguments }
+        }
+    }
+
+    // MARK: Anthropic SSE translation
+
+    /// Translates Anthropic Messages-API events into the same accumulator
+    /// state the OpenAI path fills: message_start → usage seed,
+    /// content_block_delta (text_delta / thinking_delta) → visible/reasoning,
+    /// content_block_start (tool_use) → tool call, message_delta →
+    /// finish_reason, message_stop → completion. Errors arrive as
+    /// {"type":"error",...} and surface as a thrown StreamError.
+    private mutating func consumeAnthropic(_ type: String, _ object: [String: Any]) throws -> ChatStreamEvent {
+        switch type {
+        case "message_start":
+            let usage = object["message"] as? [String: Any]
+            anthropicPromptTokens = (usage?["usage"] as? [String: Any])
+                .flatMap { ($0["input_tokens"] as? NSNumber)?.intValue }
+            return ChatStreamEvent()
+
+        case "content_block_start":
+            if let block = object["content_block"] as? [String: Any],
+               block["type"] as? String == "tool_use" {
+                mergeAnthropicToolBlock(block, index: (object["index"] as? NSNumber)?.intValue ?? 0)
+            }
+            return ChatStreamEvent()
+
+        case "content_block_delta":
+            var event = ChatStreamEvent()
+            guard let delta = object["delta"] as? [String: Any] else { return event }
+            switch delta["type"] as? String {
+            case "thinking_delta":
+                if let text = delta["thinking"] as? String, !text.isEmpty {
+                    reasoning += text
+                    event.receivedContent = true
+                }
+            case "text_delta":
+                if let text = delta["text"] as? String, !text.isEmpty {
+                    visible += text
+                    event.receivedContent = true
+                }
+            case "input_json_delta":
+                if let partial = delta["partial_json"] as? String, !partial.isEmpty,
+                   let index = (object["index"] as? NSNumber)?.intValue,
+                   let callIndex = anthropicToolBlocks[index] {
+                    toolCalls[callIndex].arguments += partial
+                    event.receivedToolCall = true
+                }
+            default:
+                break
+            }
+            return event
+
+        case "message_delta":
+            var event = ChatStreamEvent()
+            if let delta = object["delta"] as? [String: Any],
+               let stop = delta["stop_reason"] as? String, !stop.isEmpty {
+                finishReason = Self.anthropicFinish(stop)
+            }
+            if let usageBlock = object["usage"] as? [String: Any] {
+                if let out = (usageBlock["output_tokens"] as? NSNumber)?.intValue {
+                    anthropicCompletionTokens = out
+                }
+                // Final usage row for the metrics card, matching the OpenAI shape.
+                if let pin = anthropicPromptTokens, let pout = anthropicCompletionTokens {
+                    usage = (pin, pout)
+                }
+            }
+            return event
+
+        case "message_stop":
+            return ChatStreamEvent(completed: true)
+
+        case "ping":
+            return ChatStreamEvent()
+
+        case "error":
+            let detail = (object["error"] as? [String: Any])?["message"] as? String
+            throw StreamError(message: detail ?? "The provider reported a stream error")
+
+        default:
+            return ChatStreamEvent()
+        }
+    }
+
+    private mutating func mergeAnthropicToolBlock(_ block: [String: Any], index: Int) {
+        let callIndex = toolCalls.count
+        anthropicToolBlocks[index] = callIndex
+        var call = ChatToolCall(name: block["name"] as? String ?? "",
+                                arguments: block["input"] as? String ?? "")
+        if let id = block["id"] as? String, !id.isEmpty { call.serverID = id }
+        toolCalls.append(call)
+    }
+
+    /// Maps Anthropic stop reasons onto the finish_reason vocabulary the
+    /// transcript/metrics code already handles.
+    static func anthropicFinish(_ stopReason: String) -> String {
+        switch stopReason {
+        case "end_turn", "stop_sequence": return "stop"
+        case "max_tokens": return "length"
+        case "tool_use": return "tool_calls"
+        default: return stopReason
         }
     }
 }

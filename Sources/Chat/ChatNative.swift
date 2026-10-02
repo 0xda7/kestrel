@@ -971,7 +971,11 @@ final class ChatStore: ObservableObject {
                 if !remote {
                     req.setValue(streamIdentity, forHTTPHeaderField: "X-Conversation-Id")
                 }
-                req.httpBody = try JSONSerialization.data(withJSONObject: body)
+                // The wire transform is the body of record: it strips llama-only
+                // fields for remote dialects, forces the route's model id, and
+                // reshapes messages for Anthropic. Sending the pre-transform
+                // dictionary here would bypass the seam entirely.
+                req.httpBody = try JSONSerialization.data(withJSONObject: wire.body)
 
                 let (bytes, response) = try await ChatStore.streamingSession.bytes(for: req)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
