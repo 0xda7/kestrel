@@ -58,21 +58,18 @@ struct DashboardMetricsView: View {
     }
 
     /// The GPU this card is about, in order of what matters to this app:
-    /// 1. the card holding a loaded model (VRAM residency beats everything —
-    ///    desktop compositing can light the iGPU to ~15% and mislead a pure
-    ///    "busiest" rule into naming the 1.5 GB Intel on a Radeon machine),
-    /// 2. the busiest card under real render load,
-    /// 3. otherwise the biggest card, which on mixed iGPU+dGPU Macs is the
-    ///    discrete GPU the user actually bought the machine for.
+    /// 1. the card holding a loaded model (VRAM residency beats everything),
+    /// 2. otherwise the biggest card — on mixed iGPU+dGPU Macs that is the
+    ///    discrete GPU. There is deliberately no "busiest" fallback: the Intel
+    ///    driver reports desktop-compositing activity (~15–40% while idle) but
+    ///    the AMD driver reports none until something renders, so a load rule
+    ///    would systematically name the iGPU on exactly the machines this app
+    ///    targets. Captured via ioreg PerformanceStatistics, 2026-10-01.
     private var primaryGPU: GPUStat? {
         let gpus = vram.gpus
         guard !gpus.isEmpty else { return nil }
         if let loaded = gpus.max(by: { $0.usedMB < $1.usedMB }), loaded.usedMB > 256 {
             return loaded
-        }
-        if let busiest = gpus.max(by: { ($0.activityPercent ?? 0) < ($1.activityPercent ?? 0) }),
-           (busiest.activityPercent ?? 0) > 20 {
-            return busiest
         }
         return gpus.max { $0.totalMB < $1.totalMB }
     }
