@@ -57,14 +57,21 @@ struct DashboardMetricsView: View {
             .frame(minWidth: 150)
     }
 
-    /// The GPU this card is about: the busiest one while anything is rendering,
-    /// otherwise the biggest card (the discrete GPU on mixed iGPU+dGPU Macs) —
-    /// never just `first`, which on this class of machine is always the iGPU.
+    /// The GPU this card is about, in order of what matters to this app:
+    /// 1. the card holding a loaded model (VRAM residency beats everything —
+    ///    desktop compositing can light the iGPU to ~15% and mislead a pure
+    ///    "busiest" rule into naming the 1.5 GB Intel on a Radeon machine),
+    /// 2. the busiest card under real render load,
+    /// 3. otherwise the biggest card, which on mixed iGPU+dGPU Macs is the
+    ///    discrete GPU the user actually bought the machine for.
     private var primaryGPU: GPUStat? {
         let gpus = vram.gpus
         guard !gpus.isEmpty else { return nil }
+        if let loaded = gpus.max(by: { $0.usedMB < $1.usedMB }), loaded.usedMB > 256 {
+            return loaded
+        }
         if let busiest = gpus.max(by: { ($0.activityPercent ?? 0) < ($1.activityPercent ?? 0) }),
-           (busiest.activityPercent ?? 0) > 0 {
+           (busiest.activityPercent ?? 0) > 20 {
             return busiest
         }
         return gpus.max { $0.totalMB < $1.totalMB }
