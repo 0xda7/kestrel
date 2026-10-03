@@ -8,9 +8,12 @@ struct RemoteProvidersSection: View {
 
     @State private var routes: [InferenceRoute] = []
     @State private var activeSelection = ""
-    @State private var apiKey = ""
-    @State private var keySet = false
     @State private var testState: TestState?
+
+    /// Per-route SecureField text, keyed by route id (the shared key field is
+    /// gone: each provider carries its own credential).
+    @State private var routeKeyDrafts: [String: String] = [:]
+    @State private var routesWithKeys: Set<String> = []
 
     private struct TestState: Equatable {
         var ok: Bool
@@ -45,12 +48,20 @@ struct RemoteProvidersSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            keyRow
+            if InferenceRoutes.legacySharedKeyPresent {
+                Label(loc.t("Los proveedores sin clave propia usan la clave compartida heredada; guarda una clave por proveedor para migrarla.",
+                            "Providers without their own key fall back to the inherited shared key; save a per-provider key to migrate off it."),
+                      systemImage: "key.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .onAppear {
             routes = InferenceRoutes.load()
             activeSelection = InferenceRoutes.activeID ?? ""
-            keySet = !(Keychain.get("remote-api-key") ?? "").isEmpty
+            routesWithKeys = Set(routes.filter { InferenceRoutes.hasAPIKey(for: $0) }
+                .map(\.id.uuidString))
         }
         .onChange(of: activeSelection) { _, newValue in
             InferenceRoutes.setActive(newValue.isEmpty ? nil : newValue)
@@ -106,36 +117,41 @@ struct RemoteProvidersSection: View {
                     .buttonStyle(.borderless)
                     .disabled(!route.wrappedValue.isConfigured)
             }
+            routeKeyRow(route.wrappedValue)
         }
         .padding(.vertical, 2)
     }
 
-    private var keyRow: some View {
+    /// One credential per provider, stored under its own Keychain account.
+    /// Empty input + an existing key = clear the key (Save acts as Delete).
+    @ViewBuilder private func routeKeyRow(_ route: InferenceRoute) -> some View {
+        let id = route.id.uuidString
+        let hasKey = routesWithKeys.contains(id)
         HStack {
-            SecureField(loc.t("Clave API del proveedor", "Provider API key"), text: $apiKey)
+            SecureField(loc.t("Clave API de este proveedor", "API key for this provider"),
+                        text: Binding(
+                            get: { routeKeyDrafts[id] ?? "" },
+                            set: { routeKeyDrafts[id] = $0 }))
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
             Button(loc.t("Guardar clave", "Save key")) {
-                let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
-                    Keychain.delete("remote-api-key")
-                    keySet = false
-                } else {
-                    Keychain.setThisDeviceOnly(trimmed, account: "remote-api-key")
-                    keySet = true
-                }
-                apiKey = ""
+                let trimmed = (routeKeyDrafts[id] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                InferenceRoutes.setAPIKey(trimmed, for: route)
+                if trimmed.isEmpty { routesWithKeys.remove(id) }
+                else { routesWithKeys.insert(id) }
+                routeKeyDrafts[id] = ""
             }
             .buttonStyle(.borderless)
-            .disabled(apiKey.isEmpty && !keySet)
-            if keySet {
+            .disabled((routeKeyDrafts[id] ?? "").isEmpty && !hasKey)
+            if hasKey {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .accessibilityLabel(loc.t("Clave guardada en el llavero", "Key stored in Keychain"))
             }
         }
-        .infoTip(loc.t("La clave se guarda en el llavero del sistema y se envía solo al proveedor configurado. No se registra ni se sincroniza.",
-                       "The key is stored in the system Keychain and sent only to the configured provider. It is never logged or synced."))
+        .infoTip(loc.t("La clave se guarda en el llavero del sistema, asociada solo a este proveedor, y se envía únicamente a él. No se registra ni se sincroniza.",
+                       "The key is stored in the system Keychain, scoped to this provider only, and sent only to it. It is never logged or synced."))
     }
 
     private func persist() {
@@ -147,11 +163,12 @@ struct RemoteProvidersSection: View {
             testState = TestState(ok: false, message: loc.t("URL no válida.", "Invalid URL."))
             return
         }
-        let key = Keychain.get("remote-api-key") ?? ""
+        let key = InferenceRoutes.apiKey(for: route)
         var request: URLRequest
         if route.dialect == .anthropic {
             let path = base.path.hasSuffix("/v1") ? "/messages" : "/v1/messages"
-            request = URLRequest(url: URL(string: base.absoluteString + path)!)
+            request = URLRequest(url: URL(string: base.absoluteString + path)
+                                 ?? URL(fileURLWithPath: "/dev/null"))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
@@ -160,7 +177,8 @@ struct RemoteProvidersSection: View {
                                         "messages": [["role": "user", "content": "ping"]]]
             request.httpBody = try? JSONSerialization.data(withJSONObject: probe)
         } else {
-            request = URLRequest(url: URL(string: base.absoluteString + "/models")!)
+            request = URLRequest(url: URL(string: base.absoluteString + "/models")
+                                 ?? URL(fileURLWithPath: "/dev/null"))
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             if !key.isEmpty { request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
         }

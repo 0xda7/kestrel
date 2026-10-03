@@ -559,12 +559,12 @@ final class BenchmarkController: ObservableObject {
                 direct.benchDepth = 0
                 dynamicMoeOptimizationStatus = .testingDirect(slots: direct.dynamicMoeSlots)
                 let clearSplit: [String: String?] = [
-                    "TOSH_MOE_SPLIT_BANK": nil,
-                    "TOSH_MOE_SPLIT_RING": nil,
-                    "TOSH_MOE_BOUNDED_STAGE": nil,
-                    "TOSH_MOE_BOUNDED_STAGE_FORCE": nil,
-                    "TOSH_MOE_DOUBLE_BUFFER": nil,
-                    "TOSH_MOE_HOT_MAP": nil,
+                    "KESTREL_MOE_SPLIT_BANK": nil,
+                    "KESTREL_MOE_SPLIT_RING": nil,
+                    "KESTREL_MOE_BOUNDED_STAGE": nil,
+                    "KESTREL_MOE_BOUNDED_STAGE_FORCE": nil,
+                    "KESTREL_MOE_DOUBLE_BUFFER": nil,
+                    "KESTREL_MOE_HOT_MAP": nil,
                 ]
                 if let result = await runOnce(settings: direct, environmentOverrides: clearSplit) {
                     dynamicMoeOptimizationSamples.append(DynamicMoeOptimizationSample(
@@ -614,14 +614,14 @@ final class BenchmarkController: ObservableObject {
             let ring = max(8, model.activeExpertCount)
             dynamicMoeOptimizationStatus = .learningExperts
             let calibrationEnvironment: [String: String?] = [
-                "TOSH_MOE_SPLIT_BANK": "1",
-                "TOSH_MOE_SPLIT_RING": String(ring),
-                "TOSH_MOE_BOUNDED_STAGE": "1",
-                "TOSH_MOE_BOUNDED_STAGE_FORCE": "1",
-                "TOSH_MOE_DOUBLE_BUFFER": nil,
-                "TOSH_MOE_HOT_MAP": nil,
-                "TOSH_MOE_HOT_MAP_OUT": mapURL.path,
-                "TOSH_MOE_HOT_MAP_K": String(model.expertCount),
+                "KESTREL_MOE_SPLIT_BANK": "1",
+                "KESTREL_MOE_SPLIT_RING": String(ring),
+                "KESTREL_MOE_BOUNDED_STAGE": "1",
+                "KESTREL_MOE_BOUNDED_STAGE_FORCE": "1",
+                "KESTREL_MOE_DOUBLE_BUFFER": nil,
+                "KESTREL_MOE_HOT_MAP": nil,
+                "KESTREL_MOE_HOT_MAP_OUT": mapURL.path,
+                "KESTREL_MOE_HOT_MAP_K": String(model.expertCount),
             ]
             guard await runOnce(settings: calibration, environmentOverrides: calibrationEnvironment) != nil,
                   Self.dynamicMoeHotMapIsValid(mapURL, expertCount: model.expertCount) else {
@@ -646,14 +646,14 @@ final class BenchmarkController: ObservableObject {
                 candidate.benchDepth = 0
                 dynamicMoeOptimizationStatus = .testingSplit(slots: slots)
                 let splitEnvironment: [String: String?] = [
-                    "TOSH_MOE_SPLIT_BANK": "1",
-                    "TOSH_MOE_SPLIT_RING": String(ring),
-                    "TOSH_MOE_BOUNDED_STAGE": "1",
-                    "TOSH_MOE_BOUNDED_STAGE_FORCE": "1",
-                    "TOSH_MOE_DOUBLE_BUFFER": "1",
-                    "TOSH_MOE_HOT_MAP": mapURL.path,
-                    "TOSH_MOE_HOT_MAP_OUT": nil,
-                    "TOSH_MOE_HOT_MAP_K": nil,
+                    "KESTREL_MOE_SPLIT_BANK": "1",
+                    "KESTREL_MOE_SPLIT_RING": String(ring),
+                    "KESTREL_MOE_BOUNDED_STAGE": "1",
+                    "KESTREL_MOE_BOUNDED_STAGE_FORCE": "1",
+                    "KESTREL_MOE_DOUBLE_BUFFER": "1",
+                    "KESTREL_MOE_HOT_MAP": mapURL.path,
+                    "KESTREL_MOE_HOT_MAP_OUT": nil,
+                    "KESTREL_MOE_HOT_MAP_K": nil,
                 ]
                 guard let result = await runOnce(settings: candidate, environmentOverrides: splitEnvironment) else { continue }
                 let estimatedVRAM = plan.map {
@@ -689,14 +689,14 @@ final class BenchmarkController: ObservableObject {
                 candidate.benchDepth = 0
                 dynamicMoeOptimizationStatus = .tuningPrefetch(prefetch)
                 let environment: [String: String?] = [
-                    "TOSH_MOE_SPLIT_BANK": "1",
-                    "TOSH_MOE_SPLIT_RING": String(ring),
-                    "TOSH_MOE_BOUNDED_STAGE": "1",
-                    "TOSH_MOE_BOUNDED_STAGE_FORCE": "1",
-                    "TOSH_MOE_DOUBLE_BUFFER": "1",
-                    "TOSH_MOE_HOT_MAP": mapURL.path,
-                    "TOSH_MOE_HOT_MAP_OUT": nil,
-                    "TOSH_MOE_HOT_MAP_K": nil,
+                    "KESTREL_MOE_SPLIT_BANK": "1",
+                    "KESTREL_MOE_SPLIT_RING": String(ring),
+                    "KESTREL_MOE_BOUNDED_STAGE": "1",
+                    "KESTREL_MOE_BOUNDED_STAGE_FORCE": "1",
+                    "KESTREL_MOE_DOUBLE_BUFFER": "1",
+                    "KESTREL_MOE_HOT_MAP": mapURL.path,
+                    "KESTREL_MOE_HOT_MAP_OUT": nil,
+                    "KESTREL_MOE_HOT_MAP_K": nil,
                     "GGML_SCHED_PREFETCH_EXPERTS": String(prefetch),
                 ]
                 guard let result = await runOnce(settings: candidate, environmentOverrides: environment) else { continue }

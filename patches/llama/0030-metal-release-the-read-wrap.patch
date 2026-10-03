@@ -15,7 +15,7 @@ index 0fb45b20d..d9efbf196 100644
 +            [buf_dst release];
 +
              if (t0) {
-                 tosh_prof_add(TOSH_PROF_D2H_DIRECT, size, t0);
+                 tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
              }
  
              return;

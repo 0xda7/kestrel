@@ -68,7 +68,7 @@ fi
 
 # Stamped into the binaries so a log identifies the Kestrel build, not just the
 # upstream commit (which is unchanged across releases that only touch the patch).
-TOSH_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../VERSION")"
+KESTREL_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../VERSION")"
 
 # CI runners drop DNS or reset a transfer now and then, and a release build should not lose
 # minutes of compilation to it, so every networked git operation retries with backoff.
@@ -111,14 +111,14 @@ CMAKE_FLAGS=(
     -DGGML_METAL=ON
     -DGGML_METAL_EMBED_LIBRARY=ON
     # Compile the experimental MoE cache into the bundled engine. It remains
-    # inert unless the app explicitly sets TOSH_MOE_MODE at process launch.
-    -DTOSH_ENABLE_DYNAMIC_MOE=ON
+    # inert unless the app explicitly sets KESTREL_MOE_MODE at process launch.
+    -DKESTREL_ENABLE_DYNAMIC_MOE=ON
     -DGGML_NATIVE=OFF
     -DCMAKE_OSX_ARCHITECTURES="$ARCH"
     # cmake defaults it to the build host, so a macos-26 runner emits binaries dyld
     # refuses to start on older systems
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
-    -DCMAKE_CXX_FLAGS="-DTOSH_VERSION=$TOSH_VERSION"
+    -DCMAKE_CXX_FLAGS="-DKESTREL_VERSION=$KESTREL_VERSION"
     # The server binds to localhost only; skip OpenSSL so static cross-builds
     # don't pick up host-arch Homebrew libraries on CI runners.
     -DLLAMA_OPENSSL=OFF
@@ -126,11 +126,11 @@ CMAKE_FLAGS=(
 
 # pin every ISA flag in both variants: with GGML_NATIVE=OFF ggml's defaults follow the build
 # host, an arm64 runner cross-building x86_64 does not count as cross-compiling, and a flag left
-# out keeps whatever the previous variant cached in build-static. TOSH_NO_AVX2=1 is the SSE4.2
+# out keeps whatever the previous variant cached in build-static. KESTREL_NO_AVX2=1 is the SSE4.2
 # baseline for pre-AVX Xeons.
 ISA_FLAGS=()
 if [ "$ARCH" = "x86_64" ]; then
-    if [ -z "${TOSH_NO_AVX2:-}" ]; then
+    if [ -z "${KESTREL_NO_AVX2:-}" ]; then
         ISA_FLAGS=(-DGGML_SSE42=ON -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON
                    -DGGML_F16C=ON -DGGML_BMI2=ON -DGGML_AVX_VNNI=OFF -DGGML_AVX512=OFF)
     else
@@ -343,7 +343,7 @@ build_image_engine() {
     # buffers it has not reclaimed yet, and the engine then refuses work that fits.
     git apply --include='ggml/src/ggml-metal/*' -p1 "$ROOT/patches/image/0055-image-metal-live-vram-report.patch"
     # Half partials as an opt-in: float stays the default because some models overflow half,
-    # and the app sets TOSH_MM_ACC_HALF only for the models checked with it.
+    # and the app sets KESTREL_MM_ACC_HALF only for the models checked with it.
     git apply --include='ggml/src/ggml-metal/*' -p1 "$ROOT/patches/image/0056-image-metal-half-partials.patch"
     echo "applied ggml-metal hunks of 0001 + 0003 + core fallback 0004 + ext wave64 0008 to stable-diffusion.cpp"
 

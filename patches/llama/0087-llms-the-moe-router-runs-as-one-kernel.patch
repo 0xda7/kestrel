@@ -53,10 +53,10 @@ index d501092dd..6db894c8b 100644
  static bool ggml_metal_tosh_topk_moe_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_tosh_topk_moe_plan & plan) {
 -    // measured neutral on RDNA2 (pp512 +0.1%, tg128 -1%, both inside the noise), so the
 -    // dispatch saving does not pay for itself here; opt-in until a device shows a gain
--    static const bool enabled = TOSH_ENV("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
+-    static const bool enabled = KESTREL_ENV("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
 +    // decode on these cards is bound by the host, and the router chain is five small dispatches
 +    // per MoE layer; where the experts run on the CPU instead it measures neutral
-+    static const bool enabled = TOSH_ENV("GGML_METAL_TOPK_MOE_DISABLE") == nullptr;
++    static const bool enabled = KESTREL_ENV("GGML_METAL_TOPK_MOE_DISABLE") == nullptr;
      if (!enabled || !ctx->use_fusion()) {
          return false;
      }
@@ -77,7 +77,7 @@ index d501092dd..6db894c8b 100644
 +// the router that picks on the raw logits and takes the softmax over the picked ones only
 +// (gpt-oss): argsort, get_rows, softmax
 +static bool ggml_metal_tosh_topk_moe_delayed_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_tosh_topk_moe_plan & plan) {
-+    static const bool enabled = TOSH_ENV("GGML_METAL_TOPK_MOE_DISABLE") == nullptr;
++    static const bool enabled = KESTREL_ENV("GGML_METAL_TOPK_MOE_DISABLE") == nullptr;
 +    if (!enabled || !ctx->use_fusion() || idx + 2 >= ctx->n_nodes()) {
 +        return false;
 +    }

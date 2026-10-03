@@ -2,7 +2,7 @@ diff --git a/ggml/src/ggml-metal/CMakeLists.txt b/ggml/src/ggml-metal/CMakeLists
 index a46cfad2a..d59adc6bd 100644
 --- a/ggml/src/ggml-metal/CMakeLists.txt
 +++ b/ggml/src/ggml-metal/CMakeLists.txt
-@@ -36,16 +36,17 @@ if (TOSH_ENABLE_DYNAMIC_MOE)
+@@ -36,16 +36,17 @@ if (KESTREL_ENABLE_DYNAMIC_MOE)
                     ${CMAKE_CURRENT_SOURCE_DIR}/kernels/tosh_moe.metal COPYONLY)
  endif()
  
@@ -31,13 +31,13 @@ index 29cd531fa..7f31804e7 100644
      // attention matmuls read a permuted KV cache view and can exceed half range in the packed
      // accumulator; bfloat has no native arithmetic here, so float is faster for it too
      const bool acc_f32 = use_mm_manual && (!ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16) &&
-                          getenv("TOSH_MM_ACC_F32_DISABLE") == nullptr;
+                          getenv("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
  
 -    snprintf(base, 256, "kernel_mul_mm_%s_%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "");
 +    // the 64-lane GEMM lives in mul_mm_w64.metal: one wave is one tile there, so it needs the
 +    // dispatch to hand it whole waves instead of the 32-thread groups the shared kernel expects
 +    const bool w64 = simd_width == 64 && use_mm_manual && !has_tensor &&
-+                     getenv("TOSH_MM_W64_DISABLE") == nullptr;
++                     getenv("KESTREL_MM_W64_DISABLE") == nullptr;
 +
 +    snprintf(base, 256, "kernel_mul_mm_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
      snprintf(name, 256, "%s_bci=%d_bco=%d_ne12=%d_ne13=%d_r2=%d_r3=%d_mm=%d_db=%d_af=%d",

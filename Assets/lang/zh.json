@@ -98,7 +98,7 @@
   "Added to the chat's own.": "附加到聊天自身的设置上。",
   "Added to the ones in Settings and applied to this model only, an MTP head in a separate file for instance.": "追加在设置中的参数之后，仅对此模型生效，例如位于单独文件中的 MTP 头。",
   "Additional arguments and logs.": "附加参数和日志。",
-  "Additional llama-server arguments, space-separated. A KEY=VALUE token is applied as an environment variable. To reveal the private Dynamic MoE settings, enter TOSH_MOE_UI=1. On GCN/Vega cards with corrupted text, GGML_METAL_WAVE64_SAFEMODE=1 forces the safe path.": "附加的 llama-server 参数，以空格分隔。形如 KEY=VALUE 的项会作为环境变量应用。输入 TOSH_MOE_UI=1 可显示隐藏的 Dynamic MoE 设置。GCN/Vega 显卡如出现乱码文本，GGML_METAL_WAVE64_SAFEMODE=1 会强制走安全路径。",
+  "Additional llama-server arguments, space-separated. A KEY=VALUE token is applied as an environment variable. To reveal the private Dynamic MoE settings, enter KESTREL_MOE_UI=1. On GCN/Vega cards with corrupted text, GGML_METAL_WAVE64_SAFEMODE=1 forces the safe path.": "附加的 llama-server 参数，以空格分隔。形如 KEY=VALUE 的项会作为环境变量应用。输入 KESTREL_MOE_UI=1 可显示隐藏的 Dynamic MoE 设置。GCN/Vega 显卡如出现乱码文本，GGML_METAL_WAVE64_SAFEMODE=1 会强制走安全路径。",
   "Adds a LoRA to the prompt. The weight can be edited in the tag. LCM and Turbo LoRAs also want few steps and a low guidance, around 1.5, or the image comes out burnt.": "在提示词中添加 LoRA。权重可在标签中修改。LCM 与 Turbo 类型的 LoRA 还需要较少步数和约 1.5 的低引导值，否则画面会过曝。",
   "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.": "添加一个在沙盒中运行 JavaScript 的工具，用于计算或数据转换。",
   "Adjust the interface, startup, security, and where your local library lives.": "调整界面、启动、安全以及本地库的存放位置。",

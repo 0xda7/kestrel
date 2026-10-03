@@ -42,11 +42,11 @@ index 00ba810b0..a1a12bdf2 100644
                                        : (props_dev->simd_width == 64 ? ggml_metal_fa_wg_dk128_min_kv_w64(ne02, ne12) : 24576);
          const bool wg_dk128_width_ok = props_dev->simd_width == 32 || props_dev->simd_width == 64;
 -        // head 64 has the instantiations but no measured depth of its own yet;
--        // TOSH_FA_WG_DK64=<kv> opens it so that one can be swept
+-        // KESTREL_FA_WG_DK64=<kv> opens it so that one can be swept
 -        static const int64_t wg_dk64_min_kv = []() {
-+        // TOSH_FA_WG_DK64=<kv> sets the head-64 depth for every shape, 0 closes it
++        // KESTREL_FA_WG_DK64=<kv> sets the head-64 depth for every shape, 0 closes it
 +        static const int64_t wg_dk64_env = []() {
-             const char * s = getenv("TOSH_FA_WG_DK64");
+             const char * s = getenv("KESTREL_FA_WG_DK64");
 -            return s ? (int64_t) atoll(s) : (int64_t) 0;
 +            return s ? (int64_t) atoll(s) : (int64_t) -1;
          }();

@@ -51,6 +51,9 @@ struct InferenceRoute: Codable, Identifiable, Equatable {
 enum InferenceRoutes {
     static let storageKey = "inferenceRoutes"
     static let activeKey = "activeInferenceRoute"
+    /// Legacy pre-route shared credential; still read as a fallback so an
+    /// upgrade never silently drops a working provider key.
+    static let legacyKeychainAccount = "remote-api-key"
 
     static func load() -> [InferenceRoute] {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
@@ -81,6 +84,47 @@ enum InferenceRoutes {
               route.isConfigured else { return nil }
         return route
     }
+
+    // MARK: Per-provider credentials (Keychain, one item per route)
+
+    private static func keychainAccount(for routeID: UUID) -> String {
+        "remote-api-key-\(routeID.uuidString)"
+    }
+
+    /// The credential for one route: its own Keychain item when set, else the
+    /// legacy shared item (migration happens when the user saves a new key).
+    static func apiKey(for route: InferenceRoute) -> String {
+        let scoped = Keychain.get(keychainAccount(for: route.id)) ?? ""
+        if !scoped.isEmpty { return scoped }
+        return Keychain.get(legacyKeychainAccount) ?? ""
+    }
+
+    static func hasAPIKey(for route: InferenceRoute) -> Bool {
+        !apiKey(for: route).isEmpty
+    }
+
+    /// Stores (or clears with an empty string) the route's credential. Saving
+    /// a scoped key removes the legacy shared item only when every configured
+    /// route now carries its own, so nothing loses access mid-migration.
+    static func setAPIKey(_ key: String, for route: InferenceRoute) {
+        let account = keychainAccount(for: route.id)
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            Keychain.delete(account)
+        } else {
+            Keychain.setThisDeviceOnly(trimmed, account: account)
+        }
+        let unscoped = load().filter { $0.isConfigured }.allSatisfy {
+            !(Keychain.get(keychainAccount(for: $0.id)) ?? "").isEmpty
+        }
+        if unscoped { Keychain.delete(legacyKeychainAccount) }
+    }
+
+    /// True when the legacy shared item still exists (shown in settings so the
+    /// user can see which providers are on migrated vs inherited credentials).
+    static var legacySharedKeyPresent: Bool {
+        !(Keychain.get(legacyKeychainAccount) ?? "").isEmpty
+    }
 }
 
 // MARK: - Wire transform (the single request-boundary seam)
@@ -102,34 +146,48 @@ struct RouteWire {
 
     /// Builds the wire form for a chat request. `route == nil` is the local
     /// engine passthrough: same URL, same headers, byte-identical body.
+    /// `remoteAPIKey` is the route's credential, resolved by the caller from
+    /// `InferenceRoutes.apiKey(for:)` — RouteWire stays a pure transform.
     static func wire(body: [String: Any], port: Int, route: InferenceRoute?,
-                     localAPIKey: String?) -> RouteWire {
+                     localAPIKey: String?, remoteAPIKey: String? = nil) -> RouteWire {
         guard let route else {
             var headers: [(String, String)] = [("Content-Type", "application/json")]
             if let localAPIKey { headers.append(("Authorization", "Bearer " + localAPIKey)) }
-            return RouteWire(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!,
-                             headers: headers, body: body)
+            // Component-based construction: an out-of-range settings port
+            // yields nil here, and the request fails with a normal connection
+            // error instead of crashing on a force-unwrap.
+            var comps = URLComponents()
+            comps.scheme = "http"
+            comps.host = "127.0.0.1"
+            comps.port = port
+            comps.path = "/v1/chat/completions"
+            let url = comps.url ?? URL(fileURLWithPath: "/dev/null")
+            return RouteWire(url: url, headers: headers, body: body)
         }
         switch route.dialect {
-        case .localLlama, .openAI: return openAI(body: body, route: route)
-        case .anthropic: return anthropic(body: body, route: route)
+        case .localLlama, .openAI:
+            return openAI(body: body, route: route, apiKey: remoteAPIKey)
+        case .anthropic:
+            return anthropic(body: body, route: route, apiKey: remoteAPIKey)
         }
     }
 
-    private static func openAI(body: [String: Any], route: InferenceRoute) -> RouteWire {
+    private static func openAI(body: [String: Any], route: InferenceRoute,
+                               apiKey: String?) -> RouteWire {
         var wire = body
         for key in llamaOnlyFields { wire.removeValue(forKey: key) }
         wire["model"] = route.modelID
         var headers: [(String, String)] = [("Content-Type", "application/json")]
-        if let key = Keychain.get("remote-api-key"), !key.isEmpty {
-            headers.append(("Authorization", "Bearer " + key))
+        if let apiKey, !apiKey.isEmpty {
+            headers.append(("Authorization", "Bearer " + apiKey))
         }
-        let base = route.normalizedURL!
+        let base = route.normalizedURL ?? URL(fileURLWithPath: "/dev/null")
         let url = URL(string: base.absoluteString + "/chat/completions") ?? base
         return RouteWire(url: url, headers: headers, body: wire)
     }
 
-    private static func anthropic(body: [String: Any], route: InferenceRoute) -> RouteWire {
+    private static func anthropic(body: [String: Any], route: InferenceRoute,
+                                  apiKey: String?) -> RouteWire {
         var wire: [String: Any] = [
             "model": route.modelID,
             "max_tokens": (body["max_tokens"] as? Int).flatMap { $0 > 0 ? $0 : nil } ?? 4096,
@@ -144,6 +202,42 @@ struct RouteWire {
                     if let content = message["content"] {
                         systemParts.append(Self.textContent(of: content))
                     }
+                    continue
+                }
+                if role == "tool" {
+                    // Anthropic has no "tool" role: a tool result becomes a
+                    // user message carrying one tool_result block, paired to
+                    // the call by tool_use_id (Messages API shape).
+                    var block: [String: Any] = [
+                        "type": "tool_result",
+                        "tool_use_id": (message["tool_call_id"] as? String) ?? "",
+                        "content": Self.textContent(of: message["content"] ?? ""),
+                    ]
+                    if let error = message["error"] as? Bool, error {
+                        block["is_error"] = true
+                    }
+                    remapped.append(["role": "user", "content": [block]])
+                    continue
+                }
+                if role == "assistant", let calls = message["tool_calls"] as? [[String: Any]],
+                   !calls.isEmpty {
+                    // Assistant tool calls become tool_use content blocks; any
+                    // accompanying text is preserved as the first text block.
+                    var blocks: [[String: Any]] = []
+                    let text = Self.textContent(of: message["content"] ?? "")
+                    if !text.isEmpty { blocks.append(["type": "text", "text": text]) }
+                    for call in calls {
+                        guard let fn = call["function"] as? [String: Any],
+                              let name = fn["name"] as? String else { continue }
+                        let rawArgs = (fn["arguments"] as? String) ?? "{}"
+                        let input = (try? JSONSerialization.jsonObject(
+                            with: Data(rawArgs.utf8))) as? [String: Any] ?? [:]
+                        blocks.append(["type": "tool_use",
+                                       "id": (call["id"] as? String) ?? "",
+                                       "name": name,
+                                       "input": input])
+                    }
+                    remapped.append(["role": "assistant", "content": blocks])
                     continue
                 }
                 remapped.append(["role": role, "content": message["content"] ?? ""])
@@ -170,10 +264,10 @@ struct RouteWire {
             ("Content-Type", "application/json"),
             ("anthropic-version", "2023-06-01"),
         ]
-        if let key = Keychain.get("remote-api-key"), !key.isEmpty {
-            headers.append(("x-api-key", key))
+        if let apiKey, !apiKey.isEmpty {
+            headers.append(("x-api-key", apiKey))
         }
-        let base = route.normalizedURL!
+        let base = route.normalizedURL ?? URL(fileURLWithPath: "/dev/null")
         // Accept a bare host (path forced to /v1 by normalization) and a
         // base already ending in /v1: the Messages API lives at /v1/messages.
         let path = base.path.hasSuffix("/v1") ? "/messages" : "/v1/messages"

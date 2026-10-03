@@ -693,7 +693,7 @@
 +        return false;
 +    }
 +    if (link->cap == 0) {
-+        GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (TOSH_MGPU_EVENTS)\n", __func__);
++        GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (KESTREL_MGPU_EVENTS)\n", __func__);
 +    }
 +
 +    if (link->cap < size) {
@@ -766,14 +766,14 @@
 +        // both buffers must be private for the cross-device blits
 +        static int use_events = -1;
 +        if (use_events < 0) {
-+            const char * v = getenv("TOSH_MGPU_EVENTS");
++            const char * v = getenv("KESTREL_MGPU_EVENTS");
 +            use_events = (v && v[0] == '1') ? 1 : 0;
 +        }
 +        // Infinity Fabric peer copy is opt-in until validated on bridged hardware:
 +        // a success that silently returns wrong data has no fallback.
 +        static int use_peer = -1;
 +        if (use_peer < 0) {
-+            const char * v = getenv("TOSH_MGPU_PEER");
++            const char * v = getenv("KESTREL_MGPU_PEER");
 +            use_peer = (v && v[0] == '1') ? 1 : 0;
 +        }
 +        ggml_backend_buffer_t ebsrc = src->view_src ? src->view_src->buffer : src->buffer;
@@ -1026,7 +1026,7 @@
 -    snprintf(base, 256, "kernel_mul_mv_ext_%s_%s_r1_%d", ggml_type_name(tsrc0), ggml_type_name(tsrc1), r1ptg);
 +    // q4_K keeps its quants raw and applies the scale once per chunk; the other K-quants
 +    // read the block header once per block via the _hdr kernels
-+    static const bool no_raw = getenv("TOSH_EXT_NO_RAW") != nullptr;
++    static const bool no_raw = getenv("KESTREL_EXT_NO_RAW") != nullptr;
 +
 +    char tname[64];
 +    // q6_K measured slower with the header cached (its dequant is register-heavy), so it stays generic
@@ -1086,7 +1086,7 @@
 +    // The 8x4 tile halves the simdgroups per threadgroup, so it needs enough tokens to keep
 +    // the GPU in threadgroups; below ~192 it loses (measured 8.7% at 64 tokens on q8_0).
 +    bool wide = use_mm_manual && !has_tensor && !narrow && tsrc1 == GGML_TYPE_F32 &&
-+                op->ne[1] >= 192 && getenv("TOSH_MM_WIDE_DISABLE") == nullptr;
++                op->ne[1] >= 192 && getenv("KESTREL_MM_WIDE_DISABLE") == nullptr;
 +    if (wide) {
 +        // it needs 64 accumulators, so only where the dequant leaves the registers
 +        switch (tsrc0) {
@@ -1485,7 +1485,7 @@
 +bool   ggml_metal_device_stage_set(ggml_metal_device_t dev, struct ggml_metal_buffer_id bid_dst, const void * data, size_t size);
 +bool   ggml_metal_device_stage_get(ggml_metal_device_t dev, struct ggml_metal_buffer_id bid_src, void * data, size_t size);
 +
-+// TOSH_MOE_PROFILE: per-tensor-name transfer accounting; no-op when disabled
++// KESTREL_MOE_PROFILE: per-tensor-name transfer accounting; no-op when disabled
 +void   ggml_metal_prof_note(const char * name, size_t size, bool d2h);
 +
 +// batch small synchronous reads into one device round-trip
@@ -1754,7 +1754,7 @@
 +                // head-64 prefill path below.
 +                char simd_width_env[16];
 +                snprintf(simd_width_env, sizeof(simd_width_env), "%d", dev->props.simd_width);
-+                setenv("TOSH_METAL_SIMD_WIDTH", simd_width_env, 1);
++                setenv("KESTREL_METAL_SIMD_WIDTH", simd_width_env, 1);
 +            }
 +
              dev->props.has_simdgroup_reduction  = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
@@ -2040,7 +2040,7 @@
 +            const bool fa_amd_width_ok = dev->props.simd_width == 32
 +                ? has_simdgroup_reduction
 +                : wave64_decode;
-+            if (getenv("TOSH_FA_AMD") != NULL &&
++            if (getenv("KESTREL_FA_AMD") != NULL &&
 +                !has_simdgroup_mm && fa_amd_width_ok &&
 +                (op->src[0]->ne[0] % 32 == 0 || op->src[0]->ne[0] == 72)) {
 +                float max_bias = 0.0f;
@@ -2198,15 +2198,15 @@
 +// transfers (model load, KV persistence) keep the direct no-copy wrap
 +#define GGML_METAL_STAGE_BUF_MAX ((size_t) 16*1024*1024)
 +
-+// TOSH_MOE_PROFILE=1: count the synchronous host<->VRAM transfers (the per-token
++// KESTREL_MOE_PROFILE=1: count the synchronous host<->VRAM transfers (the per-token
 +// traffic of MoE-offload / multi-GPU) and log a summary every ~5 s.
-+enum { TOSH_PROF_D2H_STAGE, TOSH_PROF_H2D_STAGE, TOSH_PROF_D2H_DIRECT, TOSH_PROF_H2D_DIRECT, TOSH_PROF_N };
++enum { KESTREL_PROF_D2H_STAGE, KESTREL_PROF_H2D_STAGE, KESTREL_PROF_D2H_DIRECT, KESTREL_PROF_H2D_DIRECT, KESTREL_PROF_N };
 +
 +static struct {
 +    _Atomic int      state; // 0 unknown, 1 off, 2 on
-+    _Atomic uint64_t calls  [TOSH_PROF_N];
-+    _Atomic uint64_t bytes  [TOSH_PROF_N];
-+    _Atomic uint64_t wait_ns[TOSH_PROF_N];
++    _Atomic uint64_t calls  [KESTREL_PROF_N];
++    _Atomic uint64_t bytes  [KESTREL_PROF_N];
++    _Atomic uint64_t wait_ns[KESTREL_PROF_N];
 +    _Atomic uint64_t t_last;
 +    // big D2H reads (logits class) split into GPU-busy time vs the blit itself
 +    _Atomic uint64_t big_calls, big_dep_ns, big_xfer_ns;
@@ -2215,7 +2215,7 @@
 +static bool tosh_prof_on(void) {
 +    int s = atomic_load_explicit(&g_tosh_prof.state, memory_order_relaxed);
 +    if (s == 0) {
-+        const char * v = getenv("TOSH_MOE_PROFILE");
++        const char * v = getenv("KESTREL_MOE_PROFILE");
 +        s = (v && v[0] == '1') ? 2 : 1;
 +        atomic_store_explicit(&g_tosh_prof.state, s, memory_order_relaxed);
 +    }
@@ -2223,27 +2223,27 @@
 +}
 +
 +// name-class buckets, filled by the callers that know the tensor
-+enum { TOSH_CLS_MOE, TOSH_CLS_LOGITS, TOSH_CLS_OTHER, TOSH_CLS_N };
-+static _Atomic uint64_t g_tosh_cls_calls[2][TOSH_CLS_N]; // [d2h][cls]
-+static _Atomic uint64_t g_tosh_cls_bytes[2][TOSH_CLS_N];
++enum { KESTREL_CLS_MOE, KESTREL_CLS_LOGITS, KESTREL_CLS_OTHER, KESTREL_CLS_N };
++static _Atomic uint64_t g_tosh_cls_calls[2][KESTREL_CLS_N]; // [d2h][cls]
++static _Atomic uint64_t g_tosh_cls_bytes[2][KESTREL_CLS_N];
 +
 +void ggml_metal_prof_note(const char * name, size_t size, bool d2h) {
 +    if (!tosh_prof_on()) {
 +        return;
      }
-+    int cls = TOSH_CLS_OTHER;
++    int cls = KESTREL_CLS_OTHER;
 +    if (name) {
 +        if (strstr(name, "moe") || strstr(name, "exps")) {
-+            cls = TOSH_CLS_MOE;
++            cls = KESTREL_CLS_MOE;
 +        } else if (strstr(name, "result_output")) {
-+            cls = TOSH_CLS_LOGITS;
++            cls = KESTREL_CLS_LOGITS;
 +        }
 +    }
 +    atomic_fetch_add_explicit(&g_tosh_cls_calls[d2h][cls], 1,    memory_order_relaxed);
 +    atomic_fetch_add_explicit(&g_tosh_cls_bytes[d2h][cls], size, memory_order_relaxed);
 +
 +    // first distinct "other" names, to identify unexplained traffic
-+    if (cls == TOSH_CLS_OTHER && name &&
++    if (cls == KESTREL_CLS_OTHER && name &&
 +        (d2h || atomic_load_explicit(&g_tosh_prof.t_last, memory_order_relaxed) != 0)) {
 +        static char seen[16][48];
 +        static atomic_flag lock = ATOMIC_FLAG_INIT;
@@ -2266,11 +2266,11 @@
  
 +static void tosh_prof_cls_flush(void) {
 +    static const char * dirs[2] = { "H2D", "D2H" };
-+    static const char * clss[TOSH_CLS_N] = { "moe", "logits", "other" };
++    static const char * clss[KESTREL_CLS_N] = { "moe", "logits", "other" };
 +    char line[256];
 +    int n = 0;
 +    for (int d = 0; d < 2; d++) {
-+        for (int c = 0; c < TOSH_CLS_N; c++) {
++        for (int c = 0; c < KESTREL_CLS_N; c++) {
 +            const uint64_t calls = atomic_exchange(&g_tosh_cls_calls[d][c], 0);
 +            const uint64_t bytes = atomic_exchange(&g_tosh_cls_bytes[d][c], 0);
 +            if (calls == 0) {
@@ -2297,10 +2297,10 @@
 +        !atomic_compare_exchange_strong(&g_tosh_prof.t_last, &last, now)) {
 +        return;
 +    }
-+    static const char * names[TOSH_PROF_N] = { "D2H-stage", "H2D-stage", "D2H-direct", "H2D-direct" };
++    static const char * names[KESTREL_PROF_N] = { "D2H-stage", "H2D-stage", "D2H-direct", "H2D-direct" };
 +    char line[256];
 +    int n = 0;
-+    for (int i = 0; i < TOSH_PROF_N; i++) {
++    for (int i = 0; i < KESTREL_PROF_N; i++) {
 +        const uint64_t c = atomic_exchange(&g_tosh_prof.calls[i],   0);
 +        const uint64_t b = atomic_exchange(&g_tosh_prof.bytes[i],   0);
 +        const uint64_t w = atomic_exchange(&g_tosh_prof.wait_ns[i], 0);
@@ -2407,7 +2407,7 @@
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(TOSH_PROF_H2D_STAGE, size, t0);
++        tosh_prof_add(KESTREL_PROF_H2D_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -2487,7 +2487,7 @@
 +        dev->stage_batch_used += size;
 +        [dev->stage_lock unlock];
 +        if (t0) {
-+            tosh_prof_add(TOSH_PROF_D2H_STAGE, size, t0);
++            tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +        }
 +        return true;
 +    }
@@ -2529,7 +2529,7 @@
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(TOSH_PROF_D2H_STAGE, size, t0);
++        tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -2618,7 +2618,7 @@
 +            }
 +
 +            if (t0) {
-+                tosh_prof_add(TOSH_PROF_H2D_DIRECT, size, t0);
++                tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -2643,7 +2643,7 @@
          //[cmd_buf waitUntilCompleted];
 +
 +        if (t0) {
-+            tosh_prof_add(TOSH_PROF_H2D_DIRECT, size, t0);
++            tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +        }
      }
  }
@@ -2706,7 +2706,7 @@
 +            [cmd_buf waitUntilCompleted];
 +
 +            if (t0) {
-+                tosh_prof_add(TOSH_PROF_D2H_DIRECT, size, t0);
++                tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -2756,7 +2756,7 @@
 +        }
 +
 +        if (t0) {
-+            tosh_prof_add(TOSH_PROF_D2H_DIRECT, size, t0);
++            tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +        }
      }
  }
@@ -3013,7 +3013,7 @@
 +                           op->src[0]->type == GGML_TYPE_Q3_K;
  
 +        static const int nr0_env = []() {
-+            const char * s = getenv("TOSH_EXT_NR0");
++            const char * s = getenv("KESTREL_EXT_NR0");
 +            return s ? atoi(s) : 0;
 +        }();
 +
@@ -3117,7 +3117,7 @@
 -    if (props_dev->has_simdgroup_mm && ne00 >= 64 && (ne21 >= ne21_mm_id_min)) {
 +    // escape hatch: revert wave64 MoE prefill to the mat-vec route
 +    const bool mm_id_manual_ok = props_dev->simd_width == 32 ||
-+        getenv("TOSH_W64_MMID_PREFILL_DISABLE") == NULL;
++        getenv("KESTREL_W64_MMID_PREFILL_DISABLE") == NULL;
 +
 +    if ((props_dev->has_simdgroup_mm || (props_dev->use_mm_manual && mm_id_manual_ok)) && ne00 >= 64 && (ne21 >= ne21_mm_id_min)) {
          // some Metal matrix data types require aligned pointers
@@ -3246,7 +3246,7 @@
 +
 +    // AMD discrete GPUs miscompile the templated vec kernel, so route attention (decode
 +    // and prefill) to the dedicated AMD kernel for the standard K/V pairs it covers.
-+    // Keeps quantized KV on the GPU instead of the CPU fallback. Gated by TOSH_FA_AMD.
++    // Keeps quantized KV on the GPU instead of the CPU fallback. Gated by KESTREL_FA_AMD.
 +    char fa_amd_pipeline[80] = {0};
 +    // dk 72 is instantiated for f16 K/V only (vision towers); see the .metal side.
 +    const bool fa_amd_dk72 = ne00 == 72 &&
@@ -3264,7 +3264,7 @@
 +    const bool fa_amd_width_ok = props_dev->simd_width == 32
 +        ? props_dev->has_simdgroup_reduction
 +        : props_dev->wave64_decode;
-+    if (getenv("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
++    if (getenv("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
 +        !props_dev->has_simdgroup_mm && fa_amd_width_ok &&
 +        !has_bias && !has_scap) {
  
@@ -3309,7 +3309,7 @@
 +        const int fa_pf_bq = ne00 == 256 ? 32 : 64;
 +        const bool fa_pf_head_ok =
 +            ne00 == 64 || ne00 == 128 || ne00 == 256 || fa_amd_dk72;
-+        if (ne01 >= 32 && fa_pf_head_ok && getenv("TOSH_FA_PF_DISABLE") == NULL) {
++        if (ne01 >= 32 && fa_pf_head_ok && getenv("KESTREL_FA_PF_DISABLE") == NULL) {
 +            char fa_pf_pipeline[80];
 +            snprintf(fa_pf_pipeline, sizeof(fa_pf_pipeline), "kernel_flash_attn_ext_pf_amd_dk%d_k%s_v%s", (int) ne00,
 +                     ggml_metal_fa_amd_type_suffix(op->src[1]->type), ggml_metal_fa_amd_type_suffix(op->src[2]->type));
@@ -3341,7 +3341,7 @@
 +
 +        // prefill goes to the tile kernel (K/V shared across 16 queries);
 +        // decode keeps the per-query vec kernel
-+        if (ne01 >= 16 && getenv("TOSH_FA_TILE_DISABLE") == NULL) {
++        if (ne01 >= 16 && getenv("KESTREL_FA_TILE_DISABLE") == NULL) {
 +            char fa_tile_pipeline[80];
 +            snprintf(fa_tile_pipeline, sizeof(fa_tile_pipeline), "kernel_flash_attn_ext_tile_amd_dk%d_k%s_v%s%s", (int) ne00,
 +                     ggml_metal_fa_amd_type_suffix(op->src[1]->type), ggml_metal_fa_amd_type_suffix(op->src[2]->type),
@@ -3388,7 +3388,7 @@
 +        const int fa_amd_nwg =
 +            (ne00 == 256 || ne00 == 512) && ne01 == 1 && !has_sinks &&
 +            props_dev->simd_width == 32 && ne11 >= 1024 &&
-+            getenv("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
++            getenv("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
 +
 +        char fa_amd_wg_pipeline[96];
 +        if (fa_amd_nwg > 1) {
@@ -3611,7 +3611,7 @@
 -    const bool use_flash_attn = cparams.flash_attn && kq_b == nullptr;
 +    // AMD FA wins decode, while the decomposed graph wins long prefill for the
 +    // measured head sizes.
-+    const char * metal_simd_width = getenv("TOSH_METAL_SIMD_WIDTH");
++    const char * metal_simd_width = getenv("KESTREL_METAL_SIMD_WIDTH");
 +    const bool measured_head_size =
 +        q->ne[0] == 64 || q->ne[0] == 128 || q->ne[0] == 256 || q->ne[0] == 512;
 +    // Head 64/128 beat the decomposed route at every depth on both wave widths; bias
@@ -3621,7 +3621,7 @@
 +        metal_simd_width != nullptr &&
 +        (strcmp(metal_simd_width, "32") == 0 || strcmp(metal_simd_width, "64") == 0) &&
 +        hparams.f_max_alibi_bias == 0.0f && !hparams.attn_soft_cap &&
-+        getenv("TOSH_FA_PF_DISABLE") == nullptr;
++        getenv("KESTREL_FA_PF_DISABLE") == nullptr;
 +    // Head-256 is neutral through 1024 tokens and only pulls ahead on longer
 +    // prompts; keep FA for pp512, where it measured slightly faster.
 +    const int64_t decomposed_min_tokens = q->ne[0] == 256 ? 512 : 32;
@@ -3634,7 +3634,7 @@
 +        v->type == GGML_TYPE_F16 || v->type == GGML_TYPE_Q8_0 || v->type == GGML_TYPE_Q4_0;
 +    const bool decomposed_kv_ok =
 +        (k->type == GGML_TYPE_F16 && v->type == GGML_TYPE_F16) ||
-+        (getenv("TOSH_QK_PREFILL_DISABLE") == nullptr && decomposed_k_ok && decomposed_v_ok);
++        (getenv("KESTREL_QK_PREFILL_DISABLE") == nullptr && decomposed_k_ok && decomposed_v_ok);
 +    // the dequantization of a quantized V below only exists on the device, so layers a
 +    // partial offload leaves in host memory keep flash attention
 +    const ggml_tensor * v_alloc = v;
@@ -3645,14 +3645,14 @@
 +        !ggml_is_quantized(v->type) ||
 +        (v_alloc != nullptr && !ggml_backend_buft_is_host(ggml_backend_buffer_get_type(v_alloc->buffer)));
 +    const bool amd_prefill_decomposed =
-+        getenv("TOSH_FA_AMD") != nullptr &&
++        getenv("KESTREL_FA_AMD") != nullptr &&
 +        decomposed_v_on_device &&
-+        getenv("TOSH_FA_AMD_PREFILL_DECOMPOSED_DISABLE") == nullptr &&
-+        getenv("TOSH_FA_AMD_HEAD64_PREFILL_DISABLE") == nullptr &&
++        getenv("KESTREL_FA_AMD_PREFILL_DECOMPOSED_DISABLE") == nullptr &&
++        getenv("KESTREL_FA_AMD_HEAD64_PREFILL_DISABLE") == nullptr &&
 +        metal_simd_width != nullptr &&
 +        // wave64 validated on GCN/Vega (parity + long-prompt wins); hatch opts out
 +        (strcmp(metal_simd_width, "32") == 0 ||
-+         (strcmp(metal_simd_width, "64") == 0 && getenv("TOSH_W64_PREFILL_DISABLE") == nullptr)) &&
++         (strcmp(metal_simd_width, "64") == 0 && getenv("KESTREL_W64_PREFILL_DISABLE") == nullptr)) &&
 +        n_tokens > decomposed_min_tokens && measured_head_size &&
 +        decomposed_kv_ok && !amd_prefill_fa_blocked;
 +    const bool use_flash_attn = cparams.flash_attn && kq_b == nullptr && !amd_prefill_decomposed;
@@ -3757,7 +3757,7 @@
 +        // only ever be restored as the wrong state: skip their copies. The ubatch token count is
 +        // part of the graph reuse key, so the two topologies never share a cached graph.
 +        const int64_t n_ut  = conv_input->ne[0] - conv_states->ne[0];
-+        const int64_t K_eff = getenv("TOSH_RS_SLOTS_FULL") ? K : std::min<int64_t>(K, n_ut + 1);
++        const int64_t K_eff = getenv("KESTREL_RS_SLOTS_FULL") ? K : std::min<int64_t>(K, n_ut + 1);
 +
 +        for (int64_t t = K - K_eff + 1; t <= K; ++t) {
              const int64_t s_idx  = std::max<int64_t>(0, conv_input->ne[0] - conv_states->ne[0] - K + t);

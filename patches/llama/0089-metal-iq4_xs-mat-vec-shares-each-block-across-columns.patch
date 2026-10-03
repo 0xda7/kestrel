@@ -8,12 +8,12 @@ index 721449016..59909db0d 100644
                  }
                  smem = 32*sizeof(float);
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
-                 if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+                 if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
 +                // up to three columns share one pass over the weights; four columns spill
 +                // the registers, so wider batches split into even groups of two or three
-+                if (ne11 >= 2 && suffix[0] == '\0' && TOSH_ENV("TOSH_MV_IQ4_XS_NC_DISABLE") == nullptr) {
++                if (ne11 >= 2 && suffix[0] == '\0' && KESTREL_ENV("KESTREL_MV_IQ4_XS_NC_DISABLE") == nullptr) {
 +                    const int passes = (ne11 + 2)/3;
 +                    nr1 = (ne11 + passes - 1)/passes;
 +                    if (w64) {

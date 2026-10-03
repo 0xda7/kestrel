@@ -4,7 +4,7 @@ index d59adc6bd..cb04bfefb 100644
 +++ b/ggml/src/ggml-metal/CMakeLists.txt
 @@ -33,16 +33,17 @@ set(METALLIB_KERNELS_QUANTIZE   "${CMAKE_CURRENT_SOURCE_DIR}/kernels/quantize.h"
  # the expert cache kernels ride along as one more library when the dynamic MoE is on
- if (TOSH_ENABLE_DYNAMIC_MOE)
+ if (KESTREL_ENABLE_DYNAMIC_MOE)
      configure_file(${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-lru.metal
                     ${CMAKE_CURRENT_SOURCE_DIR}/kernels/tosh_moe.metal COPYONLY)
  endif()
@@ -48,7 +48,7 @@ index 5cec2d64d..e79b4c680 100644
 +++ b/ggml/src/ggml-metal/ggml-metal-ops.cpp
 @@ -3974,17 +3974,17 @@ int ggml_metal_op_flash_attn_ext(ggml_metal_op_t ctx, int idx) {
          // MLA keeps K wider than V; the tile kernel it used to fall back to measures ~26% slower
-         static const bool pfmla = getenv("TOSH_FA_PF_MLA_DISABLE") == nullptr;
+         static const bool pfmla = getenv("KESTREL_FA_PF_MLA_DISABLE") == nullptr;
          const bool fa_pf_512 = pf512 && ne00 == 512 && ne00 == ne20;
          const bool fa_pf_mla = pfmla && ne00 == 576 && ne20 == 512 &&
                                 op->src[2]->type == GGML_TYPE_F16;
@@ -77,29 +77,29 @@ index 5cec2d64d..e79b4c680 100644
 +
 +                // the 64-lane twin lives in fa_w64.metal, with the lane group as a parameter.
 +                // Only the symmetric heads have one; MLA and the asymmetric pairs stay above.
-+                // TOSH_FA_PF_LG picks the group so the three can be compared; 16 reproduces
++                // KESTREL_FA_PF_LG picks the group so the three can be compared; 16 reproduces
 +                // the 32-lane kernel exactly and is the control.
 +                static const int pf_lg = []() {
 +                    // the cross sweep left the group at sixteen: wider only wins at depth 0,
 +                    // where this kernel weighs least, and loses 3 to 37% deeper in
-+                    const char * s = getenv("TOSH_FA_PF_LG");
++                    const char * s = getenv("KESTREL_FA_PF_LG");
 +                    return s ? atoi(s) : 16;
 +                }();
-+                // TOSH_FA_PF_BQ picks the query-block twin of that group, which is what keeps
++                // KESTREL_FA_PF_BQ picks the query-block twin of that group, which is what keeps
 +                // the rows per thread fixed while the group widens
 +                static const int pf_bq = []() {
-+                    const char * s = getenv("TOSH_FA_PF_BQ");
++                    const char * s = getenv("KESTREL_FA_PF_BQ");
 +                    return s ? atoi(s) : 0;
 +                }();
-+                // TOSH_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
++                // KESTREL_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
 +                // side of the K/V reuse, so a bigger block pays the same traffic fewer times
 +                static const int pf_bk = []() {
-+                    const char * s = getenv("TOSH_FA_PF_BK");
++                    const char * s = getenv("KESTREL_FA_PF_BK");
 +                    return s ? atoi(s) : 0;
 +                }();
 +                if (props_dev->simd_width == 64 && (pf_lg == 16 || pf_lg == 32 || pf_lg == 64) &&
 +                    (ne00 == 64 || ne00 == 128 || ne00 == 256) &&
-+                    getenv("TOSH_FA_PF_W64_DISABLE") == nullptr) {
++                    getenv("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
 +                    char w64_name[96];
 +                    if (pf_bq > 0) {
 +                        snprintf(w64_name, sizeof(w64_name), "%s_w64_lg%dq%dk%d", fa_pf_pipeline, pf_lg, pf_bq,

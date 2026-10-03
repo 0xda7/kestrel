@@ -13,8 +13,8 @@ diff --git a/ggml/src/ggml-metal/ggml-metal-device.cpp b/ggml/src/ggml-metal/ggm
 -    // diffusion activations overflow half partials, so always accumulate in float here
 -    const bool acc_f32 = use_mm_manual;
 +    // diffusion activations overflow half partials on some models, so float stays the default;
-+    // TOSH_MM_ACC_HALF opts a model validated in half back into the faster path
-+    static const bool acc_half = getenv("TOSH_MM_ACC_HALF") != nullptr;
++    // KESTREL_MM_ACC_HALF opts a model validated in half back into the faster path
++    static const bool acc_half = getenv("KESTREL_MM_ACC_HALF") != nullptr;
 +    const bool acc_f32 = use_mm_manual &&
 +                         (!acc_half || !ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16);
  
@@ -37,8 +37,8 @@ diff --git a/ggml/src/ggml-metal/ggml-metal-device.cpp b/ggml/src/ggml-metal/ggm
 -    // diffusion activations overflow half partials, so always accumulate in float here
 -    const bool acc_f32 = use_mm_manual;
 +    // diffusion activations overflow half partials on some models, so float stays the default;
-+    // TOSH_MM_ACC_HALF opts a model validated in half back into the faster path
-+    static const bool acc_half = getenv("TOSH_MM_ACC_HALF") != nullptr;
++    // KESTREL_MM_ACC_HALF opts a model validated in half back into the faster path
++    static const bool acc_half = getenv("KESTREL_MM_ACC_HALF") != nullptr;
 +    const bool acc_f32 = use_mm_manual &&
 +                         (!acc_half || !ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16);
  

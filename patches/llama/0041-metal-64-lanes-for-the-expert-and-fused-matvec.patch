@@ -15,7 +15,7 @@ index 8120d0a51..cb0ef215c 100644
 +    // decomposition as the standalone one, so the expert path stops falling back to 32.
 +    // Types whose shared memory holds a lookup grid keep the rows and the buffer the
 +    // switch above computed: only the reduction-buffer ones move.
-+    bool id_w64 = simd_width == 64 && getenv("TOSH_MVID_W64_DISABLE") == nullptr;
++    bool id_w64 = simd_width == 64 && getenv("KESTREL_MVID_W64_DISABLE") == nullptr;
 +    if (id_w64) {
 +        switch (tsrc0) {
 +            case GGML_TYPE_Q4_0: nr0 = 4; break;
@@ -61,13 +61,13 @@ index 8120d0a51..cb0ef215c 100644
                               tsrc0 == GGML_TYPE_BF16 || tsrc0 == GGML_TYPE_Q8_0);
          const bool sr     = (tsrc0 == GGML_TYPE_Q4_K || tsrc0 == GGML_TYPE_Q5_K || tsrc0 == GGML_TYPE_Q6_K ||
 @@ -1913,17 +1954,17 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mv_id(ggml_m
-                       getenv("TOSH_MV_ROW4_DISABLE") == nullptr;
+                       getenv("KESTREL_MV_ROW4_DISABLE") == nullptr;
  
      // The expert kernels share the implementations of the dense path, so they can read the
      // quant arrays a word at a time under the same conditions.
      const bool row8 = row4 && (op->src[0]->nb[1] % 4 == 0) && (op->src[0]->nb[2] % 4 == 0) &&
                        (nw == 64 || (nw == 32 && tsrc0 == GGML_TYPE_Q8_0)) &&
-                       getenv("TOSH_MV_ROW8_DISABLE") == nullptr;
+                       getenv("KESTREL_MV_ROW8_DISABLE") == nullptr;
  
 -    snprintf(base, 256, "kernel_mul_mv_id_%s_%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), suffix);
 +    snprintf(base, 256, "kernel_mul_mv_id_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), suffix, id_w64 ? "_w64" : "");
@@ -92,7 +92,7 @@ index 4920c9f23..5cec2d64d 100644
      const ggml_type tv = v->src[0]->type;
      const ggml_type tk = k->src[0]->type;
  
-+    const bool qvk_w64 = props_dev->simd_width == 64 && getenv("TOSH_QVK_W64_DISABLE") == nullptr;
++    const bool qvk_w64 = props_dev->simd_width == 64 && getenv("KESTREL_QVK_W64_DISABLE") == nullptr;
 +
      if (tq == GGML_TYPE_Q4_0 && tv == GGML_TYPE_Q4_0 && tk == GGML_TYPE_Q4_0) {
 -        pattern = { "kernel_mul_mv_qvk_q4_0_q4_0_q4_0_f32", 1, 4, 4, 4 };

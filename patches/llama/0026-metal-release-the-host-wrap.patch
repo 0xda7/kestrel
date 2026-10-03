@@ -18,7 +18,7 @@ index 1f2c9b1dd..5fb37f18a 100644
          //[cmd_buf waitUntilCompleted];
  
          if (t0) {
-             tosh_prof_add(TOSH_PROF_H2D_DIRECT, size, t0);
+             tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
          }
      }
  }

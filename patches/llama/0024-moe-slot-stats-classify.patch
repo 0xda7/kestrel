@@ -12,7 +12,7 @@ index 71516638e..78948dadb 100644
              }
          }
 -        for (int e = 0; e < n_expert; ++e) slot_of[e] = -1;
-         if (getenv("TOSH_MOE_WIDE_DEBUG") != NULL) {
+         if (getenv("KESTREL_MOE_WIDE_DEBUG") != NULL) {
              GGML_LOG_WARN("%s: layer %d unique=%d cold=%d slots=%d fixed=%d experts=%d\n",
                  __func__, layer, n_unique, n_cold_unique, n_slots, n_fixed, n_expert);
          }
@@ -51,9 +51,9 @@ index 71516638e..78948dadb 100644
          }
 +        for (int e = 0; e < n_expert; ++e) slot_of[e] = -1;
          if (n_fixed > 0 && (wide_shape || n_cold_unique > n_slots - n_fixed)) {
-             const bool transient_map = getenv("TOSH_MOE_TRANSIENT_MAP") != NULL;
-             const bool persistent_map = getenv("TOSH_MOE_PERSISTENT_MAP") != NULL;
-             const bool double_buffer = getenv("TOSH_MOE_DOUBLE_BUFFER") != NULL &&
+             const bool transient_map = getenv("KESTREL_MOE_TRANSIENT_MAP") != NULL;
+             const bool persistent_map = getenv("KESTREL_MOE_PERSISTENT_MAP") != NULL;
+             const bool double_buffer = getenv("KESTREL_MOE_DOUBLE_BUFFER") != NULL &&
                  !transient_map && !persistent_map && wide_shape;
              const int parity = double_buffer ? full_sequence++ & 1 : 0;
              if (full_pending[parity] != nil) {

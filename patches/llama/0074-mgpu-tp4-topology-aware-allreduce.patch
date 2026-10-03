@@ -62,7 +62,7 @@ index 42fbfa927..02569a06e 100644
      // overwrite what the previous one is still reducing
      std::vector<ggml_backend_buffer_t>  tmp;
      std::vector<size_t>                 tmp_size;
-     // f16 transport staging (TOSH_MGPU_STAGE_F16): same slotting as the f32 scratch
+     // f16 transport staging (KESTREL_MGPU_STAGE_F16): same slotting as the f32 scratch
      std::vector<ggml_backend_buffer_t>  tmp_f16;
      std::vector<size_t>                 tmp_f16_size;
      size_t                              n_steps = 0;
@@ -137,8 +137,8 @@ index 42fbfa927..02569a06e 100644
      comm_ctx->tmp.assign(n_backends*comm_ctx->n_steps, nullptr);
      comm_ctx->tmp_size.assign(n_backends*comm_ctx->n_steps, 0);
  
-+    const char * hierarchical = getenv("TOSH_MGPU_HIERARCHICAL");
-+    const char * peer = getenv("TOSH_MGPU_PEER");
++    const char * hierarchical = getenv("KESTREL_MGPU_HIERARCHICAL");
++    const char * peer = getenv("KESTREL_MGPU_PEER");
 +    const bool peer_enabled = peer != nullptr && peer[0] == '1';
 +    if (peer_enabled && (hierarchical == nullptr || hierarchical[0] != '0')) {
 +        comm_ctx->hierarchical = ggml_backend_metal_comm_hierarchical_init(comm_ctx);
@@ -164,7 +164,7 @@ index 42fbfa927..02569a06e 100644
  static void ggml_backend_metal_comm_free(void * comm_ctx_v) {
 @@ -1100,21 +1169,16 @@ static bool ggml_backend_metal_comm_allreduce_noop(void) {
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_ALLREDUCE_NOOP=1, the reduction is "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_ALLREDUCE_NOOP=1, the reduction is "
                              "skipped and the output is meaningless. Benchmark only.\n");
          }
      }
@@ -185,7 +185,7 @@ index 42fbfa927..02569a06e 100644
  
      const size_t n_backends = comm_ctx->backends.size();
 @@ -1209,17 +1273,19 @@ static bool ggml_backend_metal_comm_allreduce_tensor(void * comm_ctx_v, ggml_ten
-         const char * v = getenv("TOSH_MGPU_STAGE_F16");
+         const char * v = getenv("KESTREL_MGPU_STAGE_F16");
          stage = (v && v[0] == '1') ? 1 : 0;
      }
  
@@ -332,7 +332,7 @@ index 42fbfa927..02569a06e 100644
      // so the copies all go out before any of the adds.
      static int fused = -1;
      if (fused < 0) {
-         fused = getenv("TOSH_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
+         fused = getenv("KESTREL_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
      }
  
      for (size_t offset = offset_max; offset >= 1; offset /= 2) {

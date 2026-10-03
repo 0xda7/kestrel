@@ -11,7 +11,7 @@ index 4feaf083e..ddcc76265 100644
  option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
  
  # extra artifacts
-+option(TOSH_ENABLE_DYNAMIC_MOE "kestrel: experimental MoE expert cache" OFF)
++option(KESTREL_ENABLE_DYNAMIC_MOE "kestrel: experimental MoE expert cache" OFF)
 +
  option(LLAMA_BUILD_TESTS     "llama: build tests"                                                                ${LLAMA_STANDALONE})
  option(LLAMA_BUILD_TOOLS     "llama: build tools"                                                                ${LLAMA_STANDALONE})
@@ -74,7 +74,7 @@ index 9b3a4fcc4..cbe45d80c 100644
      target_compile_definitions(test-export-graph-ops PRIVATE LLAMA_HF_FETCH)
  endif()
 +
-+if (TOSH_ENABLE_DYNAMIC_MOE)
++if (KESTREL_ENABLE_DYNAMIC_MOE)
 +    add_executable(test-tosh-moe-cache test-tosh-moe-cache.cpp ../tosh-moe/tosh-moe-cache.cpp)
 +    target_include_directories(test-tosh-moe-cache PRIVATE ../tosh-moe)
 +    add_test(NAME test-tosh-moe-cache COMMAND test-tosh-moe-cache)
@@ -720,8 +720,8 @@ index 6541bb507..fa5aaf30a 100644
 +// Dynamic MoE: the run is decided by how many expert slots the card holds, so the report says
 +// that instead of the CPU-expert count and the tensor override, which are fixed while it is on.
 +static int tosh_bench_moe_slots() {
-+    const char * mode  = getenv("TOSH_MOE_MODE");
-+    const char * slots = getenv("TOSH_MOE_SLOTS");
++    const char * mode  = getenv("KESTREL_MOE_MODE");
++    const char * slots = getenv("KESTREL_MOE_SLOTS");
 +    if (!mode || !slots || strcmp(mode, "off") == 0) {
 +        return 0;
 +    }

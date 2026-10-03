@@ -11,7 +11,7 @@ index 119e8b65b..8fb157e36 100644
  bool ggml_metal_add_inplace_supported(ggml_metal_t ctx, const struct ggml_tensor * acc, const struct ggml_tensor * add);
  bool ggml_metal_add_inplace_async    (ggml_metal_t ctx, struct ggml_tensor * acc, const struct ggml_tensor * add);
  
-+// f16 transport for the prefill allreduce (TOSH_MGPU_STAGE_F16): halve the bytes crossing
++// f16 transport for the prefill allreduce (KESTREL_MGPU_STAGE_F16): halve the bytes crossing
 +// the peer bridge by carrying partials as f16 and folding them into the f32 accumulator.
 +bool ggml_metal_f16_stage_supported(ggml_metal_t ctx, const struct ggml_tensor * t);
 +bool ggml_metal_cvt_f32_f16        (ggml_metal_t ctx, const struct ggml_tensor * src, struct ggml_tensor * dst);
@@ -194,7 +194,7 @@ index cd9dfa040..b083e0c70 100644
 +    return true;
 +}
 +
- // TOSH_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
+ // KESTREL_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
  // latency and the shared host block is faster.
  // rows in the exchanged tensor: one for a generated token, the whole prompt for a prefill
  static int64_t tosh_batch_of(const struct ggml_tensor * t) {
@@ -297,7 +297,7 @@ index 348a24c1e..42fbfa927 100644
      // overwrite what the previous one is still reducing
      std::vector<ggml_backend_buffer_t>  tmp;
      std::vector<size_t>                 tmp_size;
-+    // f16 transport staging (TOSH_MGPU_STAGE_F16): same slotting as the f32 scratch
++    // f16 transport staging (KESTREL_MGPU_STAGE_F16): same slotting as the f32 scratch
 +    std::vector<ggml_backend_buffer_t>  tmp_f16;
 +    std::vector<size_t>                 tmp_f16_size;
      size_t                              n_steps = 0;
@@ -325,7 +325,7 @@ index 348a24c1e..42fbfa927 100644
      delete comm_ctx;
  }
  
- // TOSH_MGPU_ALLREDUCE_NOOP=1 keeps the split graph and every subgraph submission but performs
+ // KESTREL_MGPU_ALLREDUCE_NOOP=1 keeps the split graph and every subgraph submission but performs
  // no reduction and no cross-device synchronisation at all. The output is wrong by construction.
  // It exists for one measurement: what tensor-split decode would cost if communication were free.
  static bool ggml_backend_metal_comm_allreduce_noop(void) {
@@ -339,7 +339,7 @@ index 348a24c1e..42fbfa927 100644
      // the batch decides: peer wins the prefill, events the decode.
      const bool prefer_events = ne / tensors[0]->ne[0] < ggml_metal_peer_min_batch();
  
-+    // TOSH_MGPU_STAGE_F16=1: carry the partials across the bridge as f16 and fold them in
++    // KESTREL_MGPU_STAGE_F16=1: carry the partials across the bridge as f16 and fold them in
 +    // with an upcast add. At prefill payloads the copy butterfly is fabric-bound, so halving
 +    // the bytes is the lever; decode is latency-bound and stays f32. All-or-nothing per
 +    // collective: every device must support both kernels or today's path runs unchanged.
@@ -347,7 +347,7 @@ index 348a24c1e..42fbfa927 100644
 +    // faulted the AMD driver within minutes - see .bench/bf16-stage/fault-hunt.md.
 +    static int stage = -1;
 +    if (stage < 0) {
-+        const char * v = getenv("TOSH_MGPU_STAGE_F16");
++        const char * v = getenv("KESTREL_MGPU_STAGE_F16");
 +        stage = (v && v[0] == '1') ? 1 : 0;
 +    }
 +
@@ -413,7 +413,7 @@ index 348a24c1e..42fbfa927 100644
      // buffer stays open between the two calls
      static int fuse = -1;
      if (fuse < 0) {
-         fuse = getenv("TOSH_MGPU_FUSE_ADD_DISABLE") == NULL ? 1 : 0;
+         fuse = getenv("KESTREL_MGPU_FUSE_ADD_DISABLE") == NULL ? 1 : 0;
      }
      const bool hold_dst = fuse == 1;
  

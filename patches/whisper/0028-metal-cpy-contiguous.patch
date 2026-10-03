@@ -176,7 +176,7 @@
 +    // recomputing 4-D indices for every element instead
 +    const bool contig = ggml_blck_size(op->src[0]->type) == 1 && ggml_blck_size(op->type) == 1 &&
 +                        ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op) &&
-+                        getenv("TOSH_CPY_CONTIG_DISABLE") == nullptr;
++                        getenv("KESTREL_CPY_CONTIG_DISABLE") == nullptr;
  
 +    if (contig) {
 +        const int64_t n = ggml_nelements(op);

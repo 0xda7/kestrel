@@ -5,14 +5,14 @@ index 2245fbb49..fa6b501d0 100644
 @@ -55,17 +55,17 @@ static _Atomic uint64_t g_cbp_commit_ns; // the commit call itself
  static _Atomic uint64_t g_cbp_create_ns; // creating and enqueuing the buffers of a graph
  
- static struct tosh_cbp_bucket g_cbp[TOSH_CBP_MAX_BUCKETS];
+ static struct tosh_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
  static _Atomic int g_cbp_state = 0; // 0 unknown, 1 off, 2 on
  
  static bool tosh_cbp_on(void) {
      int st = atomic_load_explicit(&g_cbp_state, memory_order_relaxed);
      if (st == 0) {
--        const char * e = getenv("TOSH_CB_PROFILE");
-+        const char * e = TOSH_ENV("TOSH_CB_PROFILE");
+-        const char * e = getenv("KESTREL_CB_PROFILE");
++        const char * e = KESTREL_ENV("KESTREL_CB_PROFILE");
          st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
          atomic_store_explicit(&g_cbp_state, st, memory_order_relaxed);
      }
@@ -20,18 +20,18 @@ index 2245fbb49..fa6b501d0 100644
  }
  
  static struct tosh_cbp_bucket * tosh_cbp_bucket_for(int n_nodes) {
-     for (int i = 0; i < TOSH_CBP_MAX_BUCKETS; ++i) {
+     for (int i = 0; i < KESTREL_CBP_MAX_BUCKETS; ++i) {
 @@ -372,17 +372,17 @@ struct ggml_metal {
  };
  
- // TOSH_MGPU_DEFER_WAITS folds a cross-device wait into the next command buffer this context
+ // KESTREL_MGPU_DEFER_WAITS folds a cross-device wait into the next command buffer this context
  // submits instead of spending a whole one on it. Opt-in: on a single card both contexts share
  // the device queue, so it measures slightly negative there and only 2 real GPUs can settle it.
  static bool ggml_metal_defer_waits(void) {
      static int val = -1;
      if (val < 0) {
--        const char * v = getenv("TOSH_MGPU_DEFER_WAITS");
-+        const char * v = TOSH_ENV("TOSH_MGPU_DEFER_WAITS");
+-        const char * v = getenv("KESTREL_MGPU_DEFER_WAITS");
++        const char * v = KESTREL_ENV("KESTREL_MGPU_DEFER_WAITS");
          val = (v && v[0] == '1') ? 1 : 0;
      }
      return val;
@@ -49,8 +49,8 @@ index 2245fbb49..fa6b501d0 100644
  static bool tosh_mgpu_trace(void) {
      static int on = -1;
      if (on < 0) {
--        const char * v = getenv("TOSH_MGPU_TRACE");
-+        const char * v = TOSH_ENV("TOSH_MGPU_TRACE");
+-        const char * v = getenv("KESTREL_MGPU_TRACE");
++        const char * v = KESTREL_ENV("KESTREL_MGPU_TRACE");
          on = (v && v[0] == '1') ? 1 : 0;
      }
      return on == 1;
@@ -63,20 +63,20 @@ index 2245fbb49..fa6b501d0 100644
  // decode actually takes. Four samples, all from one device, so no cross-GPU clock correlation
  // is involved: S0/S1 bracket the publish blit, S2/S3 the staging read. S1 to S2 is a
  // WAIT-WINDOW, not a pure event wait: it spans the signal, the peer wait and the encoder switch.
- #define TOSH_CT_SLOTS 4096
- #define TOSH_CT_PER   4
+ #define KESTREL_CT_SLOTS 4096
+ #define KESTREL_CT_PER   4
  
  static bool ggml_metal_ctime(void) {
      static int v = -1;
--    if (v < 0) { const char * s = getenv("TOSH_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
-+    if (v < 0) { const char * s = TOSH_ENV("TOSH_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
+-    if (v < 0) { const char * s = getenv("KESTREL_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
++    if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
      return v == 1;
  }
  
  static bool ggml_metal_ctime_barrier(void) {
      static int v = -1;
--    if (v < 0) { const char * s = getenv("TOSH_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
-+    if (v < 0) { const char * s = TOSH_ENV("TOSH_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
+-    if (v < 0) { const char * s = getenv("KESTREL_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
++    if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
      return v == 1;
  }
  
@@ -90,15 +90,15 @@ index 2245fbb49..fa6b501d0 100644
  // Subtracting this run's central window from the normal one isolates the real peer stall
  // without adding an encoder to the interval being measured.
  // The same trick for the other wait in the path, the one guarding reuse of the shared host
- // block. TOSH_MGPU_BP_SATISFIED=1, benchmark only, same warning applies.
+ // block. KESTREL_MGPU_BP_SATISFIED=1, benchmark only, same warning applies.
  static bool ggml_metal_bp_satisfied(void) {
      static int v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_BP_SATISFIED");
-+        const char * s = TOSH_ENV("TOSH_MGPU_BP_SATISFIED");
+-        const char * s = getenv("KESTREL_MGPU_BP_SATISFIED");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_BP_SATISFIED");
          v = (s && s[0] == '1') ? 1 : 0;
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_BP_SATISFIED=1, the collective does not "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_BP_SATISFIED=1, the collective does not "
                              "wait before reusing the staging block. Benchmark only.\n");
          }
      }
@@ -110,8 +110,8 @@ index 2245fbb49..fa6b501d0 100644
  static bool ggml_metal_tp2_fused_boundary(int64_t batch) {
      static int v = -2;
      if (v == -2) {
--        const char * s = getenv("TOSH_MGPU_TP2_FUSED_BOUNDARY");
-+        const char * s = TOSH_ENV("TOSH_MGPU_TP2_FUSED_BOUNDARY");
+-        const char * s = getenv("KESTREL_MGPU_TP2_FUSED_BOUNDARY");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_TP2_FUSED_BOUNDARY");
          v = s ? (s[0] == '1' ? 1 : 0) : -1;
      }
      if (v >= 0) {
@@ -123,11 +123,11 @@ index 2245fbb49..fa6b501d0 100644
  static bool ggml_metal_wait_satisfied(void) {
      static int v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_WAIT_SATISFIED");
-+        const char * s = TOSH_ENV("TOSH_MGPU_WAIT_SATISFIED");
+-        const char * s = getenv("KESTREL_MGPU_WAIT_SATISFIED");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_WAIT_SATISFIED");
          v = (s && s[0] == '1') ? 1 : 0;
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_WAIT_SATISFIED=1, the collective never "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_WAIT_SATISFIED=1, the collective never "
                              "waits for the peer and the output is meaningless. Benchmark only.\n");
          }
      }
@@ -143,7 +143,7 @@ index 2245fbb49..fa6b501d0 100644
          res->is_prefetch = prefetch;
          if (prefetch) {
 -            const char * val = getenv("GGML_METAL_PREFETCH_STAGE_COUNT");
-+            const char * val = TOSH_ENV("GGML_METAL_PREFETCH_STAGE_COUNT");
++            const char * val = KESTREL_ENV("GGML_METAL_PREFETCH_STAGE_COUNT");
              const int requested = val ? atoi(val) : 1;
              res->prefetch_stage_count = MAX(1, MIN(requested, GGML_METAL_MAX_PREFETCH_STAGES));
          }
@@ -163,19 +163,19 @@ index 2245fbb49..fa6b501d0 100644
          res->use_concurrency = props_dev->has_unified_memory
 -            ? getenv("GGML_METAL_CONCURRENCY_DISABLE") == nil
 -            : getenv("GGML_METAL_CONCURRENCY_ENABLE")  != nil;
-+            ? TOSH_ENV("GGML_METAL_CONCURRENCY_DISABLE") == nil
-+            : TOSH_ENV("GGML_METAL_CONCURRENCY_ENABLE")  != nil;
++            ? KESTREL_ENV("GGML_METAL_CONCURRENCY_DISABLE") == nil
++            : KESTREL_ENV("GGML_METAL_CONCURRENCY_ENABLE")  != nil;
  
          {
 -            const char * val = getenv("GGML_METAL_GRAPH_DEBUG");
-+            const char * val = TOSH_ENV("GGML_METAL_GRAPH_DEBUG");
++            const char * val = KESTREL_ENV("GGML_METAL_GRAPH_DEBUG");
              res->debug_graph = val ? atoi(val) : 0;
          }
  
          res->use_graph_optimize = true;
  
 -        if (getenv("GGML_METAL_GRAPH_OPTIMIZE_DISABLE") != NULL) {
-+        if (TOSH_ENV("GGML_METAL_GRAPH_OPTIMIZE_DISABLE") != NULL) {
++        if (KESTREL_ENV("GGML_METAL_GRAPH_OPTIMIZE_DISABLE") != NULL) {
              res->use_graph_optimize = false;
          }
  
@@ -194,7 +194,7 @@ index 2245fbb49..fa6b501d0 100644
  
          {
 -            const char * val = getenv("GGML_METAL_CAPTURE_COMPUTE");
-+            const char * val = TOSH_ENV("GGML_METAL_CAPTURE_COMPUTE");
++            const char * val = KESTREL_ENV("GGML_METAL_CAPTURE_COMPUTE");
              if (val) {
                  res->capture_compute = atoi(val);
              }
@@ -205,32 +205,32 @@ index 2245fbb49..fa6b501d0 100644
          res->gf = nil;
 @@ -1638,33 +1638,33 @@ static void tosh_trace_cmd_buf(id<MTLCommandBuffer> cmd_buf) {
  
- // TOSH_MGPU_NOWAIT=1, benchmark only: the collective still publishes, still signals and still
+ // KESTREL_MGPU_NOWAIT=1, benchmark only: the collective still publishes, still signals and still
  // reduces, but never waits for the partner. The output is wrong by construction. Subtracting
  // this from the normal run measures the stall at the wait inside the real collective, instead
  // of inferring it from whole-command-buffer completion timestamps.
  static bool ggml_metal_collective_nowait(void) {
      static int v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_NOWAIT");
-+        const char * s = TOSH_ENV("TOSH_MGPU_NOWAIT");
+-        const char * s = getenv("KESTREL_MGPU_NOWAIT");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_NOWAIT");
          v = (s && s[0] == '1') ? 1 : 0;
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_NOWAIT=1, the collective does not wait "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_NOWAIT=1, the collective does not wait "
                              "for the peer and the output is meaningless. Benchmark only.\n");
          }
      }
      return v == 1;
  }
  
- // TOSH_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
+ // KESTREL_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
  // same GPU (GGML_METAL_DEVICE_LIST=0,0), which needs no bridge: the queues are still
  // separate, so the cross-device ordering is testable on a single card.
  static bool ggml_metal_peer_self(void) {
      static int val = -1;
      if (val < 0) {
--        const char * v = getenv("TOSH_MGPU_PEER_SELF");
-+        const char * v = TOSH_ENV("TOSH_MGPU_PEER_SELF");
+-        const char * v = getenv("KESTREL_MGPU_PEER_SELF");
++        const char * v = KESTREL_ENV("KESTREL_MGPU_PEER_SELF");
          val = (v && v[0] == '1') ? 1 : 0;
      }
      return val;
@@ -249,33 +249,33 @@ index 2245fbb49..fa6b501d0 100644
      // hand-off goes through host memory (GGML_METAL_CROSS_STAGING_DISABLE uses the generic copy).
      if (ctx_src->dev != ctx_dst->dev) {
 -        if (getenv("GGML_METAL_CROSS_STAGING_DISABLE") != NULL) {
-+        if (TOSH_ENV("GGML_METAL_CROSS_STAGING_DISABLE") != NULL) {
++        if (KESTREL_ENV("GGML_METAL_CROSS_STAGING_DISABLE") != NULL) {
              return false;
          }
  
          // both buffers must be private for the cross-device blits
          static int use_events = -1;
          if (use_events < 0) {
--            const char * v = getenv("TOSH_MGPU_EVENTS");
-+            const char * v = TOSH_ENV("TOSH_MGPU_EVENTS");
+-            const char * v = getenv("KESTREL_MGPU_EVENTS");
++            const char * v = KESTREL_ENV("KESTREL_MGPU_EVENTS");
              use_events = (v && v[0] == '1') ? 1 : 0;
          }
          // Infinity Fabric peer copy is opt-in until validated on bridged hardware:
          // a success that silently returns wrong data has no fallback.
          static int use_peer = -1;
          if (use_peer < 0) {
--            const char * v = getenv("TOSH_MGPU_PEER");
-+            const char * v = TOSH_ENV("TOSH_MGPU_PEER");
+-            const char * v = getenv("KESTREL_MGPU_PEER");
++            const char * v = KESTREL_ENV("KESTREL_MGPU_PEER");
              use_peer = (v && v[0] == '1') ? 1 : 0;
          }
          ggml_backend_buffer_t ebsrc = src->view_src ? src->view_src->buffer : src->buffer;
          ggml_backend_buffer_t ebdst = dst->view_src ? dst->view_src->buffer : dst->buffer;
          // which of the three hand-offs actually runs is not visible otherwise, and the flag
-         // alone does not tell: TOSH_MGPU_XDEV_COUNT reports the tally at exit
+         // alone does not tell: KESTREL_MGPU_XDEV_COUNT reports the tally at exit
          static int count = -1;
          if (count < 0) {
--            count = getenv("TOSH_MGPU_XDEV_COUNT") != NULL;
-+            count = TOSH_ENV("TOSH_MGPU_XDEV_COUNT") != NULL;
+-            count = getenv("KESTREL_MGPU_XDEV_COUNT") != NULL;
++            count = KESTREL_ENV("KESTREL_MGPU_XDEV_COUNT") != NULL;
              if (count) {
                  atexit(tosh_xdev_report);
              }
@@ -288,13 +288,13 @@ index 2245fbb49..fa6b501d0 100644
  
  // acc += a plain buffer laid out exactly like acc. The collective's partner publishes its
  // partial that way, so the add can read it straight across the fabric with no tensor to wrap.
- // TOSH_MGPU_FB_ADD_RB=0 keeps the generic add below. A single row goes through the row-broadcast
+ // KESTREL_MGPU_FB_ADD_RB=0 keeps the generic add below. A single row goes through the row-broadcast
  // float4 variant the graph already uses for the residual, since bin_one strides a few threads
  // across the whole row and is several times slower on it.
  static bool ggml_metal_fb_add_rb(void) {
      static int v = -1;
--    if (v < 0) { const char * s = getenv("TOSH_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
-+    if (v < 0) { const char * s = TOSH_ENV("TOSH_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
+-    if (v < 0) { const char * s = getenv("KESTREL_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
++    if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
      return v == 1;
  }
  
@@ -312,8 +312,8 @@ index 2245fbb49..fa6b501d0 100644
  static int64_t ggml_metal_peer_min_batch(void) {
      static int64_t v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_PEER_MIN_BATCH");
-+        const char * s = TOSH_ENV("TOSH_MGPU_PEER_MIN_BATCH");
+-        const char * s = getenv("KESTREL_MGPU_PEER_MIN_BATCH");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_PEER_MIN_BATCH");
          v = s ? atoll(s) : 32;
      }
      return v;
@@ -325,12 +325,12 @@ index 2245fbb49..fa6b501d0 100644
  // and then only when the batch is small. A token of one row crosses 72 times and each crossing
  // carries its own pair of command buffers, so halving them is worth ~3% of decode; a prompt
  // amortises the submissions over the whole batch and loses ~2% instead, hence the batch gate.
- // TOSH_MGPU_HOLD=1 forces it on, =0 off, unset follows the batch.
+ // KESTREL_MGPU_HOLD=1 forces it on, =0 off, unset follows the batch.
  static bool ggml_metal_collective_hold_batch(int64_t batch) {
      static int v = -2;
      if (v == -2) {
--        const char * s = getenv("TOSH_MGPU_HOLD");
-+        const char * s = TOSH_ENV("TOSH_MGPU_HOLD");
+-        const char * s = getenv("KESTREL_MGPU_HOLD");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_HOLD");
          v = s ? (s[0] == '1' ? 1 : 0) : -1;
      }
      if (v >= 0) {
@@ -348,8 +348,8 @@ index 2245fbb49..fa6b501d0 100644
  
      static int use_peer = -1;
      if (use_peer < 0) {
--        const char * v = getenv("TOSH_MGPU_PEER");
-+        const char * v = TOSH_ENV("TOSH_MGPU_PEER");
+-        const char * v = getenv("KESTREL_MGPU_PEER");
++        const char * v = KESTREL_ENV("KESTREL_MGPU_PEER");
          use_peer = (v && v[0] == '1') ? 1 : 0;
      }
  
@@ -359,7 +359,7 @@ index 2245fbb49..fa6b501d0 100644
          id<MTLDevice> dev_self = ggml_metal_device_get_obj(ctx_self->dev);
          id<MTLDevice> dev_peer = ggml_metal_device_get_obj(ctx_peer->dev);
 @@ -2909,17 +2909,17 @@ static bool ggml_metal_exchange_reduce_peer(ggml_metal_t ctx_self, ggml_metal_t
- // TOSH_MGPU_ONESHOT=1 engages the one-shot round for decode batches. Default off: at n=4 the
+ // KESTREL_MGPU_ONESHOT=1 engages the one-shot round for decode batches. Default off: at n=4 the
  // measurements say the staged butterfly wins, 38.0 vs 35.8 t/s. The one-shot's publish is one
  // round instead of two, but every card then waits on every partner in the same held command
  // buffer, so each queue stalls on the slowest of the four every collective: NOWAIT decode is
@@ -367,8 +367,8 @@ index 2245fbb49..fa6b501d0 100644
  static bool ggml_metal_oneshot_enabled(void) {
      static int v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_ONESHOT");
-+        const char * s = TOSH_ENV("TOSH_MGPU_ONESHOT");
+-        const char * s = getenv("KESTREL_MGPU_ONESHOT");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_ONESHOT");
          v = (s && s[0] == '1') ? 1 : 0;
      }
      return v == 1;
@@ -386,8 +386,8 @@ index 2245fbb49..fa6b501d0 100644
      // decode, and it costs a second kernel.
      static int fused = -1;
      if (fused < 0) {
--        const char * v = getenv("TOSH_MGPU_PEER_FUSED");
-+        const char * v = TOSH_ENV("TOSH_MGPU_PEER_FUSED");
+-        const char * v = getenv("KESTREL_MGPU_PEER_FUSED");
++        const char * v = KESTREL_ENV("KESTREL_MGPU_PEER_FUSED");
          fused = v == NULL ? 1 : atoi(v);
      }
  
@@ -405,8 +405,8 @@ index 2245fbb49..fa6b501d0 100644
  // and blitted into private K slots. No command ever receives a Metal view of the complete bank.
  static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, struct ggml_cgraph * gf) {
      int copy_workers = 4;
--    const char * copy_workers_env = getenv("TOSH_MOE_BOUNDED_COPY_WORKERS");
-+    const char * copy_workers_env = TOSH_ENV("TOSH_MOE_BOUNDED_COPY_WORKERS");
+-    const char * copy_workers_env = getenv("KESTREL_MOE_BOUNDED_COPY_WORKERS");
++    const char * copy_workers_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_COPY_WORKERS");
      if (copy_workers_env != NULL) {
          copy_workers = MAX(1, MIN(8, atoi(copy_workers_env)));
      }
@@ -422,10 +422,10 @@ index 2245fbb49..fa6b501d0 100644
      int full_sequence = 0;
      enum ggml_status result = GGML_STATUS_SUCCESS;
  
-     // TOSH_MOE_SLOT_STATS=1: per-pass census of expert placement, to tell a routing id that
+     // KESTREL_MOE_SLOT_STATS=1: per-pass census of expert placement, to tell a routing id that
      // never reached a slot from one that reached a stale one
--    const bool slot_stats = getenv("TOSH_MOE_SLOT_STATS") != NULL;
-+    const bool slot_stats = TOSH_ENV("TOSH_MOE_SLOT_STATS") != NULL;
+-    const bool slot_stats = getenv("KESTREL_MOE_SLOT_STATS") != NULL;
++    const bool slot_stats = KESTREL_ENV("KESTREL_MOE_SLOT_STATS") != NULL;
      int st_layers = 0, st_wide = 0, st_narrow = 0;
      long st_unique = 0, st_cold = 0, st_miss = 0, st_unplaced = 0, st_refs = 0, st_refs_unplaced = 0;
      int st_unique_max = 0, st_slots = 0;
@@ -443,8 +443,8 @@ index 2245fbb49..fa6b501d0 100644
                  }
              }
          }
--        if (getenv("TOSH_MOE_WIDE_DEBUG") != NULL) {
-+        if (TOSH_ENV("TOSH_MOE_WIDE_DEBUG") != NULL) {
+-        if (getenv("KESTREL_MOE_WIDE_DEBUG") != NULL) {
++        if (KESTREL_ENV("KESTREL_MOE_WIDE_DEBUG") != NULL) {
              GGML_LOG_WARN("%s: layer %d unique=%d cold=%d slots=%d fixed=%d experts=%d\n",
                  __func__, layer, n_unique, n_cold_unique, n_slots, n_fixed, n_expert);
          }
@@ -462,12 +462,12 @@ index 2245fbb49..fa6b501d0 100644
          }
          for (int e = 0; e < n_expert; ++e) slot_of[e] = -1;
          if (n_fixed > 0 && (wide_shape || n_cold_unique > n_slots - n_fixed)) {
--            const bool transient_map = getenv("TOSH_MOE_TRANSIENT_MAP") != NULL;
--            const bool persistent_map = getenv("TOSH_MOE_PERSISTENT_MAP") != NULL;
--            const bool double_buffer = getenv("TOSH_MOE_DOUBLE_BUFFER") != NULL &&
-+            const bool transient_map = TOSH_ENV("TOSH_MOE_TRANSIENT_MAP") != NULL;
-+            const bool persistent_map = TOSH_ENV("TOSH_MOE_PERSISTENT_MAP") != NULL;
-+            const bool double_buffer = TOSH_ENV("TOSH_MOE_DOUBLE_BUFFER") != NULL &&
+-            const bool transient_map = getenv("KESTREL_MOE_TRANSIENT_MAP") != NULL;
+-            const bool persistent_map = getenv("KESTREL_MOE_PERSISTENT_MAP") != NULL;
+-            const bool double_buffer = getenv("KESTREL_MOE_DOUBLE_BUFFER") != NULL &&
++            const bool transient_map = KESTREL_ENV("KESTREL_MOE_TRANSIENT_MAP") != NULL;
++            const bool persistent_map = KESTREL_ENV("KESTREL_MOE_PERSISTENT_MAP") != NULL;
++            const bool double_buffer = KESTREL_ENV("KESTREL_MOE_DOUBLE_BUFFER") != NULL &&
                  !transient_map && !persistent_map && wide_shape;
              const int parity = double_buffer ? full_sequence++ & 1 : 0;
              if (full_pending[parity] != nil) {
@@ -478,15 +478,15 @@ index 2245fbb49..fa6b501d0 100644
                  if (result != GGML_STATUS_SUCCESS) {
 @@ -4071,17 +4071,17 @@ done:
  
- // TOSH_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
+ // KESTREL_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
  // command buffer for each collective plus one for each subgraph that follows it. With this on,
  // the collective leaves its buffer open and the next subgraph encodes into it instead of
  // submitting its own, which halves the command buffers a split token creates.
  static bool ggml_metal_merge_graph(void) {
      static int v = -1;
      if (v < 0) {
--        const char * s = getenv("TOSH_MGPU_MERGE");
-+        const char * s = TOSH_ENV("TOSH_MGPU_MERGE");
+-        const char * s = getenv("KESTREL_MGPU_MERGE");
++        const char * s = KESTREL_ENV("KESTREL_MGPU_MERGE");
          // on by default: it is inert unless a collective left a buffer held, which only the
          // batch gate above does, so a prompt never sees it
          v = s ? (s[0] == '1' ? 1 : 0) : 1;
@@ -502,13 +502,13 @@ index 2245fbb49..fa6b501d0 100644
          return GGML_STATUS_FAILED;
      }
  
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
      bool staged_moe = false;
--    const char * bounded_env = getenv("TOSH_MOE_BOUNDED_STAGE");
-+    const char * bounded_env = TOSH_ENV("TOSH_MOE_BOUNDED_STAGE");
+-    const char * bounded_env = getenv("KESTREL_MOE_BOUNDED_STAGE");
++    const char * bounded_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE");
      const bool bounded_requested = bounded_env != NULL && strcmp(bounded_env, "0") != 0;
--    const char * force_env = getenv("TOSH_MOE_BOUNDED_STAGE_FORCE");
-+    const char * force_env = TOSH_ENV("TOSH_MOE_BOUNDED_STAGE_FORCE");
+-    const char * force_env = getenv("KESTREL_MOE_BOUNDED_STAGE_FORCE");
++    const char * force_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE_FORCE");
      const bool bounded_forced = force_env != NULL && strcmp(force_env, "0") != 0;
      size_t bounded_bank_size = 0;
      size_t bounded_threshold = 0;
@@ -526,8 +526,8 @@ index 2245fbb49..fa6b501d0 100644
              // the RX 6700 XT this separates the 9.61 GiB Q2 bank from the 12.58/16.88 GiB
              // Q4 banks which Metal cannot safely wrap as one host resource.
              bounded_threshold = props->max_working_set_size*7/8;
--            const char * threshold_mb = getenv("TOSH_MOE_BOUNDED_STAGE_THRESHOLD_MB");
-+            const char * threshold_mb = TOSH_ENV("TOSH_MOE_BOUNDED_STAGE_THRESHOLD_MB");
+-            const char * threshold_mb = getenv("KESTREL_MOE_BOUNDED_STAGE_THRESHOLD_MB");
++            const char * threshold_mb = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE_THRESHOLD_MB");
              if (threshold_mb != NULL) {
                  const unsigned long long value = strtoull(threshold_mb, NULL, 10);
                  if (value > 0 && value <= SIZE_MAX/(1024ULL*1024ULL)) {
@@ -542,11 +542,11 @@ index 2245fbb49..fa6b501d0 100644
  #endif
  
      // number of nodes encoded by the main thread (empirically determined)
-     // the split was tuned on unified memory; TOSH_N_MAIN overrides it to A/B the share here
+     // the split was tuned on unified memory; KESTREL_N_MAIN overrides it to A/B the share here
      static int n_main_env = -2;
      if (n_main_env == -2) {
--        const char * v = getenv("TOSH_N_MAIN");
-+        const char * v = TOSH_ENV("TOSH_N_MAIN");
+-        const char * v = getenv("KESTREL_N_MAIN");
++        const char * v = KESTREL_ENV("KESTREL_N_MAIN");
          n_main_env = v ? atoi(v) : -1;
      }
      const int n_main = n_main_env >= 0 ? n_main_env : MAX(64, 0.1*gf->n_nodes);
@@ -565,7 +565,7 @@ index 2245fbb49..fa6b501d0 100644
          static int max_tokens = -1;
          if (max_tokens < 0) {
 -            const char * s = getenv("GGML_METAL_GRAPH_OPTIMIZE_MIN_BATCH");
-+            const char * s = TOSH_ENV("GGML_METAL_GRAPH_OPTIMIZE_MIN_BATCH");
++            const char * s = KESTREL_ENV("GGML_METAL_GRAPH_OPTIMIZE_MIN_BATCH");
              max_tokens = s ? atoi(s) - 1 : 7;
          }
  
@@ -587,8 +587,8 @@ index a6b44005f..721449016 100644
          ggml_metal_device_get_props(ggml_metal_library_get_device(lib));
  
      // escape hatch for the A/B; a card with no bfloat has no other path
--    static const bool off = getenv("TOSH_BF16_MANUAL_DISABLE") != nullptr;
-+    static const bool off = TOSH_ENV("TOSH_BF16_MANUAL_DISABLE") != nullptr;
+-    static const bool off = getenv("KESTREL_BF16_MANUAL_DISABLE") != nullptr;
++    static const bool off = KESTREL_ENV("KESTREL_BF16_MANUAL_DISABLE") != nullptr;
  
      return !props->has_bfloat || (!props->has_simdgroup_mm && !off);
  }
@@ -605,9 +605,9 @@ index a6b44005f..721449016 100644
      GGML_ASSERT(ne20 % 32 == 0);
  
      // rows of 128 split over 16 lanes instead of 32: the per-token reductions get shorter and each
-     // lane reads q and k as whole vectors. TOSH_GDN_LPR picks another split, 0 the 32-lane kernel
--    static const int lpr_env = []() { const char * e = getenv("TOSH_GDN_LPR"); return e ? atoi(e) : 16; }();
-+    static const int lpr_env = []() { const char * e = TOSH_ENV("TOSH_GDN_LPR"); return e ? atoi(e) : 16; }();
+     // lane reads q and k as whole vectors. KESTREL_GDN_LPR picks another split, 0 the 32-lane kernel
+-    static const int lpr_env = []() { const char * e = getenv("KESTREL_GDN_LPR"); return e ? atoi(e) : 16; }();
++    static const int lpr_env = []() { const char * e = KESTREL_ENV("KESTREL_GDN_LPR"); return e ? atoi(e) : 16; }();
      const int lpr = (ne20 == 128 && ggml_is_contiguous_rows(op->src[0]) && ggml_is_contiguous_rows(op->src[1])) ? lpr_env : 0;
  
      if (lpr) {
@@ -625,21 +625,21 @@ index a6b44005f..721449016 100644
  
      // q4_K keeps its quants raw and applies the scale once per chunk; the other K-quants
      // read the block header once per block via the _hdr kernels
--    static const bool no_raw = getenv("TOSH_EXT_NO_RAW") != nullptr;
-+    static const bool no_raw = TOSH_ENV("TOSH_EXT_NO_RAW") != nullptr;
+-    static const bool no_raw = getenv("KESTREL_EXT_NO_RAW") != nullptr;
++    static const bool no_raw = KESTREL_ENV("KESTREL_EXT_NO_RAW") != nullptr;
  
      char tname[64];
      // q6_K measured slower with the header cached (its dequant is register-heavy), so it stays generic
      const bool is_khdr = tsrc0 == GGML_TYPE_Q5_K || tsrc0 == GGML_TYPE_Q2_K || tsrc0 == GGML_TYPE_Q3_K;
      // staging the activation chunk in shared memory pays from three columns up: with two, half the
      // simdgroup idles in the staging loop. Measured on 64 lanes only, so it stays gated there;
-     // TOSH_EXT_LDS asks for it on 32 lanes to A/B it
+     // KESTREL_EXT_LDS asks for it on 32 lanes to A/B it
      const int simd_width_lds = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->simd_width;
      const bool use_lds =
--        (simd_width_lds == 64 || getenv("TOSH_EXT_LDS") != nullptr) &&
--        getenv("TOSH_EXT_LDS_DISABLE") == nullptr &&
-+        (simd_width_lds == 64 || TOSH_ENV("TOSH_EXT_LDS") != nullptr) &&
-+        TOSH_ENV("TOSH_EXT_LDS_DISABLE") == nullptr &&
+-        (simd_width_lds == 64 || getenv("KESTREL_EXT_LDS") != nullptr) &&
+-        getenv("KESTREL_EXT_LDS_DISABLE") == nullptr &&
++        (simd_width_lds == 64 || KESTREL_ENV("KESTREL_EXT_LDS") != nullptr) &&
++        KESTREL_ENV("KESTREL_EXT_LDS_DISABLE") == nullptr &&
          nr0 > 1 && r1ptg >= 3;
  
      if (!no_raw && tsrc0 == GGML_TYPE_Q4_K) {
@@ -650,9 +650,9 @@ index a6b44005f..721449016 100644
          snprintf(tname, sizeof(tname), "%s", ggml_metal_tname(lib, tsrc0));
      }
  
-     // q6_K on 64 lanes uses the wave64-shaped variant; TOSH_EXT_W64_DISABLE falls back to the generic kernel
--    static const bool w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
-+    static const bool w64_disable = TOSH_ENV("TOSH_EXT_W64_DISABLE") != nullptr;
+     // q6_K on 64 lanes uses the wave64-shaped variant; KESTREL_EXT_W64_DISABLE falls back to the generic kernel
+-    static const bool w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
++    static const bool w64_disable = KESTREL_ENV("KESTREL_EXT_W64_DISABLE") != nullptr;
      const bool is_w64_q6k = !w64_disable && tsrc0 == GGML_TYPE_Q6_K && simd_width_lds == 64;
      // q8_0 reads its quads as halves on 64 lanes only: the same read is slower on 32
      const bool is_w64_q8  = !w64_disable && tsrc0 == GGML_TYPE_Q8_0 && simd_width_lds == 64 && nr0 == 1;
@@ -671,7 +671,7 @@ index a6b44005f..721449016 100644
      const bool has_tensor    = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->has_tensor;
      const bool use_mm_manual = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->use_mm_manual;
 -    const bool use_mm_double_buffer = use_mm_manual && getenv("GGML_METAL_MM_DOUBLE_BUFFER_DISABLE") == nullptr;
-+    const bool use_mm_double_buffer = use_mm_manual && TOSH_ENV("GGML_METAL_MM_DOUBLE_BUFFER_DISABLE") == nullptr;
++    const bool use_mm_double_buffer = use_mm_manual && KESTREL_ENV("GGML_METAL_MM_DOUBLE_BUFFER_DISABLE") == nullptr;
  
      const bool bc_out = has_tensor
          ? (op->ne[0] % NRA != 0 || op->ne[1] % NRB != 0)
@@ -686,8 +686,8 @@ index a6b44005f..721449016 100644
      // The 8x4 tile halves the simdgroups per threadgroup, so it needs enough tokens to keep
      // the GPU in threadgroups; below ~192 it loses (measured 8.7% at 64 tokens on q8_0).
      static const int wide_floor_env = []() {
--        const char * s = getenv("TOSH_MM_WIDE_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_MM_WIDE_FLOOR");
+-        const char * s = getenv("KESTREL_MM_WIDE_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_MM_WIDE_FLOOR");
          return s ? atoi(s) : 0;
      }();
  
@@ -698,10 +698,10 @@ index a6b44005f..721449016 100644
      // so it must not follow the wide floor down
      // The 192 bound was measured on 32 lanes. On 64 the tail path stops paying earlier: 128 gains
      // 1.8 to 3.6% between 130 and 160 tokens and is neutral elsewhere, while raising it costs 8%.
-     // TOSH_MM_TAIL_MAX overrides it on either width.
+     // KESTREL_MM_TAIL_MAX overrides it on either width.
      static const int tail_max_env = []() {
--        const char * s = getenv("TOSH_MM_TAIL_MAX");
-+        const char * s = TOSH_ENV("TOSH_MM_TAIL_MAX");
+-        const char * s = getenv("KESTREL_MM_TAIL_MAX");
++        const char * s = KESTREL_ENV("KESTREL_MM_TAIL_MAX");
          return s ? atoi(s) : 0;
      }();
  
@@ -709,8 +709,8 @@ index a6b44005f..721449016 100644
      const int tail_max = tail_max_env ? tail_max_env : (simd_width_tail == 64 ? 128 : 192);
  
      bool tail_32 = op->ne[1] < tail_max && (op->ne[1] % 64) >= 1 && (op->ne[1] % 64) <= 32 &&
--                   getenv("TOSH_MM_NARROW_TAIL_DISABLE") == nullptr;
-+                   TOSH_ENV("TOSH_MM_NARROW_TAIL_DISABLE") == nullptr;
+-                   getenv("KESTREL_MM_NARROW_TAIL_DISABLE") == nullptr;
++                   KESTREL_ENV("KESTREL_MM_NARROW_TAIL_DISABLE") == nullptr;
      if (tail_32 && op->ne[1] > 128) {
          switch (tsrc0) {
              case GGML_TYPE_IQ1_S:
@@ -728,8 +728,8 @@ index a6b44005f..721449016 100644
      // wave64 wants a far higher floor: between 288 and 384 the tile loses on two models,
      // and from 448 up it wins 4 to 6%
      const int simd_width = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->simd_width;
--    const bool wide_width_ok = simd_width != 64 || getenv("TOSH_MM_WIDE_W64_DISABLE") == nullptr;
-+    const bool wide_width_ok = simd_width != 64 || TOSH_ENV("TOSH_MM_WIDE_W64_DISABLE") == nullptr;
+-    const bool wide_width_ok = simd_width != 64 || getenv("KESTREL_MM_WIDE_W64_DISABLE") == nullptr;
++    const bool wide_width_ok = simd_width != 64 || KESTREL_ENV("KESTREL_MM_WIDE_W64_DISABLE") == nullptr;
      // Both floors were derived against the 32-lane tile. The 64-lane rewrite moved the
      // crossover, and it moved by a different amount per type, so each carries its own:
      // a single number would have to pick whom to hurt (q8_0 gains 3.7% where q4_K loses 3.1%).
@@ -747,8 +747,8 @@ index a6b44005f..721449016 100644
      // threadgroup costs more where the rows run out: on 64 lanes 2560 rows lose 7 to 10% at 512
      // tokens while 4096 and up keep winning
      static const int ne0_floor_env = []() {
--        const char * s = getenv("TOSH_MM_NE0_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_MM_NE0_FLOOR");
+-        const char * s = getenv("KESTREL_MM_NE0_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_MM_NE0_FLOOR");
          return s ? atoi(s) : 0;
      }();
  
@@ -764,17 +764,17 @@ index a6b44005f..721449016 100644
      }
  
      static const int wide_ext_floor_env = []() {
--        const char * s = getenv("TOSH_MM_WIDE_EXT_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_MM_WIDE_EXT_FLOOR");
+-        const char * s = getenv("KESTREL_MM_WIDE_EXT_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_MM_WIDE_EXT_FLOOR");
          return s ? atoi(s) : 0;
      }();
      const int wide_ext_floor = wide_ext_floor_env ? wide_ext_floor_env : 2048;
  
      bool wide = use_mm_manual && !has_tensor && !narrow && tsrc1 == GGML_TYPE_F32 && wide_width_ok &&
--                op->ne[1] >= wide_floor && (op->ne[0] >= ne0_floor || getenv("TOSH_MM_NE0_FLOOR_DISABLE") != nullptr) &&
--                getenv("TOSH_MM_WIDE_DISABLE") == nullptr;
-+                op->ne[1] >= wide_floor && (op->ne[0] >= ne0_floor || TOSH_ENV("TOSH_MM_NE0_FLOOR_DISABLE") != nullptr) &&
-+                TOSH_ENV("TOSH_MM_WIDE_DISABLE") == nullptr;
+-                op->ne[1] >= wide_floor && (op->ne[0] >= ne0_floor || getenv("KESTREL_MM_NE0_FLOOR_DISABLE") != nullptr) &&
+-                getenv("KESTREL_MM_WIDE_DISABLE") == nullptr;
++                op->ne[1] >= wide_floor && (op->ne[0] >= ne0_floor || KESTREL_ENV("KESTREL_MM_NE0_FLOOR_DISABLE") != nullptr) &&
++                KESTREL_ENV("KESTREL_MM_WIDE_DISABLE") == nullptr;
      if (wide) {
          // it needs 64 accumulators, so only where the dequant leaves the registers
          switch (tsrc0) {
@@ -791,29 +791,29 @@ index a6b44005f..721449016 100644
              case GGML_TYPE_IQ2_XS:
              case GGML_TYPE_IQ3_XXS:
                  // third floor, for the types whose dequant leaves less room: it was picked
-                 // against the 32-lane tile too, so TOSH_MM_WIDE_EXT_FLOOR opens it for sweeping
--                wide = op->ne[0] >= wide_ext_floor && getenv("TOSH_MM_WIDE_EXT_DISABLE") == nullptr; break;
-+                wide = op->ne[0] >= wide_ext_floor && TOSH_ENV("TOSH_MM_WIDE_EXT_DISABLE") == nullptr; break;
+                 // against the 32-lane tile too, so KESTREL_MM_WIDE_EXT_FLOOR opens it for sweeping
+-                wide = op->ne[0] >= wide_ext_floor && getenv("KESTREL_MM_WIDE_EXT_DISABLE") == nullptr; break;
++                wide = op->ne[0] >= wide_ext_floor && KESTREL_ENV("KESTREL_MM_WIDE_EXT_DISABLE") == nullptr; break;
              // f32 and bf16 have never been through this gate; the override opens them so the
              // exclusion can be measured instead of inherited
--            default: wide = getenv("TOSH_MM_WIDE_ALL") != nullptr && op->ne[0] >= wide_ext_floor; break;
-+            default: wide = TOSH_ENV("TOSH_MM_WIDE_ALL") != nullptr && op->ne[0] >= wide_ext_floor; break;
+-            default: wide = getenv("KESTREL_MM_WIDE_ALL") != nullptr && op->ne[0] >= wide_ext_floor; break;
++            default: wide = KESTREL_ENV("KESTREL_MM_WIDE_ALL") != nullptr && op->ne[0] >= wide_ext_floor; break;
          }
      }
  
      // attention matmuls read a permuted KV cache view and can exceed half range in the packed
      // accumulator; bfloat has no native arithmetic here, so float is faster for it too
      const bool acc_f32 = use_mm_manual && (!ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16) &&
--                         getenv("TOSH_MM_ACC_F32_DISABLE") == nullptr;
-+                         TOSH_ENV("TOSH_MM_ACC_F32_DISABLE") == nullptr;
+-                         getenv("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
++                         KESTREL_ENV("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
  
      // the 64-lane GEMM lives in mul_mm_w64.metal: one wave is one tile there, so it needs the
      // dispatch to hand it whole waves instead of the 32-thread groups the shared kernel expects
      // iq4_nl is the one type this kernel does not suit at every batch: it costs 3.9% at 256
      // tokens and gains 1.0% at 512, so it takes a floor rather than lose the gain.
      static const int w64_floor_env = []() {
--        const char * s = getenv("TOSH_MM_W64_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_MM_W64_FLOOR");
+-        const char * s = getenv("KESTREL_MM_W64_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_MM_W64_FLOOR");
          return s ? atoi(s) : 0;
      }();
      const int w64_floor = w64_floor_env ? w64_floor_env :
@@ -821,15 +821,15 @@ index a6b44005f..721449016 100644
  
      const bool w64 = simd_width == 64 && use_mm_manual && !has_tensor &&
                       op->ne[1] >= w64_floor &&
--                     getenv("TOSH_MM_W64_DISABLE") == nullptr;
-+                     TOSH_ENV("TOSH_MM_W64_DISABLE") == nullptr;
+-                     getenv("KESTREL_MM_W64_DISABLE") == nullptr;
++                     KESTREL_ENV("KESTREL_MM_W64_DISABLE") == nullptr;
  
      snprintf(base, 256, "kernel_mul_mm_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
      // measured on 32 lanes only; the 64-lane tile lives in its own kernel
      const bool uniform_scale = (tsrc0 == GGML_TYPE_Q4_K || tsrc0 == GGML_TYPE_Q5_K) && wide && !w64 &&
                                 use_mm_manual && !has_tensor && simd_width == 32 &&
--                               getenv("TOSH_MM_UNIFORM_SCALE_DISABLE") == nullptr;
-+                               TOSH_ENV("TOSH_MM_UNIFORM_SCALE_DISABLE") == nullptr;
+-                               getenv("KESTREL_MM_UNIFORM_SCALE_DISABLE") == nullptr;
++                               KESTREL_ENV("KESTREL_MM_UNIFORM_SCALE_DISABLE") == nullptr;
  
      snprintf(name, 256, "%s_bci=%d_bco=%d_ne12=%d_ne13=%d_r2=%d_r3=%d_mm=%d_db=%d_af=%d_us=%d",
               base, bc_inp, bc_out, ne12, ne13, r2, r3, use_mm_manual + 2*narrow, use_mm_double_buffer, acc_f32, uniform_scale);
@@ -847,8 +847,8 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q4_0:
              {
                  // eight lanes per block with four rows each: +5.8% of generation
--                if (simd_width == 64 && getenv("TOSH_MV_Q4_0_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_Q4_0_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_Q4_0_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_Q4_0_W64_DISABLE") == nullptr) {
                      nsg    = 1;
                      nr0    = 4;
                      suffix = "_L8r4";
@@ -861,8 +861,8 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q4_1:
              {
                  // four lanes per block with four rows each: +6.2% of generation
--                if (simd_width == 64 && getenv("TOSH_MV_Q4_1_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_Q4_1_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_Q4_1_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_Q4_1_W64_DISABLE") == nullptr) {
                      nsg    = 1;
                      nr0    = 4;
                      suffix = "_L4r4";
@@ -875,9 +875,9 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q5_0:
              {
                  // eight rows per thread measured worse on 64 lanes for this type, so the
-                 // inherited pair stays; TOSH_MV_Q5_0_R8 opens it again for measuring
--                if (getenv("TOSH_MV_Q5_0_R8") != nullptr) {
-+                if (TOSH_ENV("TOSH_MV_Q5_0_R8") != nullptr) {
+                 // inherited pair stays; KESTREL_MV_Q5_0_R8 opens it again for measuring
+-                if (getenv("KESTREL_MV_Q5_0_R8") != nullptr) {
++                if (KESTREL_ENV("KESTREL_MV_Q5_0_R8") != nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -886,17 +886,17 @@ index a6b44005f..721449016 100644
                      nr0 = N_R0_Q5_0;
                  }
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_Q5_1:
              {
                  // eight rows per thread measured worse on 64 lanes for this type, so the
-                 // inherited pair stays; TOSH_MV_Q5_1_R8 opens it again for measuring
--                if (getenv("TOSH_MV_Q5_1_R8") != nullptr) {
-+                if (TOSH_ENV("TOSH_MV_Q5_1_R8") != nullptr) {
+                 // inherited pair stays; KESTREL_MV_Q5_1_R8 opens it again for measuring
+-                if (getenv("KESTREL_MV_Q5_1_R8") != nullptr) {
++                if (KESTREL_ENV("KESTREL_MV_Q5_1_R8") != nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -905,22 +905,22 @@ index a6b44005f..721449016 100644
                      nr0 = N_R0_Q5_1;
                  }
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_Q8_0:
              {
-                 // TOSH_MV_Q8_0_R8 asks for eight rows instead of the four this width takes,
+                 // KESTREL_MV_Q8_0_R8 asks for eight rows instead of the four this width takes,
                  // so the three values can be compared
--                if (getenv("TOSH_MV_Q8_0_R8") != nullptr) {
-+                if (TOSH_ENV("TOSH_MV_Q8_0_R8") != nullptr) {
+-                if (getenv("KESTREL_MV_Q8_0_R8") != nullptr) {
++                if (KESTREL_ENV("KESTREL_MV_Q8_0_R8") != nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
--                } else if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                } else if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                } else if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                } else if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 4;
                      suffix = "_r4";
@@ -931,8 +931,8 @@ index a6b44005f..721449016 100644
                  // the reduction buffer scales with the rows, so it follows the effective nr0
                  smem = 32*sizeof(float)*nr0;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -944,15 +944,15 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_MXFP4;
                  smem = 32*sizeof(float);
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_Q2_K:
              {
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -961,8 +961,8 @@ index a6b44005f..721449016 100644
                      nr0 = N_R0_Q2_K;
                  }
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -970,16 +970,16 @@ index a6b44005f..721449016 100644
              {
                  // A 64-lane variant with thirty-two lanes per block and the mask tables derived
                  // instead of held: measured 127.2 against 126.2, so it stays behind the switch.
--                if (simd_width == 64 && getenv("TOSH_MV_Q3K_W64") != nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_Q3K_W64") != nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_Q3K_W64") != nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_Q3K_W64") != nullptr) {
                      nsg = N_SG_Q3_K;
                      nr0 = N_R0_Q3_K;
                      suffix = "_w64";
                      break;
                  }
                  // 64 lanes want eight rows in one group (+7.2% tg); two groups there costs 30%
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -993,11 +993,11 @@ index a6b44005f..721449016 100644
                  // small matrices: one simdgroup with 4 rows amortizes the
                  // per-threadgroup setup better than two with 2. Unlike q5_K and q6_K,
                  // 64 lanes do NOT want the four-row path at any size here, so the choice
-                 // stays by shape; TOSH_MV_Q4K_R4 opens it again for measuring
--                const bool q4k_r4_wide = getenv("TOSH_MV_Q4K_R4") != nullptr &&
--                                         getenv("TOSH_MV_Q4K_R4_DISABLE") == nullptr;
-+                const bool q4k_r4_wide = TOSH_ENV("TOSH_MV_Q4K_R4") != nullptr &&
-+                                         TOSH_ENV("TOSH_MV_Q4K_R4_DISABLE") == nullptr;
+                 // stays by shape; KESTREL_MV_Q4K_R4 opens it again for measuring
+-                const bool q4k_r4_wide = getenv("KESTREL_MV_Q4K_R4") != nullptr &&
+-                                         getenv("KESTREL_MV_Q4K_R4_DISABLE") == nullptr;
++                const bool q4k_r4_wide = KESTREL_ENV("KESTREL_MV_Q4K_R4") != nullptr &&
++                                         KESTREL_ENV("KESTREL_MV_Q4K_R4_DISABLE") == nullptr;
                  const bool q4k_small = ne00 <= 2048 || ne01 <= 2048 || q4k_r4_wide;
  
                  // 64 lanes have their own decomposition: sixteen cover a block instead of
@@ -1005,8 +1005,8 @@ index a6b44005f..721449016 100644
                  // cover the small-matrix case, which still wants one group with four rows.
                  // Sixteen lanes with four rows each: +5.8% over eight lanes. Sixteen lanes
                  // with the inherited rows loses, so the win lives in the crossing of the two.
--                if (simd_width == 64 && !q4k_small && getenv("TOSH_MV_Q4K_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && !q4k_small && TOSH_ENV("TOSH_MV_Q4K_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && !q4k_small && getenv("KESTREL_MV_Q4K_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && !q4k_small && KESTREL_ENV("KESTREL_MV_Q4K_W64_DISABLE") == nullptr) {
                      nsg    = 1;
                      nr0    = 4;
                      suffix = "_L16r4";
@@ -1023,9 +1023,9 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q5_K:
              {
                  // the shipped 2 rows per thread is a 32-lane number; 64 lanes want 8 (+15.9% tg).
-                 // TOSH_MV_R8 forces it on 32 too, so that width can be A/B'd without a rebuild
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+                 // KESTREL_MV_R8 forces it on 32 too, so that width can be A/B'd without a rebuild
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -1038,8 +1038,8 @@ index a6b44005f..721449016 100644
                  // over the inherited pair, five alternating pairs. Four lanes with eight rows
                  // loses, which is why the two fronts have to be walked as a grid and not one
                  // at a time.
--                if (simd_width == 64 && getenv("TOSH_MV_Q5K_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_Q5K_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_Q5K_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_Q5K_W64_DISABLE") == nullptr) {
                      nsg    = 1;
                      nr0    = 2;
                      suffix = "_L16r2";
@@ -1049,8 +1049,8 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q6_K:
              {
                  // 64 lanes want four rows in one group (+16.3% tg); 32 keep the shipped pair
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 4;
                      suffix = "_r4";
@@ -1059,8 +1059,8 @@ index a6b44005f..721449016 100644
                      nr0 = N_R0_Q6_K;
                  }
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1070,8 +1070,8 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ2_XXS;
                  smem = 256*8+128;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1081,15 +1081,15 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ2_XS;
                  smem = 512*8+128;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_IQ3_XXS:
              {
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -1099,8 +1099,8 @@ index a6b44005f..721449016 100644
                  }
                  smem = 256*4+128;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1110,8 +1110,8 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ3_S;
                  smem = 512*4;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1121,8 +1121,8 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ2_S;
                  smem = 1024*8;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1132,8 +1132,8 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ1_S;
                  smem = 2048*4;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1143,17 +1143,17 @@ index a6b44005f..721449016 100644
                  nr0 = N_R0_IQ1_M;
                  smem = 2048*4;
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_IQ4_NL:
              {
                  // eight rows per thread measured worse on 64 lanes for this type, so the
-                 // inherited pair stays; TOSH_MV_IQ4_NL_R8 opens it again for measuring
--                if (getenv("TOSH_MV_IQ4_NL_R8") != nullptr) {
-+                if (TOSH_ENV("TOSH_MV_IQ4_NL_R8") != nullptr) {
+                 // inherited pair stays; KESTREL_MV_IQ4_NL_R8 opens it again for measuring
+-                if (getenv("KESTREL_MV_IQ4_NL_R8") != nullptr) {
++                if (KESTREL_ENV("KESTREL_MV_IQ4_NL_R8") != nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -1163,17 +1163,17 @@ index a6b44005f..721449016 100644
                  }
                  smem = 32*sizeof(float);
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
          case GGML_TYPE_IQ4_XS:
              {
                  // eight rows per thread measured worse on 64 lanes for this type, so the
-                 // inherited pair stays; TOSH_MV_IQ4_XS_R8 opens it again for measuring
--                if (getenv("TOSH_MV_IQ4_XS_R8") != nullptr) {
-+                if (TOSH_ENV("TOSH_MV_IQ4_XS_R8") != nullptr) {
+                 // inherited pair stays; KESTREL_MV_IQ4_XS_R8 opens it again for measuring
+-                if (getenv("KESTREL_MV_IQ4_XS_R8") != nullptr) {
++                if (KESTREL_ENV("KESTREL_MV_IQ4_XS_R8") != nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -1183,8 +1183,8 @@ index a6b44005f..721449016 100644
                  }
                  smem = 32*sizeof(float);
                  // the 64-lane twin of this kernel lives in mul_mv_w64.metal
--                if (simd_width == 64 && getenv("TOSH_MV_W64_DISABLE") == nullptr) {
-+                if (simd_width == 64 && TOSH_ENV("TOSH_MV_W64_DISABLE") == nullptr) {
+-                if (simd_width == 64 && getenv("KESTREL_MV_W64_DISABLE") == nullptr) {
++                if (simd_width == 64 && KESTREL_ENV("KESTREL_MV_W64_DISABLE") == nullptr) {
                      w64 = true;
                  }
              } break;
@@ -1202,36 +1202,36 @@ index a6b44005f..721449016 100644
      // q6_K's 210-byte block leaves the compiler assuming byte alignment, so it reads its quant
      // arrays a byte at a time; an even stride lets the kernel read them two bytes at a time
      const bool row4 = (op->src[0]->nb[1] % 2 == 0) && (op->src[0]->nb[2] % 2 == 0) &&
--                      getenv("TOSH_MV_ROW4_DISABLE") == nullptr;
-+                      TOSH_ENV("TOSH_MV_ROW4_DISABLE") == nullptr;
+-                      getenv("KESTREL_MV_ROW4_DISABLE") == nullptr;
++                      KESTREL_ENV("KESTREL_MV_ROW4_DISABLE") == nullptr;
  
      // A stride that is a multiple of four lets the quant arrays be read a word at a time.
      // The two widths are decided apart: 64 lanes have no last-level cache to hide the extra
      // loads and every type gains, while 32 lanes only measured a gain on q8_0.
      const bool row8_aligned = row4 && (op->src[0]->nb[1] % 4 == 0) && (op->src[0]->nb[2] % 4 == 0);
      const bool row8_width   = nw == 64 || (nw == 32 && tsrc0 == GGML_TYPE_Q8_0);
--    const bool row8 = row8_aligned && row8_width && getenv("TOSH_MV_ROW8_DISABLE") == nullptr;
-+    const bool row8 = row8_aligned && row8_width && TOSH_ENV("TOSH_MV_ROW8_DISABLE") == nullptr;
+-    const bool row8 = row8_aligned && row8_width && getenv("KESTREL_MV_ROW8_DISABLE") == nullptr;
++    const bool row8 = row8_aligned && row8_width && KESTREL_ENV("KESTREL_MV_ROW8_DISABLE") == nullptr;
  
      // Cards that require natural alignment read the wrong bytes from the odd blocks of the
      // 22-, 34-, 98-, 110- and 210-byte types, so the wide read splits in two there.
      const bool align = props->needs_aligned_loads;
  
-     // Sweep hook: TOSH_SWEEP_TYPE names one ggml type and TOSH_SWEEP_NR0 / TOSH_SWEEP_NSG
+     // Sweep hook: KESTREL_SWEEP_TYPE names one ggml type and KESTREL_SWEEP_NR0 / KESTREL_SWEEP_NSG
      // force its rows per lane and simdgroups, so the register front can be measured without
      // rebuilding. The pipeline name carries both, so a run can be checked against what it asked.
      {
--        const char * st = getenv("TOSH_SWEEP_TYPE");
-+        const char * st = TOSH_ENV("TOSH_SWEEP_TYPE");
+-        const char * st = getenv("KESTREL_SWEEP_TYPE");
++        const char * st = KESTREL_ENV("KESTREL_SWEEP_TYPE");
  
          if (st != nullptr && strcmp(st, ggml_type_name(tsrc0)) == 0) {
--            const char * snr = getenv("TOSH_SWEEP_NR0");
--            const char * sns = getenv("TOSH_SWEEP_NSG");
-+            const char * snr = TOSH_ENV("TOSH_SWEEP_NR0");
-+            const char * sns = TOSH_ENV("TOSH_SWEEP_NSG");
+-            const char * snr = getenv("KESTREL_SWEEP_NR0");
+-            const char * sns = getenv("KESTREL_SWEEP_NSG");
++            const char * snr = KESTREL_ENV("KESTREL_SWEEP_NR0");
++            const char * sns = KESTREL_ENV("KESTREL_SWEEP_NSG");
  
--            const char * sln = getenv("TOSH_SWEEP_LANES");
-+            const char * sln = TOSH_ENV("TOSH_SWEEP_LANES");
+-            const char * sln = getenv("KESTREL_SWEEP_LANES");
++            const char * sln = KESTREL_ENV("KESTREL_SWEEP_LANES");
  
              if (snr != nullptr && sln != nullptr) {
                  // cross sweep: the 32-block family carries one entry point per (lanes, rows)
@@ -1249,8 +1249,8 @@ index a6b44005f..721449016 100644
      snprintf(base, 256, "kernel_mul_mv_%s_%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), suffix);
      snprintf(name, 256, "%s_nsg=%d_ne12=%d_r2=%d_r3=%d_nw=%d_a4=%d_a8=%d_al=%d", base, nsg, ne12, r2, r3, nw, row4, row8, align);
  
--    if (getenv("TOSH_SWEEP_DEBUG") != nullptr) {
-+    if (TOSH_ENV("TOSH_SWEEP_DEBUG") != nullptr) {
+-    if (getenv("KESTREL_SWEEP_DEBUG") != nullptr) {
++    if (KESTREL_ENV("KESTREL_SWEEP_DEBUG") != nullptr) {
          fprintf(stderr, "SWEEP pipeline = %s (nsg=%d nr0=%d)\n", name, nsg, nr0);
      }
  
@@ -1268,30 +1268,30 @@ index a6b44005f..721449016 100644
      const bool use_mm_manual = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->use_mm_manual;
  
      const bool acc_f32 = use_mm_manual && (!ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16) &&
--                         getenv("TOSH_MM_ACC_F32_DISABLE") == nullptr;
-+                         TOSH_ENV("TOSH_MM_ACC_F32_DISABLE") == nullptr;
+-                         getenv("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
++                         KESTREL_ENV("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
  
      // one grid per expert already keeps the GPU in threadgroups, so the 8x4 tile does not need
      // the dense token floor. What it needs is an average expert that fills the narrow tile:
      // below that its 64 columns are mostly padding and it loses (measured -5% at 14 tokens
      // per expert, +2.3% at 45)
      static const int wide_floor = []() {
--        const char * s = getenv("TOSH_MMID_WIDE_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_MMID_WIDE_FLOOR");
+-        const char * s = getenv("KESTREL_MMID_WIDE_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_MMID_WIDE_FLOOR");
          return s ? atoi(s) : 32;
      }();
  
      // wave64 is off by the dense tile's result, not by one measured here: the expert path splits
      // its work per expert, so the opt-in exists for a GCN card to settle it
      const int simd_width = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->simd_width;
--    const bool wide_width_ok = simd_width != 64 || getenv("TOSH_MMID_WIDE_W64_ENABLE") != nullptr;
-+    const bool wide_width_ok = simd_width != 64 || TOSH_ENV("TOSH_MMID_WIDE_W64_ENABLE") != nullptr;
+-    const bool wide_width_ok = simd_width != 64 || getenv("KESTREL_MMID_WIDE_W64_ENABLE") != nullptr;
++    const bool wide_width_ok = simd_width != 64 || KESTREL_ENV("KESTREL_MMID_WIDE_W64_ENABLE") != nullptr;
  
      const int64_t tpe = op->src[0]->ne[2] > 0 ? op->src[2]->ne[0]*op->src[2]->ne[1] / op->src[0]->ne[2] : 0;
  
      bool wide = use_mm_manual && tsrc1 == GGML_TYPE_F32 && wide_width_ok &&
--                tpe >= wide_floor && getenv("TOSH_MMID_WIDE_DISABLE") == nullptr;
-+                tpe >= wide_floor && TOSH_ENV("TOSH_MMID_WIDE_DISABLE") == nullptr;
+-                tpe >= wide_floor && getenv("KESTREL_MMID_WIDE_DISABLE") == nullptr;
++                tpe >= wide_floor && KESTREL_ENV("KESTREL_MMID_WIDE_DISABLE") == nullptr;
      if (wide) {
          // it needs 64 accumulators, so only where the dequant leaves the registers
          switch (tsrc0) {
@@ -1309,8 +1309,8 @@ index a6b44005f..721449016 100644
      // the 64-lane twin lives in mul_mm_w64.metal, beside the dense one; it has no src1 rescale
      const int simd_width_id = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->simd_width;
      const bool w64 = simd_width_id == 64 && use_mm_manual && !amax &&
--                     getenv("TOSH_MMID_W64_DISABLE") == nullptr;
-+                     TOSH_ENV("TOSH_MMID_W64_DISABLE") == nullptr;
+-                     getenv("KESTREL_MMID_W64_DISABLE") == nullptr;
++                     KESTREL_ENV("KESTREL_MMID_W64_DISABLE") == nullptr;
  
      snprintf(base, 256, "kernel_mul_mm_id_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
      snprintf(name, 256, "%s_bci=%d_mm=%d_af=%d_amax=%d", base, bc_inp, use_mm_manual, acc_f32, amax);
@@ -1328,8 +1328,8 @@ index a6b44005f..721449016 100644
          case GGML_TYPE_Q5_K:
              {
                  // the expert mat-vec was short too: 8 rows measure +12.1% of tg on a 64-wide card
--                if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
-+                if ((simd_width == 64 || TOSH_ENV("TOSH_MV_R8") != nullptr) && TOSH_ENV("TOSH_MV_R8_DISABLE") == nullptr) {
+-                if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
++                if ((simd_width == 64 || KESTREL_ENV("KESTREL_MV_R8") != nullptr) && KESTREL_ENV("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";
@@ -1347,8 +1347,8 @@ index a6b44005f..721449016 100644
      // decomposition as the standalone one, so the expert path stops falling back to 32.
      // Types whose shared memory holds a lookup grid keep the rows and the buffer the
      // switch above computed: only the reduction-buffer ones move.
--    bool id_w64 = simd_width == 64 && getenv("TOSH_MVID_W64_DISABLE") == nullptr;
-+    bool id_w64 = simd_width == 64 && TOSH_ENV("TOSH_MVID_W64_DISABLE") == nullptr;
+-    bool id_w64 = simd_width == 64 && getenv("KESTREL_MVID_W64_DISABLE") == nullptr;
++    bool id_w64 = simd_width == 64 && KESTREL_ENV("KESTREL_MVID_W64_DISABLE") == nullptr;
      if (id_w64) {
          switch (tsrc0) {
              case GGML_TYPE_Q4_0: nr0 = 4; break;
@@ -1366,15 +1366,15 @@ index a6b44005f..721449016 100644
      }
  
      const bool row4 = (op->src[0]->nb[1] % 2 == 0) && (op->src[0]->nb[2] % 2 == 0) &&
--                      getenv("TOSH_MV_ROW4_DISABLE") == nullptr;
-+                      TOSH_ENV("TOSH_MV_ROW4_DISABLE") == nullptr;
+-                      getenv("KESTREL_MV_ROW4_DISABLE") == nullptr;
++                      KESTREL_ENV("KESTREL_MV_ROW4_DISABLE") == nullptr;
  
      // The expert kernels share the implementations of the dense path, so they can read the
      // quant arrays a word at a time under the same conditions.
      const bool row8 = row4 && (op->src[0]->nb[1] % 4 == 0) && (op->src[0]->nb[2] % 4 == 0) &&
                        (nw == 64 || (nw == 32 && tsrc0 == GGML_TYPE_Q8_0)) &&
--                      getenv("TOSH_MV_ROW8_DISABLE") == nullptr;
-+                      TOSH_ENV("TOSH_MV_ROW8_DISABLE") == nullptr;
+-                      getenv("KESTREL_MV_ROW8_DISABLE") == nullptr;
++                      KESTREL_ENV("KESTREL_MV_ROW8_DISABLE") == nullptr;
  
      const bool align = props_id->needs_aligned_loads;
  
@@ -1397,7 +1397,7 @@ index ef39bbeea..0fc883648 100644
      res->keep_alive_s = 3*60;
  
 -    const char * GGML_METAL_RESIDENCY_KEEP_ALIVE_S = getenv("GGML_METAL_RESIDENCY_KEEP_ALIVE_S");
-+    const char * GGML_METAL_RESIDENCY_KEEP_ALIVE_S = TOSH_ENV("GGML_METAL_RESIDENCY_KEEP_ALIVE_S");
++    const char * GGML_METAL_RESIDENCY_KEEP_ALIVE_S = KESTREL_ENV("GGML_METAL_RESIDENCY_KEEP_ALIVE_S");
      if (GGML_METAL_RESIDENCY_KEEP_ALIVE_S) {
          res->keep_alive_s = atoi(GGML_METAL_RESIDENCY_KEEP_ALIVE_S);
      }
@@ -1415,8 +1415,8 @@ index ef39bbeea..0fc883648 100644
  
  
  static id<MTLCommandQueue> ggml_metal_new_queue(id<MTLDevice> device) {
--    const char * s = getenv("TOSH_MTL_QUEUE_DEPTH");
-+    const char * s = TOSH_ENV("TOSH_MTL_QUEUE_DEPTH");
+-    const char * s = getenv("KESTREL_MTL_QUEUE_DEPTH");
++    const char * s = KESTREL_ENV("KESTREL_MTL_QUEUE_DEPTH");
      const int depth = s ? atoi(s) : 0;
  
      if (depth > 0) {
@@ -1437,9 +1437,9 @@ index ef39bbeea..0fc883648 100644
 -            const char * env_idx  = getenv("GGML_METAL_DEVICE_INDEX");
 -            const char * env_num  = getenv("GGML_METAL_DEVICES");
 -            const char * env_list = getenv("GGML_METAL_DEVICE_LIST");
-+            const char * env_idx  = TOSH_ENV("GGML_METAL_DEVICE_INDEX");
-+            const char * env_num  = TOSH_ENV("GGML_METAL_DEVICES");
-+            const char * env_list = TOSH_ENV("GGML_METAL_DEVICE_LIST");
++            const char * env_idx  = KESTREL_ENV("GGML_METAL_DEVICE_INDEX");
++            const char * env_num  = KESTREL_ENV("GGML_METAL_DEVICES");
++            const char * env_list = KESTREL_ENV("GGML_METAL_DEVICE_LIST");
              const int    num_dev = env_num ? atoi(env_num) : 1;
              if (env_idx != NULL || num_dev > 1 || env_list != NULL) {
                  const int base = env_idx ? atoi(env_idx) : 0;
@@ -1451,14 +1451,14 @@ index ef39bbeea..0fc883648 100644
 @@ -1329,28 +1329,28 @@ ggml_metal_device_t ggml_metal_device_init(int device, int n_devices) {
                      char simd_width_env[16];
                      snprintf(simd_width_env, sizeof(simd_width_env), "%d", dev->props.simd_width);
-                     setenv("TOSH_METAL_SIMD_WIDTH", simd_width_env, 1);
+                     setenv("KESTREL_METAL_SIMD_WIDTH", simd_width_env, 1);
                  }
  
                  dev->props.has_simdgroup_reduction  = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
                  dev->props.has_simdgroup_reduction |= [dev->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
                  // simdgroup reduction kernels produce corrupted output on AMD RDNA 2 (e.g. RX 6700 XT)
 -                if (getenv("GGML_METAL_SIMDGROUP_REDUCTION_DISABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_SIMDGROUP_REDUCTION_DISABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_SIMDGROUP_REDUCTION_DISABLE") != NULL) {
                      dev->props.has_simdgroup_reduction = false;
                  }
  
@@ -1470,7 +1470,7 @@ index ef39bbeea..0fc883648 100644
                      dev->props.simd_width != 32 &&
                      ![dev->mtl_device supportsFamily:MTLGPUFamilyApple1] &&
 -                    getenv("GGML_METAL_WAVE64_UNSAFE") == NULL;
-+                    TOSH_ENV("GGML_METAL_WAVE64_UNSAFE") == NULL;
++                    KESTREL_ENV("GGML_METAL_WAVE64_UNSAFE") == NULL;
                  if (is_wave64) {
                      fprintf(stderr, "ggml_metal: wave64 mode (SIMD width %d): GPU prefill matmul, "
                                      "CPU decode/reductions for correct output\n",
@@ -1488,15 +1488,15 @@ index ef39bbeea..0fc883648 100644
                      }
                      dev->props.needs_aligned_loads = is_wave64 && !tolerant;
  
--                    const char * force = getenv("TOSH_MV_ALIGN");
-+                    const char * force = TOSH_ENV("TOSH_MV_ALIGN");
+-                    const char * force = getenv("KESTREL_MV_ALIGN");
++                    const char * force = KESTREL_ENV("KESTREL_MV_ALIGN");
                      if (force != NULL) {
                          dev->props.needs_aligned_loads = atoi(force) != 0;
-                         snprintf(how, sizeof(how), "TOSH_MV_ALIGN=%s", force);
+                         snprintf(how, sizeof(how), "KESTREL_MV_ALIGN=%s", force);
                      }
                      if (is_wave64 || force != NULL) {
                          fprintf(stderr, "ggml_metal: aligned mat-vec reads %s by %s "
-                                         "(override with TOSH_MV_ALIGN=1 or =0)\n",
+                                         "(override with KESTREL_MV_ALIGN=1 or =0)\n",
                                  dev->props.needs_aligned_loads ? "ON" : "off", how);
                      }
                  }
@@ -1506,8 +1506,8 @@ index ef39bbeea..0fc883648 100644
                  // GGML_METAL_WAVE64_SAFEMODE is the user-facing alias the app documents.
 -                dev->props.wave64_decode = is_wave64 && getenv("GGML_METAL_WAVE64_DECODE_DISABLE") == NULL
 -                                                     && getenv("GGML_METAL_WAVE64_SAFEMODE") == NULL;
-+                dev->props.wave64_decode = is_wave64 && TOSH_ENV("GGML_METAL_WAVE64_DECODE_DISABLE") == NULL
-+                                                     && TOSH_ENV("GGML_METAL_WAVE64_SAFEMODE") == NULL;
++                dev->props.wave64_decode = is_wave64 && KESTREL_ENV("GGML_METAL_WAVE64_DECODE_DISABLE") == NULL
++                                                     && KESTREL_ENV("GGML_METAL_WAVE64_SAFEMODE") == NULL;
                  if (dev->props.wave64_decode) {
                      fprintf(stderr, "ggml_metal: wave64 decode ON: quantized/f16/bf16 mat-vec on GPU "
                                      "(see the allowlist in ggml_metal_library_get_pipeline_mul_mv)\n");
@@ -1522,7 +1522,7 @@ index ef39bbeea..0fc883648 100644
                      ![dev->mtl_device supportsFamily:MTLGPUFamilyApple1] &&
                      (dev->props.simd_width == 32 ? dev->props.has_simdgroup_reduction : is_wave64);
 -                if (getenv("GGML_METAL_MM_MANUAL_DISABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_MM_MANUAL_DISABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_MM_MANUAL_DISABLE") != NULL) {
                      dev->props.use_mm_manual = false;
                  }
  
@@ -1531,13 +1531,13 @@ index ef39bbeea..0fc883648 100644
                  dev->props.has_bfloat  = [dev->mtl_device supportsFamily:MTLGPUFamilyMetal3_GGML];
                  dev->props.has_bfloat |= [dev->mtl_device supportsFamily:MTLGPUFamilyApple6];
 -                if (getenv("GGML_METAL_BF16_DISABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_BF16_DISABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_BF16_DISABLE") != NULL) {
                      dev->props.has_bfloat = false;
                  }
  
                  dev->props.has_tensor = [dev->mtl_device supportsFamily:MTLGPUFamilyMetal4_GGML];
 -                if (getenv("GGML_METAL_TENSOR_DISABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_TENSOR_DISABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_TENSOR_DISABLE") != NULL) {
                      dev->props.has_tensor = false;
                  }
  
@@ -1547,7 +1547,7 @@ index ef39bbeea..0fc883648 100644
                  //
                  // TODO: try to update the tensor API kernels to at least match the simdgroup performance
 -                if (getenv("GGML_METAL_TENSOR_ENABLE") == NULL &&
-+                if (TOSH_ENV("GGML_METAL_TENSOR_ENABLE") == NULL &&
++                if (KESTREL_ENV("GGML_METAL_TENSOR_ENABLE") == NULL &&
                      ![[dev->mtl_device name] containsString:@"M5"] &&
                      ![[dev->mtl_device name] containsString:@"M6"] &&
                      ![[dev->mtl_device name] containsString:@"A19"] &&
@@ -1566,7 +1566,7 @@ index ef39bbeea..0fc883648 100644
                  dev->props.use_residency_sets = true;
  #if defined(GGML_METAL_HAS_RESIDENCY_SETS)
 -                dev->props.use_residency_sets = getenv("GGML_METAL_NO_RESIDENCY") == nil;
-+                dev->props.use_residency_sets = TOSH_ENV("GGML_METAL_NO_RESIDENCY") == nil;
++                dev->props.use_residency_sets = KESTREL_ENV("GGML_METAL_NO_RESIDENCY") == nil;
  #endif
  
                  dev->props.use_shared_buffers = dev->props.has_unified_memory;
@@ -1575,24 +1575,24 @@ index ef39bbeea..0fc883648 100644
                  dev->props.use_shared_buffers |= [dev->mtl_device location] == MTLDeviceLocationExternal;
  #endif
 -                if (getenv("GGML_METAL_SHARED_BUFFERS_DISABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_SHARED_BUFFERS_DISABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_SHARED_BUFFERS_DISABLE") != NULL) {
                      dev->props.use_shared_buffers = false;
                  }
 -                if (getenv("GGML_METAL_SHARED_BUFFERS_ENABLE") != NULL) {
-+                if (TOSH_ENV("GGML_METAL_SHARED_BUFFERS_ENABLE") != NULL) {
++                if (KESTREL_ENV("GGML_METAL_SHARED_BUFFERS_ENABLE") != NULL) {
                      dev->props.use_shared_buffers = true;
                  }
  
                  // the expert cache keeps weights in host memory the GPU can read; without unified
              // memory that is a different decision from making every buffer shared
-             dev->props.use_host_buffers = !dev->props.use_shared_buffers && tosh_moe_mode() != TOSH_MOE_OFF;
+             dev->props.use_host_buffers = !dev->props.use_shared_buffers && tosh_moe_mode() != KESTREL_MOE_OFF;
  
              dev->props.supports_gpu_family_apple7 = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
  
                  dev->props.device_id = ggml_metal_device_id_parse([[dev->mtl_device name] UTF8String]);
  
 -                dev->props.op_offload_min_batch_size  = getenv("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(getenv("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
-+                dev->props.op_offload_min_batch_size  = TOSH_ENV("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(TOSH_ENV("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
++                dev->props.op_offload_min_batch_size  = KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
  
                  dev->props.max_buffer_size            = dev->mtl_device.maxBufferLength;
  
@@ -1601,13 +1601,13 @@ index ef39bbeea..0fc883648 100644
                  // buffers itself, which is the one place that knows no tensor may straddle them.
                  // The 4 GiB failure that motivated this was reported by Slice on an RX 570:
                  // https://www.insanelymac.com/forum/profile/112217-slice/
--                if (getenv("TOSH_METAL_MAX_BUFFER_MB")) {
--                    const size_t cap = (size_t) atoll(getenv("TOSH_METAL_MAX_BUFFER_MB")) * 1024 * 1024;
-+                if (TOSH_ENV("TOSH_METAL_MAX_BUFFER_MB")) {
-+                    const size_t cap = (size_t) atoll(TOSH_ENV("TOSH_METAL_MAX_BUFFER_MB")) * 1024 * 1024;
+-                if (getenv("KESTREL_METAL_MAX_BUFFER_MB")) {
+-                    const size_t cap = (size_t) atoll(getenv("KESTREL_METAL_MAX_BUFFER_MB")) * 1024 * 1024;
++                if (KESTREL_ENV("KESTREL_METAL_MAX_BUFFER_MB")) {
++                    const size_t cap = (size_t) atoll(KESTREL_ENV("KESTREL_METAL_MAX_BUFFER_MB")) * 1024 * 1024;
                      if (cap > 0 && cap < dev->props.max_buffer_size) {
                          dev->props.max_buffer_size = cap;
-                         fprintf(stderr, "ggml_metal: max single buffer capped to %zu MiB by TOSH_METAL_MAX_BUFFER_MB\n", cap / 1024 / 1024);
+                         fprintf(stderr, "ggml_metal: max single buffer capped to %zu MiB by KESTREL_METAL_MAX_BUFFER_MB\n", cap / 1024 / 1024);
                      }
                  }
                  dev->props.max_theadgroup_memory_size = dev->mtl_device.maxThreadgroupMemoryLength;
@@ -1623,7 +1623,7 @@ index ef39bbeea..0fc883648 100644
      // GGML_METAL_HOST_WRAP_LIMIT_MB overrides it; 0 restores the uncapped behaviour.
      size_t limit = (size_t) dev->props.max_working_set_size;
 -    const char * limit_mb = getenv("GGML_METAL_HOST_WRAP_LIMIT_MB");
-+    const char * limit_mb = TOSH_ENV("GGML_METAL_HOST_WRAP_LIMIT_MB");
++    const char * limit_mb = KESTREL_ENV("GGML_METAL_HOST_WRAP_LIMIT_MB");
      if (limit_mb != NULL) {
          limit = (size_t) strtoull(limit_mb, NULL, 10)*1024*1024;
      }
@@ -1641,8 +1641,8 @@ index ef39bbeea..0fc883648 100644
              const bool fa_amd_width_ok = dev->props.simd_width == 32
                  ? has_simdgroup_reduction
                  : wave64_decode;
--            if (getenv("TOSH_FA_AMD") != NULL &&
-+            if (TOSH_ENV("TOSH_FA_AMD") != NULL &&
+-            if (getenv("KESTREL_FA_AMD") != NULL &&
++            if (KESTREL_ENV("KESTREL_FA_AMD") != NULL &&
                  !has_simdgroup_mm && fa_amd_width_ok &&
                  (op->src[0]->ne[0] % 32 == 0 || op->src[0]->ne[0] == 72 ||
                   op->src[0]->ne[0] == 40 || op->src[0]->ne[0] == 80 || op->src[0]->ne[0] == 160)) {
@@ -1660,8 +1660,8 @@ index ef39bbeea..0fc883648 100644
  static bool tosh_prof_on(void) {
      int s = atomic_load_explicit(&g_tosh_prof.state, memory_order_relaxed);
      if (s == 0) {
--        const char * v = getenv("TOSH_MOE_PROFILE");
-+        const char * v = TOSH_ENV("TOSH_MOE_PROFILE");
+-        const char * v = getenv("KESTREL_MOE_PROFILE");
++        const char * v = KESTREL_ENV("KESTREL_MOE_PROFILE");
          s = (v && v[0] == '1') ? 2 : 1;
          atomic_store_explicit(&g_tosh_prof.state, s, memory_order_relaxed);
      }
@@ -1669,7 +1669,7 @@ index ef39bbeea..0fc883648 100644
  }
  
  // name-class buckets, filled by the callers that know the tensor
- enum { TOSH_CLS_MOE, TOSH_CLS_LOGITS, TOSH_CLS_OTHER, TOSH_CLS_N };
+ enum { KESTREL_CLS_MOE, KESTREL_CLS_LOGITS, KESTREL_CLS_OTHER, KESTREL_CLS_N };
 @@ -3184,17 +3184,17 @@ bool ggml_metal_device_stage_set(ggml_metal_device_t dev, struct ggml_metal_buff
          [dev->stage_set_cmds[slot] release];
          dev->stage_set_cmds[slot] = nil;
@@ -1679,8 +1679,8 @@ index ef39bbeea..0fc883648 100644
      if (stage == nil || stage.length < size) {
          [stage release];
          static int wc_off = -1;
--        if (wc_off < 0) { wc_off = getenv("TOSH_STAGE_WC_OFF") != NULL; }
-+        if (wc_off < 0) { wc_off = TOSH_ENV("TOSH_STAGE_WC_OFF") != NULL; }
+-        if (wc_off < 0) { wc_off = getenv("KESTREL_STAGE_WC_OFF") != NULL; }
++        if (wc_off < 0) { wc_off = KESTREL_ENV("KESTREL_STAGE_WC_OFF") != NULL; }
          stage = [dev->mtl_device newBufferWithLength:MAX(size, (size_t) 256*1024)
                                               options:wc_off ? MTLResourceStorageModeShared
                                                              : (MTLResourceStorageModeShared | MTLResourceCPUCacheModeWriteCombined)];
@@ -1698,17 +1698,17 @@ index ef39bbeea..0fc883648 100644
              // Only measured with one device so far, so several cards keep the wrap until it is.
              static int stage_load = -1;
              if (stage_load < 0) {
--                if (getenv("TOSH_STAGE_LOAD_DISABLE") != NULL) {
-+                if (TOSH_ENV("TOSH_STAGE_LOAD_DISABLE") != NULL) {
+-                if (getenv("KESTREL_STAGE_LOAD_DISABLE") != NULL) {
++                if (KESTREL_ENV("KESTREL_STAGE_LOAD_DISABLE") != NULL) {
                      stage_load = 0;
--                } else if (getenv("TOSH_STAGE_LOAD") != NULL) {
-+                } else if (TOSH_ENV("TOSH_STAGE_LOAD") != NULL) {
+-                } else if (getenv("KESTREL_STAGE_LOAD") != NULL) {
++                } else if (KESTREL_ENV("KESTREL_STAGE_LOAD") != NULL) {
                      stage_load = 1;
                  } else {
 -                    const char * n = getenv("GGML_METAL_DEVICES");
 -                    stage_load = (n == NULL || atoi(n) <= 1) && getenv("GGML_METAL_DEVICE_LIST") == NULL;
-+                    const char * n = TOSH_ENV("GGML_METAL_DEVICES");
-+                    stage_load = (n == NULL || atoi(n) <= 1) && TOSH_ENV("GGML_METAL_DEVICE_LIST") == NULL;
++                    const char * n = KESTREL_ENV("GGML_METAL_DEVICES");
++                    stage_load = (n == NULL || atoi(n) <= 1) && KESTREL_ENV("GGML_METAL_DEVICE_LIST") == NULL;
                  }
              }
              if (stage_load) {
@@ -1716,8 +1716,8 @@ index ef39bbeea..0fc883648 100644
                  for (size_t done = 0; done < size;) {
                      static size_t slice = 0;
                      if (slice == 0) {
--                        const char * v = getenv("TOSH_STAGE_SLICE_MB");
-+                        const char * v = TOSH_ENV("TOSH_STAGE_SLICE_MB");
+-                        const char * v = getenv("KESTREL_STAGE_SLICE_MB");
++                        const char * v = KESTREL_ENV("KESTREL_STAGE_SLICE_MB");
                          slice = v ? MIN((size_t) atoi(v)*1024*1024, GGML_METAL_STAGE_BUF_MAX) : GGML_METAL_STAGE_BUF_MAX;
                          if (slice == 0) { slice = GGML_METAL_STAGE_BUF_MAX; }
                      }
@@ -1733,10 +1733,10 @@ index ef39bbeea..0fc883648 100644
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
          // wrapping the caller's pointer registers the whole tensor as a Metal resource for the
-         // blit; TOSH_NO_HOST_WRAP skips it so the chunked staging path below is used instead
+         // blit; KESTREL_NO_HOST_WRAP skips it so the chunked staging path below is used instead
          static int no_wrap = -1;
--        if (no_wrap < 0) { no_wrap = getenv("TOSH_NO_HOST_WRAP") != NULL; }
-+        if (no_wrap < 0) { no_wrap = TOSH_ENV("TOSH_NO_HOST_WRAP") != NULL; }
+-        if (no_wrap < 0) { no_wrap = getenv("KESTREL_NO_HOST_WRAP") != NULL; }
++        if (no_wrap < 0) { no_wrap = KESTREL_ENV("KESTREL_NO_HOST_WRAP") != NULL; }
          id<MTLBuffer> buf_src = no_wrap ? nil : [buf->dev->mtl_device newBufferWithBytesNoCopy:data_ptr
                                                                 length:size
                                                                options:MTLResourceStorageModeShared
@@ -1749,13 +1749,13 @@ index ef39bbeea..0fc883648 100644
      }
  }
  
- // TOSH_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
+ // KESTREL_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
  // son lo que queda del hueco de decode una vez descartados commit, creacion y espera
  static bool tosh_xfer_on(void) {
      int st = atomic_load_explicit(&g_tosh_xfer_state, memory_order_relaxed);
      if (st == 0) {
--        const char * e = getenv("TOSH_CB_PROFILE");
-+        const char * e = TOSH_ENV("TOSH_CB_PROFILE");
+-        const char * e = getenv("KESTREL_CB_PROFILE");
++        const char * e = KESTREL_ENV("KESTREL_CB_PROFILE");
          st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
          atomic_store_explicit(&g_tosh_xfer_state, st, memory_order_relaxed);
      }
@@ -1782,9 +1782,9 @@ index a0666d25a..549db4449 100644
 +// getenv walks the whole environment under a lock, and the encode path asks the same names once
 +// per node and token: each call site reads its variable once
 +#ifdef __cplusplus
-+#define TOSH_ENV(name) ([]() -> const char * { static const char * tosh_env_v = getenv(name); return tosh_env_v; }())
++#define KESTREL_ENV(name) ([]() -> const char * { static const char * tosh_env_v = getenv(name); return tosh_env_v; }())
 +#else
-+#define TOSH_ENV(name) ({ static int tosh_env_i = 0; static const char * tosh_env_v = NULL; \
++#define KESTREL_ENV(name) ({ static int tosh_env_i = 0; static const char * tosh_env_v = NULL; \
 +    if (!tosh_env_i) { tosh_env_v = getenv(name); tosh_env_i = 1; } tosh_env_v; })
 +#endif
 +#endif
@@ -1824,21 +1824,21 @@ index a9871f1f4..d501092dd 100644
 @@ -739,17 +739,17 @@ static int ggml_metal_op_encode_impl(ggml_metal_op_t ctx, int idx) {
  
  
- // TOSH_OPPROF=1: CPU time spent encoding each op kind, to compare dispatch cost across engines
+ // KESTREL_OPPROF=1: CPU time spent encoding each op kind, to compare dispatch cost across engines
  #include <time.h>
  static uint64_t g_opprof_ns[GGML_OP_COUNT];
  static uint64_t g_opprof_n [GGML_OP_COUNT];
  static bool tosh_opprof_on(void) {
      static int v = -1;
--    if (v < 0) { v = getenv("TOSH_OPPROF") != nullptr; }
-+    if (v < 0) { v = TOSH_ENV("TOSH_OPPROF") != nullptr; }
+-    if (v < 0) { v = getenv("KESTREL_OPPROF") != nullptr; }
++    if (v < 0) { v = KESTREL_ENV("KESTREL_OPPROF") != nullptr; }
      return v;
  }
  static void tosh_opprof_dump(void) {
      if (!tosh_opprof_on()) return;
      for (int i = 0; i < GGML_OP_COUNT; i++) {
          if (g_opprof_n[i] == 0) continue;
-         fprintf(stderr, "TOSH_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
+         fprintf(stderr, "KESTREL_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
                  ggml_op_name((enum ggml_op) i),
 @@ -2237,18 +2237,18 @@ static const ggml_tensor * ggml_metal_gdn_fold_dst(ggml_metal_op_t ctx, int idx)
              ggml_metal_use_count(ctx->graph(), a) == 1) {
@@ -1849,9 +1849,9 @@ index a9871f1f4..d501092dd 100644
  }
  
  static bool ggml_metal_gdn_state_fusion_on(ggml_metal_op_t ctx) {
--    static const bool disabled = getenv("TOSH_GDN_STATE_FUSION_DISABLE") != nullptr;
+-    static const bool disabled = getenv("KESTREL_GDN_STATE_FUSION_DISABLE") != nullptr;
 -    return ctx->use_fusion && !ctx->use_concurrency && !disabled;
-+    static const bool disabled = TOSH_ENV("TOSH_GDN_STATE_FUSION_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_GDN_STATE_FUSION_DISABLE") != nullptr;
 +    return ctx->use_fusion() && !ctx->use_concurrency && !disabled;
  }
  
@@ -1870,8 +1870,8 @@ index a9871f1f4..d501092dd 100644
  
      const bool contig = ggml_blck_size(op->src[0]->type) == 1 && ggml_blck_size(op->type) == 1 &&
                          ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op) &&
--                        getenv("TOSH_CPY_CONTIG_DISABLE") == nullptr;
-+                        TOSH_ENV("TOSH_CPY_CONTIG_DISABLE") == nullptr;
+-                        getenv("KESTREL_CPY_CONTIG_DISABLE") == nullptr;
++                        KESTREL_ENV("KESTREL_CPY_CONTIG_DISABLE") == nullptr;
  
      if (contig) {
          const int64_t n = ggml_nelements(op);
@@ -1889,8 +1889,8 @@ index a9871f1f4..d501092dd 100644
  // rms_norm -> mul by the norm weight -> the Hadamard transform of a folded weight's input, all
  // adjacent: one kernel writes the transform, and the norm too when other nodes read it
  static int ggml_metal_op_rms_norm_fwht(ggml_metal_op_t ctx, int idx) {
--    static const bool disabled = getenv("TOSH_NORM_FWHT_FUSION_DISABLE") != nullptr;
-+    static const bool disabled = TOSH_ENV("TOSH_NORM_FWHT_FUSION_DISABLE") != nullptr;
+-    static const bool disabled = getenv("KESTREL_NORM_FWHT_FUSION_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_NORM_FWHT_FUSION_DISABLE") != nullptr;
      if (disabled || idx + 3 >= ctx->n_nodes()) {
          return 0;
      }
@@ -1908,8 +1908,8 @@ index a9871f1f4..d501092dd 100644
  }
  
  static int ggml_metal_op_mul_mat_qvk(ggml_metal_op_t ctx, int idx) {
--    static const bool disabled = getenv("TOSH_QKV_FUSION_DISABLE") != nullptr;
-+    static const bool disabled = TOSH_ENV("TOSH_QKV_FUSION_DISABLE") != nullptr;
+-    static const bool disabled = getenv("KESTREL_QKV_FUSION_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_QKV_FUSION_DISABLE") != nullptr;
  
      const ggml_metal_device_props * props_dev = ggml_metal_device_get_props(ctx->dev);
      const bool width_ok = props_dev->simd_width == 32 ||
@@ -1927,8 +1927,8 @@ index a9871f1f4..d501092dd 100644
      const ggml_type tv = v->src[0]->type;
      const ggml_type tk = k->src[0]->type;
  
--    const bool qvk_w64 = props_dev->simd_width == 64 && getenv("TOSH_QVK_W64_DISABLE") == nullptr;
-+    const bool qvk_w64 = props_dev->simd_width == 64 && TOSH_ENV("TOSH_QVK_W64_DISABLE") == nullptr;
+-    const bool qvk_w64 = props_dev->simd_width == 64 && getenv("KESTREL_QVK_W64_DISABLE") == nullptr;
++    const bool qvk_w64 = props_dev->simd_width == 64 && KESTREL_ENV("KESTREL_QVK_W64_DISABLE") == nullptr;
  
      if (tq == GGML_TYPE_Q4_0 && tv == GGML_TYPE_Q4_0 && tk == GGML_TYPE_Q4_0) {
          // the 64-lane twin carries the same decomposition as the standalone matvec, so the
@@ -1946,8 +1946,8 @@ index a9871f1f4..d501092dd 100644
  // sequences each column paid its own full pass over the weights
  static int kquant_ext_floor() {
      static const int v = []() {
--        const char * s = getenv("TOSH_EXT_KQ_FLOOR");
-+        const char * s = TOSH_ENV("TOSH_EXT_KQ_FLOOR");
+-        const char * s = getenv("KESTREL_EXT_KQ_FLOOR");
++        const char * s = KESTREL_ENV("KESTREL_EXT_KQ_FLOOR");
          return s ? atoi(s) : 2;
      }();
      return v;
@@ -1963,8 +1963,8 @@ index a9871f1f4..d501092dd 100644
  // columns to thirty-two, so three column groups of the batched kernel are still cheaper
  static int ext_ceil(int simd_width, ggml_type tsrc0) {
      static const int v = []() {
--        const char * s = getenv("TOSH_EXT_MAX");
-+        const char * s = TOSH_ENV("TOSH_EXT_MAX");
+-        const char * s = getenv("KESTREL_EXT_MAX");
++        const char * s = KESTREL_ENV("KESTREL_EXT_MAX");
          return s ? atoi(s) : 0;
      }();
  
@@ -1982,9 +1982,9 @@ index a9871f1f4..d501092dd 100644
  // output. The three nodes are adjacent, so writing that output early only needs it apart from
  // the activation the kernel reads.
  static int ggml_metal_op_mul_mat_swiglu(ggml_metal_op_t ctx, int idx) {
--    static const bool disabled = getenv("TOSH_SWIGLU_FUSION_DISABLE") != nullptr;
+-    static const bool disabled = getenv("KESTREL_SWIGLU_FUSION_DISABLE") != nullptr;
 -    if (disabled || !ctx->use_fusion || idx + 2 >= ctx->n_nodes()) {
-+    static const bool disabled = TOSH_ENV("TOSH_SWIGLU_FUSION_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_SWIGLU_FUSION_DISABLE") != nullptr;
 +    if (disabled || !ctx->use_fusion() || idx + 2 >= ctx->n_nodes()) {
          return 0;
      }
@@ -2003,8 +2003,8 @@ index a9871f1f4..d501092dd 100644
      // these should be efficient for BS [2, ~8]
      // ext kernel derives its row split from the simdgroup width, so it runs on both
      // wave32 and wave64. wave64 rides on wave64_decode (matches the mat-vec gating).
--    static const bool ext_disabled = getenv("TOSH_EXT_DISABLE") != nullptr;
-+    static const bool ext_disabled = TOSH_ENV("TOSH_EXT_DISABLE") != nullptr;
+-    static const bool ext_disabled = getenv("KESTREL_EXT_DISABLE") != nullptr;
++    static const bool ext_disabled = KESTREL_ENV("KESTREL_EXT_DISABLE") != nullptr;
      if (!ext_disabled &&
          (props_dev->simd_width == 32 || (props_dev->simd_width == 64 && props_dev->wave64_decode)) &&
          op->src[1]->type == GGML_TYPE_F32 && (ne00%128 == 0) &&
@@ -2019,11 +2019,11 @@ index a9871f1f4..d501092dd 100644
          const int nsg    = 1;                 // num simdgroups per threadgroup
  
          // num threads along row per simdgroup
-         // the thresholds below split a 32-lane simdgroup; TOSH_EXT_NXPSG overrides them so the
+         // the thresholds below split a 32-lane simdgroup; KESTREL_EXT_NXPSG overrides them so the
          // split can be swept on a 64-lane one, where the row/column balance is not the same
          static const int nxpsg_env = []() {
--            const char * s = getenv("TOSH_EXT_NXPSG");
-+            const char * s = TOSH_ENV("TOSH_EXT_NXPSG");
+-            const char * s = getenv("KESTREL_EXT_NXPSG");
++            const char * s = KESTREL_ENV("KESTREL_EXT_NXPSG");
              return s ? atoi(s) : 0;
          }();
  
@@ -2037,14 +2037,14 @@ index a9871f1f4..d501092dd 100644
                  nxpsg = 4;
              }
              // a 64-lane simdgroup wants twice the reduction width: +9.0% with four requests.
-             // TOSH_EXT_NXPSG_X2 tries it on 32 lanes, so that width can be A/B'd before the gate goes
+             // KESTREL_EXT_NXPSG_X2 tries it on 32 lanes, so that width can be A/B'd before the gate goes
              // only where the contracted dimension is wide enough to keep four-wide loads per thread:
              // at ne00 128 the doubled split leaves too few elements and the result goes wrong
              if (ne00 % 256 == 0 &&
--                (props_dev->simd_width == 64 || getenv("TOSH_EXT_NXPSG_X2") != nullptr) &&
--                getenv("TOSH_EXT_NXPSG_X2_DISABLE") == nullptr) {
-+                (props_dev->simd_width == 64 || TOSH_ENV("TOSH_EXT_NXPSG_X2") != nullptr) &&
-+                TOSH_ENV("TOSH_EXT_NXPSG_X2_DISABLE") == nullptr) {
+-                (props_dev->simd_width == 64 || getenv("KESTREL_EXT_NXPSG_X2") != nullptr) &&
+-                getenv("KESTREL_EXT_NXPSG_X2_DISABLE") == nullptr) {
++                (props_dev->simd_width == 64 || KESTREL_ENV("KESTREL_EXT_NXPSG_X2") != nullptr) &&
++                KESTREL_ENV("KESTREL_EXT_NXPSG_X2_DISABLE") == nullptr) {
                  nxpsg = std::min<int16_t>(16, nxpsg*2);
              }
          }
@@ -2062,8 +2062,8 @@ index a9871f1f4..d501092dd 100644
                             op->src[0]->type == GGML_TYPE_Q3_K;
  
          static const int nr0_env = []() {
--            const char * s = getenv("TOSH_EXT_NR0");
-+            const char * s = TOSH_ENV("TOSH_EXT_NR0");
+-            const char * s = getenv("KESTREL_EXT_NR0");
++            const char * s = KESTREL_ENV("KESTREL_EXT_NR0");
              return s ? atoi(s) : 0;
          }();
  
@@ -2072,8 +2072,8 @@ index a9871f1f4..d501092dd 100644
          // Four rows per thread doubles what a threadgroup covers, so a weight with few
          // rows stops filling the grid. The threshold is per row count, not per quant type.
          static const int64_t nr0_min_rows = []() {
--            const char * s = getenv("TOSH_EXT_NR0_MINROWS");
-+            const char * s = TOSH_ENV("TOSH_EXT_NR0_MINROWS");
+-            const char * s = getenv("KESTREL_EXT_NR0_MINROWS");
++            const char * s = KESTREL_ENV("KESTREL_EXT_NR0_MINROWS");
              // off by default: the win depends on the weight's shape and one measured model
              // still regresses at four columns, so it stays opt-in until that is understood
              return s ? (int64_t) atoll(s) : (int64_t) 0;
@@ -2091,8 +2091,8 @@ index a9871f1f4..d501092dd 100644
  
          // the wave64 q6_K variant keeps four rows per simdgroup, so the row split does not apply
          // keep the gate in sync with the pipeline picker in ggml_metal_library_get_pipeline_mul_mv_ext
--        static const bool ext_w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
-+        static const bool ext_w64_disable = TOSH_ENV("TOSH_EXT_W64_DISABLE") != nullptr;
+-        static const bool ext_w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
++        static const bool ext_w64_disable = KESTREL_ENV("KESTREL_EXT_W64_DISABLE") != nullptr;
          const bool ext_w64_q6k = !ext_w64_disable &&
                                   props_dev->simd_width == 64 && op->src[0]->type == GGML_TYPE_Q6_K;
  
@@ -2110,8 +2110,8 @@ index a9871f1f4..d501092dd 100644
      // Only banks of small rows gain: those are read scattered from host and the copy makes them
      // contiguous. A bank of few, large rows already reads well and the copy is pure extra traffic.
      static const size_t stage_row_max = []() {
--        const char * s = getenv("TOSH_MOE_STAGE_ROW_KIB");
-+        const char * s = TOSH_ENV("TOSH_MOE_STAGE_ROW_KIB");
+-        const char * s = getenv("KESTREL_MOE_STAGE_ROW_KIB");
++        const char * s = KESTREL_ENV("KESTREL_MOE_STAGE_ROW_KIB");
          return (size_t) (s ? atoi(s) : 1024) << 10;
      }();
  
@@ -2129,8 +2129,8 @@ index a9871f1f4..d501092dd 100644
          // A batch routes to a fraction of the bank, so rebuilding every row is most of the
          // traffic of this path. Mark the routed ones and let the assemble skip the rest; a row
          // nothing routes to is never read, so leaving it stale is safe.
--        static const bool compact = getenv("TOSH_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
-+        static const bool compact = TOSH_ENV("TOSH_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
+-        static const bool compact = getenv("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
++        static const bool compact = KESTREL_ENV("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
          ggml_metal_buffer_id ab = ggml_metal_get_buffer_id(state);
          ab.offs += tosh_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
          if (compact) {
@@ -2148,8 +2148,8 @@ index a9871f1f4..d501092dd 100644
  
          // a whole expert is megabytes: one threadgroup per row leaves the device idle
          static const int n_chunks = []() {
--            const char * s = getenv("TOSH_MOE_FETCH_CHUNKS");
-+            const char * s = TOSH_ENV("TOSH_MOE_FETCH_CHUNKS");
+-            const char * s = getenv("KESTREL_MOE_FETCH_CHUNKS");
++            const char * s = KESTREL_ENV("KESTREL_MOE_FETCH_CHUNKS");
              const int v = s ? atoi(s) : 16;
              return v > 0 ? v : 1;
          }();
@@ -2167,8 +2167,8 @@ index a9871f1f4..d501092dd 100644
  
          ggml_metal_op_concurrency_reset(ctx);
  
--        static const bool raw_ids = getenv("TOSH_MOE_RAW_IDS") != nullptr;
-+        static const bool raw_ids = TOSH_ENV("TOSH_MOE_RAW_IDS") != nullptr;
+-        static const bool raw_ids = getenv("KESTREL_MOE_RAW_IDS") != nullptr;
++        static const bool raw_ids = KESTREL_ENV("KESTREL_MOE_RAW_IDS") != nullptr;
          if (!raw_ids) {
              bid_src2 = bid_state;
              bid_src2.offs = bid_state.offs + tosh_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
@@ -2177,8 +2177,8 @@ index a9871f1f4..d501092dd 100644
  
      // escape hatch: revert wave64 MoE prefill to the mat-vec route
      const bool mm_id_manual_ok = props_dev->simd_width == 32 ||
--        getenv("TOSH_W64_MMID_PREFILL_DISABLE") == NULL;
-+        TOSH_ENV("TOSH_W64_MMID_PREFILL_DISABLE") == NULL;
+-        getenv("KESTREL_W64_MMID_PREFILL_DISABLE") == NULL;
++        KESTREL_ENV("KESTREL_W64_MMID_PREFILL_DISABLE") == NULL;
  
      if (ggml_metal_op_mul_mat_id_use_mm(op, props_dev->has_simdgroup_mm || (props_dev->use_mm_manual && mm_id_manual_ok))) {
          // some Metal matrix data types require aligned pointers
@@ -2196,8 +2196,8 @@ index a9871f1f4..d501092dd 100644
              // them on half the engines and a multiple of four on a single one (measured 1.8x and
              // 3.4x). One inert tile restores the spread; it returns before reading anything.
              if (props_dev->simd_width == 64 && ntg0 % 2 == 0 &&
--                getenv("TOSH_MMID_ODD_GRID_DISABLE") == nullptr) {
-+                TOSH_ENV("TOSH_MMID_ODD_GRID_DISABLE") == nullptr) {
+-                getenv("KESTREL_MMID_ODD_GRID_DISABLE") == nullptr) {
++                KESTREL_ENV("KESTREL_MMID_ODD_GRID_DISABLE") == nullptr) {
                  ntg0 += 1;
              }
  
@@ -2215,8 +2215,8 @@ index a9871f1f4..d501092dd 100644
      const bool amd_sparse  = amd_n_kv_max > 0 && ne01 == 1;
      const int amd_n_kv_pad = amd_sparse ? GGML_PAD(amd_n_kv_max, OP_FLASH_ATTN_EXT_VEC_NCPSG) : 0;
  
--    if (getenv("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
-+    if (TOSH_ENV("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
+-    if (getenv("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
++    if (KESTREL_ENV("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
          !props_dev->has_simdgroup_mm && fa_amd_width_ok &&
          !has_bias && !has_scap) {
  
@@ -2234,11 +2234,11 @@ index a9871f1f4..d501092dd 100644
          };
  
          // queries per threadgroup, matching the instantiation for this head size
--        static const bool pf512 = getenv("TOSH_FA_PF_DK512") != nullptr;
-+        static const bool pf512 = TOSH_ENV("TOSH_FA_PF_DK512") != nullptr;
+-        static const bool pf512 = getenv("KESTREL_FA_PF_DK512") != nullptr;
++        static const bool pf512 = KESTREL_ENV("KESTREL_FA_PF_DK512") != nullptr;
          // MLA keeps K wider than V; the tile kernel it used to fall back to measures ~26% slower
--        static const bool pfmla = getenv("TOSH_FA_PF_MLA_DISABLE") == nullptr;
-+        static const bool pfmla = TOSH_ENV("TOSH_FA_PF_MLA_DISABLE") == nullptr;
+-        static const bool pfmla = getenv("KESTREL_FA_PF_MLA_DISABLE") == nullptr;
++        static const bool pfmla = KESTREL_ENV("KESTREL_FA_PF_MLA_DISABLE") == nullptr;
          const bool fa_pf_512 = pf512 && ne00 == 512 && ne00 == ne20;
          const bool fa_pf_mla = pfmla && ne00 == 576 && ne20 == 512 &&
                                 op->src[2]->type == GGML_TYPE_F16;
@@ -2253,15 +2253,15 @@ index a9871f1f4..d501092dd 100644
          // PF always dispatches 256 threads and subdivides them into logical
          // 16-lane query groups, so the same specialization works on wave32
          // (8 physical simdgroups) and wave64 (4 physical simdgroups).
--        if (getenv("TOSH_FA_PF_DEBUG") != nullptr) {
-+        if (TOSH_ENV("TOSH_FA_PF_DEBUG") != nullptr) {
+-        if (getenv("KESTREL_FA_PF_DEBUG") != nullptr) {
++        if (KESTREL_ENV("KESTREL_FA_PF_DEBUG") != nullptr) {
              fprintf(stderr, "FA_PF gate dk=%d dv=%d ne01=%d head_ok=%d ktype=%s vtype=%s\n",
                      (int) ne00, (int) ne20, (int) ne01, (int) fa_pf_head_ok,
                      ggml_type_name(op->src[1]->type), ggml_type_name(op->src[2]->type));
          }
          if ((props_dev->simd_width == 32 || props_dev->simd_width == 64) &&
--            ne01 >= 32 && fa_pf_head_ok && getenv("TOSH_FA_PF_DISABLE") == NULL) {
-+            ne01 >= 32 && fa_pf_head_ok && TOSH_ENV("TOSH_FA_PF_DISABLE") == NULL) {
+-            ne01 >= 32 && fa_pf_head_ok && getenv("KESTREL_FA_PF_DISABLE") == NULL) {
++            ne01 >= 32 && fa_pf_head_ok && KESTREL_ENV("KESTREL_FA_PF_DISABLE") == NULL) {
              char fa_pf_pipeline[80];
              bool fa_pf_asym = false;
              if (fa_pf_mla) {
@@ -2274,33 +2274,33 @@ index a9871f1f4..d501092dd 100644
  
                  // the 64-lane twin lives in fa_w64.metal, with the lane group as a parameter.
                  // Only the symmetric heads have one; MLA and the asymmetric pairs stay above.
-                 // TOSH_FA_PF_LG picks the group so the three can be compared; 16 reproduces
+                 // KESTREL_FA_PF_LG picks the group so the three can be compared; 16 reproduces
                  // the 32-lane kernel exactly and is the control.
                  static const int pf_lg = []() {
                      // the cross sweep left the group at sixteen: wider only wins at depth 0,
                      // where this kernel weighs least, and loses 3 to 37% deeper in
--                    const char * s = getenv("TOSH_FA_PF_LG");
-+                    const char * s = TOSH_ENV("TOSH_FA_PF_LG");
+-                    const char * s = getenv("KESTREL_FA_PF_LG");
++                    const char * s = KESTREL_ENV("KESTREL_FA_PF_LG");
                      return s ? atoi(s) : 16;
                  }();
-                 // TOSH_FA_PF_BQ picks the query-block twin of that group, which is what keeps
+                 // KESTREL_FA_PF_BQ picks the query-block twin of that group, which is what keeps
                  // the rows per thread fixed while the group widens
                  static const int pf_bq = []() {
--                    const char * s = getenv("TOSH_FA_PF_BQ");
-+                    const char * s = TOSH_ENV("TOSH_FA_PF_BQ");
+-                    const char * s = getenv("KESTREL_FA_PF_BQ");
++                    const char * s = KESTREL_ENV("KESTREL_FA_PF_BQ");
                      return s ? atoi(s) : 0;
                  }();
-                 // TOSH_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
+                 // KESTREL_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
                  // side of the K/V reuse, so a bigger block pays the same traffic fewer times
                  static const int pf_bk = []() {
--                    const char * s = getenv("TOSH_FA_PF_BK");
-+                    const char * s = TOSH_ENV("TOSH_FA_PF_BK");
+-                    const char * s = getenv("KESTREL_FA_PF_BK");
++                    const char * s = KESTREL_ENV("KESTREL_FA_PF_BK");
                      return s ? atoi(s) : 0;
                  }();
                  if (props_dev->simd_width == 64 && (pf_lg == 16 || pf_lg == 32 || pf_lg == 64) &&
                      (ne00 == 64 || ne00 == 128 || ne00 == 256 || ne00 == 512) &&
--                    getenv("TOSH_FA_PF_W64_DISABLE") == nullptr) {
-+                    TOSH_ENV("TOSH_FA_PF_W64_DISABLE") == nullptr) {
+-                    getenv("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
++                    KESTREL_ENV("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
                      char w64_name[96];
                      if (pf_bq > 0) {
                          snprintf(w64_name, sizeof(w64_name), "%s_w64_lg%dq%dk%d", fa_pf_pipeline, pf_lg, pf_bq,
@@ -2318,13 +2318,13 @@ index a9871f1f4..d501092dd 100644
              // the asymmetric heads compose their name in the branches above, so their twin is
              // picked here instead. Same group of sixteen; the fallback is the 32-lane kernel.
              if (fa_pf_asym && props_dev->simd_width == 64 &&
--                getenv("TOSH_FA_PF_W64_DISABLE") == nullptr) {
-+                TOSH_ENV("TOSH_FA_PF_W64_DISABLE") == nullptr) {
+-                getenv("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
++                KESTREL_ENV("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
                  char w64_name[96];
                  // sixteen reproduces the 32-lane kernel exactly, so it is the control; the
                  // sweep that closed the symmetric heads there never covered an asymmetric one
--                const char * slg = getenv("TOSH_FA_PF_LG");
-+                const char * slg = TOSH_ENV("TOSH_FA_PF_LG");
+-                const char * slg = getenv("KESTREL_FA_PF_LG");
++                const char * slg = KESTREL_ENV("KESTREL_FA_PF_LG");
                  snprintf(w64_name, sizeof(w64_name), "%s_w64_lg%d", fa_pf_pipeline, slg ? atoi(slg) : 16);
                  if (ggml_metal_library_get_pipeline(lib, w64_name).pipeline ||
                      ggml_metal_library_compile_pipeline(lib, w64_name, w64_name, nullptr).pipeline) {
@@ -2339,8 +2339,8 @@ index a9871f1f4..d501092dd 100644
  
              // Which twin a head actually lands on cannot be read from the timings: a switch that
              // never reaches the kernel gives the same number on both sides.
--            if (getenv("TOSH_FA_PF_DEBUG") != nullptr) {
-+            if (TOSH_ENV("TOSH_FA_PF_DEBUG") != nullptr) {
+-            if (getenv("KESTREL_FA_PF_DEBUG") != nullptr) {
++            if (KESTREL_ENV("KESTREL_FA_PF_DEBUG") != nullptr) {
                  fprintf(stderr, "FA_PF dk=%d dv=%d bq=%d -> %s%s\n",
                          (int) ne00, (int) ne20, fa_pf_bq, fa_pf_pipeline,
                          pipeline.pipeline ? "" : "  (NO EXISTE, cae al tile)");
@@ -2358,8 +2358,8 @@ index a9871f1f4..d501092dd 100644
  
          // prefill goes to the tile kernel (K/V shared across 16 queries);
          // decode keeps the per-query vec kernel
--        if (ne01 >= 16 && getenv("TOSH_FA_TILE_DISABLE") == NULL) {
-+        if (ne01 >= 16 && TOSH_ENV("TOSH_FA_TILE_DISABLE") == NULL) {
+-        if (ne01 >= 16 && getenv("KESTREL_FA_TILE_DISABLE") == NULL) {
++        if (ne01 >= 16 && KESTREL_ENV("KESTREL_FA_TILE_DISABLE") == NULL) {
              char fa_tile_pipeline[80];
              if (ne20 != ne00) {
                  // MLA heads carry the value width in the name: 576/512 and 320/256
@@ -2375,20 +2375,20 @@ index a9871f1f4..d501092dd 100644
          // the simdgroup count per head was never swept on either width; the pipeline caps it,
          // so an override that overruns is dropped below rather than dispatched
          // one value for every head size overruns the pipelines that cap lower, so the
-         // override is per head size: TOSH_FA_AMD_NSG_64, _128, _WIDE
+         // override is per head size: KESTREL_FA_AMD_NSG_64, _128, _WIDE
          static const int nsg_env_64 = []() {
--            const char * s = getenv("TOSH_FA_AMD_NSG_64");
-+            const char * s = TOSH_ENV("TOSH_FA_AMD_NSG_64");
+-            const char * s = getenv("KESTREL_FA_AMD_NSG_64");
++            const char * s = KESTREL_ENV("KESTREL_FA_AMD_NSG_64");
              return s ? atoi(s) : 0;
          }();
          static const int nsg_env_128 = []() {
--            const char * s = getenv("TOSH_FA_AMD_NSG_128");
-+            const char * s = TOSH_ENV("TOSH_FA_AMD_NSG_128");
+-            const char * s = getenv("KESTREL_FA_AMD_NSG_128");
++            const char * s = KESTREL_ENV("KESTREL_FA_AMD_NSG_128");
              return s ? atoi(s) : 0;
          }();
          static const int nsg_env_wide = []() {
--            const char * s = getenv("TOSH_FA_AMD_NSG_WIDE");
-+            const char * s = TOSH_ENV("TOSH_FA_AMD_NSG_WIDE");
+-            const char * s = getenv("KESTREL_FA_AMD_NSG_WIDE");
++            const char * s = KESTREL_ENV("KESTREL_FA_AMD_NSG_WIDE");
              return s ? atoi(s) : 0;
          }();
          const int nsg_env = ne00 == 64 ? nsg_env_64 : ne00 == 128 ? nsg_env_128 : nsg_env_wide;
@@ -2402,8 +2402,8 @@ index a9871f1f4..d501092dd 100644
          // for itself, so it carries its own threshold. The depth it turns at is not the same
          // on both widths, so each keeps its own.
          static const int64_t wg_dk128_env = []() {
--            const char * s = getenv("TOSH_FA_WG_DK128_MIN_KV");
-+            const char * s = TOSH_ENV("TOSH_FA_WG_DK128_MIN_KV");
+-            const char * s = getenv("KESTREL_FA_WG_DK128_MIN_KV");
++            const char * s = KESTREL_ENV("KESTREL_FA_WG_DK128_MIN_KV");
              return s ? (int64_t) atoll(s) : (int64_t) -1;
          }();
          const bool wg_wide_head =
@@ -2412,10 +2412,10 @@ index a9871f1f4..d501092dd 100644
          const int64_t wg_dk128_min_kv = wg_dk128_env >= 0 ? wg_dk128_env
                                        : (props_dev->simd_width == 64 ? ggml_metal_fa_wg_dk128_min_kv_w64(ne02, ne12) : 24576);
          const bool wg_dk128_width_ok = props_dev->simd_width == 32 || props_dev->simd_width == 64;
-         // TOSH_FA_WG_DK64=<kv> sets the head-64 depth for every shape, 0 closes it
+         // KESTREL_FA_WG_DK64=<kv> sets the head-64 depth for every shape, 0 closes it
          static const int64_t wg_dk64_env = []() {
--            const char * s = getenv("TOSH_FA_WG_DK64");
-+            const char * s = TOSH_ENV("TOSH_FA_WG_DK64");
+-            const char * s = getenv("KESTREL_FA_WG_DK64");
++            const char * s = KESTREL_ENV("KESTREL_FA_WG_DK64");
              return s ? (int64_t) atoll(s) : (int64_t) -1;
          }();
          const int64_t wg_dk64_min_kv = wg_dk64_env >= 0 ? wg_dk64_env
@@ -2428,8 +2428,8 @@ index a9871f1f4..d501092dd 100644
              (wg_wide_head || wg_dk128) && ne01 == 1 && !has_sinks &&
              (props_dev->simd_width == 32 || props_dev->simd_width == 64) &&
              (wg_dk128 || ne11 >= 1024) &&
--            getenv("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
-+            TOSH_ENV("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
+-            getenv("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
++            KESTREL_ENV("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
  
          char fa_amd_wg_pipeline[96];
          if (fa_amd_nwg > 1) {
@@ -2448,7 +2448,7 @@ index a9871f1f4..d501092dd 100644
      // measured neutral on RDNA2 (pp512 +0.1%, tg128 -1%, both inside the noise), so the
      // dispatch saving does not pay for itself here; opt-in until a device shows a gain
 -    static const bool enabled = getenv("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
-+    static const bool enabled = TOSH_ENV("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
++    static const bool enabled = KESTREL_ENV("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
      if (!enabled || !ctx->use_fusion()) {
          return false;
      }

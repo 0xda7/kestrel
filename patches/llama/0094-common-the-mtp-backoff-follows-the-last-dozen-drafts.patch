@@ -11,10 +11,10 @@ index c14bf7192..4f5578ba5 100644
          }
  
          if ((int) acc_ewma.size() == (int) n_seq && n_last_draft[seq_id] > 0) {
--            static const float alpha = getenv("TOSH_MTP_EWMA") ? (float) atof(getenv("TOSH_MTP_EWMA")) : 0.5f;
+-            static const float alpha = getenv("KESTREL_MTP_EWMA") ? (float) atof(getenv("KESTREL_MTP_EWMA")) : 0.5f;
 +            // one rejected draft of two halved the average at 0.5 and turned drafting off while
 +            // acceptance still paid; 0.92 follows the last dozen drafts instead
-+            static const float alpha = getenv("TOSH_MTP_EWMA") ? (float) atof(getenv("TOSH_MTP_EWMA")) : 0.92f;
++            static const float alpha = getenv("KESTREL_MTP_EWMA") ? (float) atof(getenv("KESTREL_MTP_EWMA")) : 0.92f;
              const float acc = std::min(1.0f, (float) n_accepted / (float) n_last_draft[seq_id]);
              const float a = acc > acc_ewma[seq_id] ? 0.2f : alpha;  // rise fast, fall at alpha
              acc_ewma[seq_id] = a * acc_ewma[seq_id] + (1.0f - a) * acc;

@@ -153,7 +153,7 @@ struct SettingsView: View {
     private var kvNeedsFlashAttention: Bool { cacheTypeK != "f16" || cacheTypeV != "f16" }
     private var amdFlashActive: Bool { faAmd }
     private var dynamicMoeUIUnlocked: Bool {
-        ShellWords.split(extraArgs).contains("TOSH_MOE_UI=1")
+        ShellWords.split(extraArgs).contains("KESTREL_MOE_UI=1")
     }
     private func dynamicMoeSlotBinding(settings: ServerSettings) -> Binding<Int> {
         Binding(
@@ -481,8 +481,8 @@ struct SettingsView: View {
                     }
                     SettingsRow(icon: "terminal",
                                 title: loc.t("Argumentos extra", "Extra arguments"),
-                                help: loc.t("Argumentos adicionales de llama-server separados por espacios. Un token CLAVE=VALOR se aplica como variable de entorno. Para mostrar la configuración privada de Dynamic MoE escribe TOSH_MOE_UI=1. En tarjetas GCN/Vega con texto corrupto, GGML_METAL_WAVE64_SAFEMODE=1 fuerza la ruta segura.",
-                                            "Additional llama-server arguments, space-separated. A KEY=VALUE token is applied as an environment variable. To reveal the private Dynamic MoE settings, enter TOSH_MOE_UI=1. On GCN/Vega cards with corrupted text, GGML_METAL_WAVE64_SAFEMODE=1 forces the safe path.")) {
+                                help: loc.t("Argumentos adicionales de llama-server separados por espacios. Un token CLAVE=VALOR se aplica como variable de entorno. Para mostrar la configuración privada de Dynamic MoE escribe KESTREL_MOE_UI=1. En tarjetas GCN/Vega con texto corrupto, GGML_METAL_WAVE64_SAFEMODE=1 fuerza la ruta segura.",
+                                            "Additional llama-server arguments, space-separated. A KEY=VALUE token is applied as an environment variable. To reveal the private Dynamic MoE settings, enter KESTREL_MOE_UI=1. On GCN/Vega cards with corrupted text, GGML_METAL_WAVE64_SAFEMODE=1 forces the safe path.")) {
                         DeferredSettingsTextField("", text: $extraArgs,
                                                   width: 240, monospaced: true)
                     }

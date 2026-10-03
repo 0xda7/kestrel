@@ -60,7 +60,7 @@ index d059614b1..1e82cb185 100644
 +    const bool amd_sparse  = amd_n_kv_max > 0 && ne01 == 1;
 +    const int amd_n_kv_pad = amd_sparse ? GGML_PAD(amd_n_kv_max, OP_FLASH_ATTN_EXT_VEC_NCPSG) : 0;
 +
-     if (getenv("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
+     if (getenv("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
          !props_dev->has_simdgroup_mm && fa_amd_width_ok &&
          !has_bias && !has_scap) {
  
@@ -81,14 +81,14 @@ index d059614b1..1e82cb185 100644
          };
  
          // queries per threadgroup, matching the instantiation for this head size
-         static const bool pf512 = getenv("TOSH_FA_PF_DK512") != nullptr;
+         static const bool pf512 = getenv("KESTREL_FA_PF_DK512") != nullptr;
          // MLA keeps K wider than V; the tile kernel it used to fall back to measures ~26% slower
-         static const bool pfmla = getenv("TOSH_FA_PF_MLA_DISABLE") == nullptr;
+         static const bool pfmla = getenv("KESTREL_FA_PF_MLA_DISABLE") == nullptr;
          const bool fa_pf_512 = pf512 && ne00 == 512 && ne00 == ne20;
          const bool fa_pf_mla = pfmla && ne00 == 576 && ne20 == 512 &&
 @@ -4444,16 +4451,48 @@ int ggml_metal_op_flash_attn_ext(ggml_metal_op_t ctx, int idx) {
              (wg_dk128 || ne11 >= 1024) &&
-             getenv("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
+             getenv("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
  
          char fa_amd_wg_pipeline[96];
          if (fa_amd_nwg > 1) {

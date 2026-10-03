@@ -16,3 +16,9 @@ licensed GPL-3.0-or-later. They include, among others:
 
 They are applied on top of llama.cpp and stable-diffusion.cpp, which carry their own
 copyright and MIT licence; those files stay under the terms of their authors.
+
+The optional assistant sidecars delegate to third-party runtimes kept outside this
+repository: [Pi](https://github.com/earendil-works/pi) (`pi`, MIT, the engine behind
+[llm-space](https://github.com/deer-flow/llm-space)) and the latch harness. Kestrel
+launches them as separate processes and passes no credentials to them; each runtime
+keeps its own licence, copyright, and configuration.

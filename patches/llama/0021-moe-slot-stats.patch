@@ -11,9 +11,9 @@ index 3a77125fd..92846d11c 100644
      int full_sequence = 0;
      enum ggml_status result = GGML_STATUS_SUCCESS;
  
-+    // TOSH_MOE_SLOT_STATS=1: per-pass census of expert placement, to tell a routing id that
++    // KESTREL_MOE_SLOT_STATS=1: per-pass census of expert placement, to tell a routing id that
 +    // never reached a slot from one that reached a stale one
-+    const bool slot_stats = getenv("TOSH_MOE_SLOT_STATS") != NULL;
++    const bool slot_stats = getenv("KESTREL_MOE_SLOT_STATS") != NULL;
 +    int st_layers = 0, st_wide = 0, st_narrow = 0;
 +    long st_unique = 0, st_cold = 0, st_miss = 0, st_unplaced = 0, st_refs = 0, st_refs_unplaced = 0;
 +    int st_unique_max = 0, st_slots = 0;
@@ -36,7 +36,7 @@ index 3a77125fd..92846d11c 100644
          // full logical bank at a time from private hot slots plus the packed cold CPU bank.
          // The shared allocation contains only cold rows and is reused after each layer.
          const bool wide_shape = n_fixed > 0 && ids->ne[0]*ids->ne[1] > n_slots - n_fixed;
-+        // TOSH_MOE_SLOT_STATS: read back the map the assemble kernel will use and check that
++        // KESTREL_MOE_SLOT_STATS: read back the map the assemble kernel will use and check that
 +        // every routed expert resolves to a source that actually holds it.
 +        if (slot_stats && n_fixed > 0) {
 +            const struct ggml_tensor * st = (const struct ggml_tensor *) tosh_moe_state_of(gf->nodes[first]->src[0]);
@@ -72,9 +72,9 @@ index 3a77125fd..92846d11c 100644
 +            if (n_unique > st_unique_max) st_unique_max = n_unique;
 +        }
          if (n_fixed > 0 && (wide_shape || n_cold_unique > n_slots - n_fixed)) {
-             const bool transient_map = getenv("TOSH_MOE_TRANSIENT_MAP") != NULL;
-             const bool persistent_map = getenv("TOSH_MOE_PERSISTENT_MAP") != NULL;
-             const bool double_buffer = getenv("TOSH_MOE_DOUBLE_BUFFER") != NULL &&
+             const bool transient_map = getenv("KESTREL_MOE_TRANSIENT_MAP") != NULL;
+             const bool persistent_map = getenv("KESTREL_MOE_PERSISTENT_MAP") != NULL;
+             const bool double_buffer = getenv("KESTREL_MOE_DOUBLE_BUFFER") != NULL &&
                  !transient_map && !persistent_map && wide_shape;
              const int parity = double_buffer ? full_sequence++ & 1 : 0;
              if (full_pending[parity] != nil) {

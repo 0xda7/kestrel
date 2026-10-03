@@ -45,9 +45,9 @@ index ad8e44388..da2ef8f2f 100644
 +// Tensor parallelism across every device drops generation as 1/N, because a synchronisation point
 +// costs the same whatever it carries. Grouping the devices keeps the tensor split inside each
 +// group and the layer split between groups, which trades some prefill for most of the generation
-+// back. TOSH_MGPU_TENSOR_GROUP is the group size; unset or 0 keeps one group, as before.
++// back. KESTREL_MGPU_TENSOR_GROUP is the group size; unset or 0 keeps one group, as before.
 +static size_t llama_tensor_group_size(size_t n_devs) {
-+    const char * s = getenv("TOSH_MGPU_TENSOR_GROUP");
++    const char * s = getenv("KESTREL_MGPU_TENSOR_GROUP");
 +    if (s == nullptr) {
 +        return n_devs;
 +    }
@@ -58,7 +58,7 @@ index ad8e44388..da2ef8f2f 100644
 +    }
 +
 +    if (n_devs % (size_t) g != 0) {
-+        LLAMA_LOG_WARN("%s: TOSH_MGPU_TENSOR_GROUP=%ld does not divide %zu devices, using one group\n",
++        LLAMA_LOG_WARN("%s: KESTREL_MGPU_TENSOR_GROUP=%ld does not divide %zu devices, using one group\n",
 +                __func__, g, n_devs);
 +        return n_devs;
 +    }

@@ -62,7 +62,7 @@ final class SpeechDictationController: ObservableObject {
         var environment = base
         environment["GGML_METAL_CONCURRENCY_DISABLE"] = "1"
         environment["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
-        environment["TOSH_FA_AMD"] = "1"
+        environment["KESTREL_FA_AMD"] = "1"
         return environment
     }
 

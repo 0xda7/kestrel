@@ -116,7 +116,7 @@ index 38dff9f84..182caa063 100644
 +
 +    static int use_peer = -1;
 +    if (use_peer < 0) {
-+        const char * v = getenv("TOSH_MGPU_PEER");
++        const char * v = getenv("KESTREL_MGPU_PEER");
 +        use_peer = (v && v[0] == '1') ? 1 : 0;
 +    }
 +

@@ -8,12 +8,12 @@ index ea2eb8396..de8ccb2db 100644
      return v == 1;
  }
  
-+// diagnostic: TOSH_GRAPH_DUMP=1 prints, once per distinct graph size, how many nodes of each op
++// diagnostic: KESTREL_GRAPH_DUMP=1 prints, once per distinct graph size, how many nodes of each op
 +// the graph has and the widest token count among its matmuls, to tell graphs of one size apart
 +static void tosh_graph_dump(struct ggml_cgraph * gf) {
 +    static int on = -1;
 +    if (on < 0) {
-+        on = TOSH_ENV("TOSH_GRAPH_DUMP") != NULL;
++        on = KESTREL_ENV("KESTREL_GRAPH_DUMP") != NULL;
 +    }
 +    if (!on) {
 +        return;
@@ -44,7 +44,7 @@ index ea2eb8396..de8ccb2db 100644
 +            gdn_tok = t->src[0]->ne[2] > gdn_tok ? t->src[0]->ne[2] : gdn_tok;
 +        }
 +    }
-+    fprintf(stderr, "TOSH_GRAPH_DUMP n_nodes=%d widest_matmul_tokens=%lld gdn_tokens=%lld :", nn, (long long) max_tok, (long long) gdn_tok);
++    fprintf(stderr, "KESTREL_GRAPH_DUMP n_nodes=%d widest_matmul_tokens=%lld gdn_tokens=%lld :", nn, (long long) max_tok, (long long) gdn_tok);
 +    for (int o = 0; o < GGML_OP_COUNT; ++o) {
 +        if (cnt[o]) {
 +            fprintf(stderr, " %s=%d", ggml_op_name((enum ggml_op) o), cnt[o]);

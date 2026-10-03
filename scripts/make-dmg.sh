@@ -4,7 +4,7 @@
 # The window layout lives in a committed .DS_Store template, because CI builds
 # the release DMG and driving Finder from a runner does not work. Regenerate it
 # here, on a real desktop, after moving anything:
-#   TOSH_DMG_LAYOUT=1 ./scripts/make-dmg.sh
+#   KESTREL_DMG_LAYOUT=1 ./scripts/make-dmg.sh
 set -e
 cd "$(dirname "$0")/.."
 
@@ -47,7 +47,7 @@ if swiftc -O scripts/dmg-background.swift -o "$BGDIR/dmgbg" 2>/dev/null \
     fi
     [ -f "$APP/Contents/Resources/AppIcon.icns" ] \
         && cp "$APP/Contents/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
-    [ -f "$TEMPLATE" ] && [ -z "${TOSH_DMG_LAYOUT:-}" ] && cp "$TEMPLATE" "$STAGE/.DS_Store"
+    [ -f "$TEMPLATE" ] && [ -z "${KESTREL_DMG_LAYOUT:-}" ] && cp "$TEMPLATE" "$STAGE/.DS_Store"
 else
     echo "warning: could not render the background, shipping a plain DMG" >&2
 fi
@@ -57,7 +57,7 @@ hdiutil create -volname "$VOLNAME" -srcfolder "$STAGE" -ov -format UDRW "$TMPDMG
 
 # Finder addresses disks by name under /Volumes, so the layout pass cannot use a
 # private mountpoint; everything else stays out of the user's way.
-if [ -n "${TOSH_DMG_LAYOUT:-}" ]; then
+if [ -n "${KESTREL_DMG_LAYOUT:-}" ]; then
     hdiutil detach "/Volumes/$VOLNAME" > /dev/null 2>&1 || true
     hdiutil attach "$TMPDMG" -noautoopen > /dev/null
     MOUNT="/Volumes/$VOLNAME"
@@ -71,7 +71,7 @@ if [ -f "$MOUNT/.VolumeIcon.icns" ]; then
     SetFile -a C "$MOUNT" 2>/dev/null || true
 fi
 
-if [ -n "${TOSH_DMG_LAYOUT:-}" ]; then
+if [ -n "${KESTREL_DMG_LAYOUT:-}" ]; then
     echo "arranging the window with Finder…"
     osascript - "$VOLNAME" <<'APPLESCRIPT' || echo "warning: Finder would not arrange the window" >&2
 on run argv
@@ -107,7 +107,7 @@ APPLESCRIPT
 fi
 
 hdiutil detach "$MOUNT" > /dev/null
-[ -n "${TOSH_DMG_LAYOUT:-}" ] || rmdir "$MOUNT" 2>/dev/null || true
+[ -n "${KESTREL_DMG_LAYOUT:-}" ] || rmdir "$MOUNT" 2>/dev/null || true
 hdiutil convert "$TMPDMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" > /dev/null
 
 echo "Done: $DMG"

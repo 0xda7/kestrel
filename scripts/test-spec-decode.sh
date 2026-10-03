@@ -8,7 +8,7 @@
 # side, and removing it drops unpredictable content below the baseline. Defaults sweep the
 # thresholds that bracket real acceptance.
 #
-# Uses the engine in vendor/ by default; override with TOSH_BIN=/path/to/bin.
+# Uses the engine in vendor/ by default; override with KESTREL_BIN=/path/to/bin.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -17,15 +17,15 @@ shift
 THRESHOLDS=("$@")
 [ ${#THRESHOLDS[@]} -gt 0 ] || THRESHOLDS=(0.65 0.60)
 
-BIN="${TOSH_BIN:-vendor/llama.cpp/build-static/bin}"
-[ -x "$BIN/llama-server" ] || { echo "no engine at $BIN (build it, or set TOSH_BIN)" >&2; exit 1; }
+BIN="${KESTREL_BIN:-vendor/llama.cpp/build-static/bin}"
+[ -x "$BIN/llama-server" ] || { echo "no engine at $BIN (build it, or set KESTREL_BIN)" >&2; exit 1; }
 
 PORT="${PORT:-8099}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"; kill $SRV 2>/dev/null' EXIT
 
 export GGML_METAL_CONCURRENCY_DISABLE=1
-export TOSH_FA_AMD=1
+export KESTREL_FA_AMD=1
 
 # predictable: the case speculation is good at. unpredictable: the case the backoff guards.
 GOOD=(
@@ -112,7 +112,7 @@ for kind in good bad; do
     echo "\n=== ${kind:u} case"
     measure "baseline (no speculation)" $kind
     for thr in "${THRESHOLDS[@]}"; do
-        TOSH_MTP_ACC_MIN=$thr measure "MTP, backoff $thr" $kind --spec-type draft-mtp
+        KESTREL_MTP_ACC_MIN=$thr measure "MTP, backoff $thr" $kind --spec-type draft-mtp
     done
 done
 

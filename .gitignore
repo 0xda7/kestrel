@@ -7,3 +7,6 @@ icon-1024.png
 .DS_Store
 
 /experiments/
+
+# Local-only operator backups (may carry pre-rebrand personal metadata)
+.agents/backups/

@@ -209,7 +209,7 @@ diff --git a/ggml/src/ggml-metal/ggml-metal-ops.cpp b/ggml/src/ggml-metal/ggml-m
 -    if (props_dev->simd_width == 32 &&
 +    // ext kernel derives its row split from the simdgroup width, so it runs on both
 +    // wave32 and wave64. wave64 rides on wave64_decode (matches the mat-vec gating).
-+    static const bool ext_disabled = getenv("TOSH_EXT_DISABLE") != nullptr;
++    static const bool ext_disabled = getenv("KESTREL_EXT_DISABLE") != nullptr;
 +    if (!ext_disabled &&
 +        (props_dev->simd_width == 32 || (props_dev->simd_width == 64 && props_dev->wave64_decode)) &&
          op->src[1]->type == GGML_TYPE_F32 && (ne00%128 == 0) &&

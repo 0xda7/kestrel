@@ -7,7 +7,7 @@
 # The second argument is optional and only for machines with three or more cards: it runs
 # section 6, the reduction across all of them.
 #
-# Uses the installed app by default; override with TOSH_BIN=/path/to/bin.
+# Uses the installed app by default; override with KESTREL_BIN=/path/to/bin.
 # Pick the GPUs with GGML_METAL_DEVICE_LIST (0,0 splits over a single card, which is how we
 # reproduce this here). Never with -dev: on tensor split it lands on a path that is neither
 # split nor single and hides the effect of the sync flags.
@@ -16,9 +16,9 @@ set -uo pipefail
 MODEL="${1:?usage: $0 <model.gguf>}"
 PORT=18082
 
-BIN="${TOSH_BIN:-/Applications/Kestrel.app/Contents/Resources/bin}"
+BIN="${KESTREL_BIN:-/Applications/Kestrel.app/Contents/Resources/bin}"
 [ -x "$BIN/llama-server" ] || BIN="$(dirname "$0")/../vendor/llama.cpp/build-static/bin"
-[ -x "$BIN/llama-server" ] || { echo "llama-server not found; set TOSH_BIN to the app's Resources/bin" >&2; exit 1; }
+[ -x "$BIN/llama-server" ] || { echo "llama-server not found; set KESTREL_BIN to the app's Resources/bin" >&2; exit 1; }
 
 echo "=== engine"
 echo "  $BIN"
@@ -26,12 +26,12 @@ echo "  $BIN"
 "$BIN/llama-server" --version 2>&1 | grep -iE "^version:|engine|^built with"
 
 export GGML_METAL_CONCURRENCY_DISABLE=1
-export TOSH_FA_AMD=1
+export KESTREL_FA_AMD=1
 
 OUT="$(mktemp -d)"
 echo "logs in $OUT"
 
-MGPU_ENV=(env -u TOSH_MGPU_PEER -u TOSH_MGPU_EVENTS)
+MGPU_ENV=(env -u KESTREL_MGPU_PEER -u KESTREL_MGPU_EVENTS)
 
 serve() { # serve <log> <extra args...>
     local log="$1"; shift
@@ -99,11 +99,11 @@ report "$OUT/tensor.log" "tensor"
 echo "\nattach $OUT/sample.txt"
 
 # "none" runs here too: section 3 generates 400 tokens, so its t/s is not comparable with these
-for cfg in "none:" "peer:TOSH_MGPU_PEER=1" "events:TOSH_MGPU_EVENTS=1" \
-           "peer+events:TOSH_MGPU_PEER=1 TOSH_MGPU_EVENTS=1"; do
+for cfg in "none:" "peer:KESTREL_MGPU_PEER=1" "events:KESTREL_MGPU_EVENTS=1" \
+           "peer+events:KESTREL_MGPU_PEER=1 KESTREL_MGPU_EVENTS=1"; do
     label="${cfg%%:*}"
     echo "\n=== 4. tensor split, coherence with $label"
-    MGPU_ENV=(env -u TOSH_MGPU_PEER -u TOSH_MGPU_EVENTS ${=cfg#*:})
+    MGPU_ENV=(env -u KESTREL_MGPU_PEER -u KESTREL_MGPU_EVENTS ${=cfg#*:})
     if serve "$OUT/$label.log" --split-mode tensor; then
         ask 120 > "$OUT/$label.json"
         echo "output (must be coherent, no mixed scripts or garbage):"
@@ -117,9 +117,9 @@ done
 # batches under the threshold go by events. 0 = always peer, 999999 = always events.
 # Same 120 tokens as section 4, so those rows are comparable with these.
 for th in 0 8 32 128 999999; do
-    echo "\n=== 5. tensor split, peer+events, TOSH_MGPU_PEER_MIN_BATCH=$th"
-    MGPU_ENV=(env -u TOSH_MGPU_PEER -u TOSH_MGPU_EVENTS \
-              TOSH_MGPU_PEER=1 TOSH_MGPU_EVENTS=1 TOSH_MGPU_PEER_MIN_BATCH=$th)
+    echo "\n=== 5. tensor split, peer+events, KESTREL_MGPU_PEER_MIN_BATCH=$th"
+    MGPU_ENV=(env -u KESTREL_MGPU_PEER -u KESTREL_MGPU_EVENTS \
+              KESTREL_MGPU_PEER=1 KESTREL_MGPU_EVENTS=1 KESTREL_MGPU_PEER_MIN_BATCH=$th)
     if serve "$OUT/th$th.log" --split-mode tensor; then
         ask 120 "$LONG_PROMPT" > "$OUT/th$th.json"
         show "$OUT/th$th.json"
@@ -134,10 +134,10 @@ done
 DEVS="${2:-}"
 if [ -n "$DEVS" ]; then
     export GGML_METAL_DEVICE_LIST="$DEVS"
-    for cfg in "generic:TOSH_MGPU_COMM_DISABLE=1" "butterfly:"; do
+    for cfg in "generic:KESTREL_MGPU_COMM_DISABLE=1" "butterfly:"; do
         label="${cfg%%:*}"
         echo "\n=== 6. tensor split on $DEVS, $label reduction"
-        MGPU_ENV=(env -u TOSH_MGPU_PEER -u TOSH_MGPU_COMM_DISABLE TOSH_MGPU_EVENTS=1 ${=cfg#*:})
+        MGPU_ENV=(env -u KESTREL_MGPU_PEER -u KESTREL_MGPU_COMM_DISABLE KESTREL_MGPU_EVENTS=1 ${=cfg#*:})
         if serve "$OUT/$label.log" --split-mode tensor; then
             ask 120 "$LONG_PROMPT" > "$OUT/$label.json"
             echo "output (must be coherent):"

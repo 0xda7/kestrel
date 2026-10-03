@@ -17,6 +17,12 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.latchPrimaryEnabled) private var latchPrimaryEnabled = false
     @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
     @AppStorage(SettingsKeys.latchDelegateTimeout) private var latchDelegateTimeout = 300
+    @AppStorage(SettingsKeys.piPrimaryEnabled) private var piPrimaryEnabled = false
+    @AppStorage(SettingsKeys.piBinaryPath) private var piBinaryPath = ""
+    @AppStorage(SettingsKeys.piModel) private var piModel = ""
+    @AppStorage(SettingsKeys.piProvider) private var piProvider = ""
+    @AppStorage(SettingsKeys.piTimeout) private var piTimeout = 900
+    @AppStorage(SettingsKeys.piThinkingLevel) private var piThinkingLevel = ""
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
@@ -40,6 +46,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.chatDryAllowedLength) private var dryAllowedLength = 2
     @AppStorage(SettingsKeys.chatDryPenaltyLastN) private var dryPenaltyLastN = 0
     @AppStorage(SettingsKeys.chatSamplers) private var samplers = ""
+    @AppStorage(SettingsKeys.chatStopSequences) private var stopSequences = ""
     @AppStorage(SettingsKeys.chatBackendSampling) private var backendSampling = false
     @AppStorage(SettingsKeys.chatCustomJSON) private var customJSON = ""
     @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = 10
@@ -143,6 +150,14 @@ struct ChatAdvancedSettingsSection: View {
                                             "Order the samplers are applied in, separated by ';'. Leave empty for the engine's default order.")) {
                         DeferredSettingsTextField("", text: $samplers,
                                                   prompt: "top_k;typ_p;top_p;min_p;temperature",
+                                                  width: Self.controlColumn)
+                    }
+                    SettingsRow(icon: "octagon.stop",
+                                title: loc.t("Secuencias de parada", "Stop sequences"),
+                                help: loc.t("Textos que cortan la respuesta al aparecer, separados por comas o líneas. Vacío = ninguno. Se envía como 'stop' (OpenAI/motor) y 'stop_sequences' (Anthropic).",
+                                            "Texts that end the reply when they appear, comma- or newline-separated. Empty = none. Sent as 'stop' (OpenAI/engine) and 'stop_sequences' (Anthropic).")) {
+                        DeferredSettingsTextField("", text: $stopSequences,
+                                                  prompt: "\"###\", \"User:\", \"END\"",
                                                   width: Self.controlColumn)
                     }
                     SettingsRow(icon: "cpu",
@@ -292,6 +307,50 @@ struct ChatAdvancedSettingsSection: View {
                                        value: $latchDelegateTimeout, range: 30...900,
                                        help: loc.t("Cuánto esperar el informe del delegado antes de detenerlo.",
                                                    "How long to wait for the delegate's report before stopping it."))
+                    }
+                    SettingsRow(icon: "bird",
+                                title: loc.t("pi como asistente principal (llm-space)", "pi as primary assistant (llm-space)"),
+                                help: loc.t("Las conversaciones nuevas responden con el runtime pi (proceso independiente, sin motor ni pasarela), el motor del proyecto llm-space. El modelo y proveedor se eligen en la configuración de pi; Kestrel nunca los fija en código. Se puede cambiar por conversación desde el chip de la cabecera. Requiere el binario pi instalado (npm i -g @earendil-works/pi-coding-agent --ignore-scripts).",
+                                       "New conversations are answered by the pi runtime (its own process, no engine or gateway), the engine of the llm-space project. Model and provider come from pi's own configuration; Kestrel never hardcodes them. Switchable per conversation from the header chip. Requires the pi binary installed (npm i -g @earendil-works/pi-coding-agent --ignore-scripts).")) {
+                        SettingsToggle(isOn: $piPrimaryEnabled)
+                    }
+                    if piPrimaryEnabled {
+                        SettingsRow(icon: "wrench.and.screwdriver",
+                                    title: loc.t("Binario de pi", "pi binary"),
+                                    help: loc.t("Ruta al ejecutable pi. Se amplía ~ al usarla.",
+                                           "Path to the pi executable. ~ expands when used.")) {
+                            DeferredSettingsTextField("", text: $piBinaryPath,
+                                                      prompt: PiDelegateService.defaultBinaryPath,
+                                                      width: 220)
+                        }
+                        SettingsRow(icon: "cpu",
+                                    title: loc.t("Modelo de pi", "pi model"),
+                                    help: loc.t("Patrón pasado a pi --model (coincidencia difusa o proveedor/modelo). Vacío usa la elección de la propia configuración de pi. Ejecuta \"pi --list-models\" para ver los nombres válidos; nunca se fija un modelo en el código.",
+                                           "Pattern passed to pi --model (fuzzy match or provider/id). Empty keeps pi's own configuration choice. Run \"pi --list-models\" for valid names; no model is ever hardcoded.")) {
+                            DeferredSettingsTextField("", text: $piModel,
+                                                      prompt: loc.t("elección de pi", "pi's own choice"),
+                                                      width: 220)
+                        }
+                        SettingsRow(icon: "externaldrive.connected.to.line.below",
+                                    title: loc.t("Proveedor de pi", "pi provider"),
+                                    help: loc.t("Restringe --provider junto con el patrón de modelo. Vacío usa la configuración de pi.",
+                                           "Restricts --provider alongside the model pattern. Empty keeps pi's configuration.")) {
+                            DeferredSettingsTextField("", text: $piProvider,
+                                                      prompt: loc.t("elección de pi", "pi's own choice"),
+                                                      width: 220)
+                        }
+                        SettingsRow(icon: "brain",
+                                    title: loc.t("Nivel de pensamiento de pi", "pi thinking level"),
+                                    help: loc.t("Nivel pasado a pi --thinking cuando el pensamiento está activado (off, minimal, low, medium, high, xhigh, max). Vacío usa el nivel de la propia configuración de pi. Con el pensamiento desactivado Kestrel manda --thinking off.",
+                                           "Level passed to pi --thinking when thinking is on (off, minimal, low, medium, high, xhigh, max). Empty keeps pi's own configured level. With thinking off, Kestrel sends --thinking off.")) {
+                            DeferredSettingsTextField("", text: $piThinkingLevel,
+                                                      prompt: loc.t("elección de pi", "pi's own choice"),
+                                                      width: 220)
+                        }
+                        integerStepper(loc.t("Tiempo límite de pi (s)", "pi timeout (s)"),
+                                       value: $piTimeout, range: 30...1800,
+                                       help: loc.t("Cuánto esperar una respuesta de pi antes de detenerlo.",
+                                                   "How long to wait for a pi reply before stopping it."))
                     }
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
@@ -495,6 +554,7 @@ struct ChatAdvancedSettingsSection: View {
         dynatempRange = 0; dynatempExponent = 1; xtcProbability = 0; xtcThreshold = 0.1
         typicalP = 1; presencePenalty = 0; frequencyPenalty = 0; dryMultiplier = 0
         dryBase = 1.75; dryAllowedLength = 2; dryPenaltyLastN = 0; samplers = ""
+        stopSequences = ""
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false

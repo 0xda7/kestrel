@@ -1,17 +1,17 @@
 #!/bin/zsh
 # Packages Kestrel as a native .app bundle.
-# TOSH_ARCH=x86_64 ./make-app.sh  -> cross-compile (CI on Apple Silicon runners)
+# KESTREL_ARCH=x86_64 ./make-app.sh  -> cross-compile (CI on Apple Silicon runners)
 set -e
 cd "$(dirname "$0")"
 
 # Version: the VERSION file is the single source of truth. Each packaging
 # build bumps the last component automatically (0.81.1 -> 0.81.2). For a
-# minor/major release set it explicitly: TOSH_VERSION=0.82 ./make-app.sh
-# CI builds (CI=true) and TOSH_NO_BUMP=1 use the committed version as-is.
-if [ -n "$TOSH_VERSION" ]; then
-    VERSION="$TOSH_VERSION"
+# minor/major release set it explicitly: KESTREL_VERSION=0.82 ./make-app.sh
+# CI builds (CI=true) and KESTREL_NO_BUMP=1 use the committed version as-is.
+if [ -n "$KESTREL_VERSION" ]; then
+    VERSION="$KESTREL_VERSION"
     echo "$VERSION" > VERSION
-elif [ -z "$CI" ] && [ "$TOSH_NO_BUMP" != "1" ]; then
+elif [ -z "$CI" ] && [ "$KESTREL_NO_BUMP" != "1" ]; then
     VERSION=$(<VERSION)
     # a two-component version opens its patch series (0.86 -> 0.86.1) instead of
     # bumping the minor, which is what incrementing its last component would do
@@ -28,16 +28,16 @@ sed -i '' -E "s/static let version = \"[^\"]*\"/static let version = \"$VERSION\
 echo "version: $VERSION"
 
 # Stamp the no-AVX2 variant so the updater keeps it on its own channel (an AVX2 DMG
-# would SIGILL on those CPUs). Set via TOSH_NO_AVX2=1 alongside build-engines.sh.
-NOAVX2=$([ "$TOSH_NO_AVX2" = "1" ] && echo true || echo false)
+# would SIGILL on those CPUs). Set via KESTREL_NO_AVX2=1 alongside build-engines.sh.
+NOAVX2=$([ "$KESTREL_NO_AVX2" = "1" ] && echo true || echo false)
 echo "no-AVX2 variant: $NOAVX2"
 
-if [ "$TOSH_ARCH" = "universal" ]; then
+if [ "$KESTREL_ARCH" = "universal" ]; then
     swift build -c release --arch x86_64 --arch arm64
     SWIFT_BIN=".build/apple/Products/Release/Kestrel"
-elif [ -n "$TOSH_ARCH" ]; then
-    swift build -c release --arch "$TOSH_ARCH"
-    SWIFT_BIN=".build/$TOSH_ARCH-apple-macosx/release/Kestrel"
+elif [ -n "$KESTREL_ARCH" ]; then
+    swift build -c release --arch "$KESTREL_ARCH"
+    SWIFT_BIN=".build/$KESTREL_ARCH-apple-macosx/release/Kestrel"
 else
     swift build -c release
     SWIFT_BIN=".build/release/Kestrel"

@@ -170,7 +170,7 @@ index 2ecd8a91a..3a77125fd 100644
 +
 +
 +
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
  static bool ggml_metal_moe_encode_range(
          ggml_metal_t ctx, struct ggml_cgraph * gf, id<MTLCommandBuffer> cmd_buf, int start, int end) {
      if (start >= end) {
@@ -218,7 +218,7 @@ index 59cb7b03e..dd7c11237 100644
      // so the copies all go out before any of the adds.
 +    static int fused = -1;
 +    if (fused < 0) {
-+        fused = getenv("TOSH_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
++        fused = getenv("KESTREL_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
 +    }
 +
      for (size_t offset = offset_max; offset >= 1; offset /= 2) {

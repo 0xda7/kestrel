@@ -804,11 +804,11 @@ final class ImageGenerator: ObservableObject {
         var env = ProcessInfo.processInfo.environment
         // The wide matmul tile is tuned for LLM prefill shapes; on diffusion it costs
         // 1.7% on SDXL and 3% on Wan, with byte-identical output. Measured 08-14.
-        env["TOSH_MM_WIDE_DISABLE"] = "1"
-        if model.halfPartials { env["TOSH_MM_ACC_HALF"] = "1" }
+        env["KESTREL_MM_WIDE_DISABLE"] = "1"
+        if model.halfPartials { env["KESTREL_MM_ACC_HALF"] = "1" }
         // The flash-attention kernels for AMD are opt-in; without this the backend
         // turns --diffusion-fa down and the attention is materialized instead.
-        env["TOSH_FA_AMD"] = "1"
+        env["KESTREL_FA_AMD"] = "1"
         // AMD discrete GPUs corrupt output without disabling Metal concurrency;
         // Apple Silicon keeps it on. Mirrors the LLM engine defaults.
         // Split each step into enough command buffers to clear the GPU watchdog.

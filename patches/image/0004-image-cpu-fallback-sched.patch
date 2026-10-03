@@ -25,7 +25,7 @@ index 54f0538..0b17873 100644
              return true;
          }
 +        // escape hatch for a wave64 card that miscomputes an op supports_op accepts
-+        static const bool forced = getenv("SD_TOSH_CPU_FALLBACK") != nullptr;
++        static const bool forced = getenv("SD_KESTREL_CPU_FALLBACK") != nullptr;
 +        if (forced && !sd_backend_is_cpu(backend_)) {
 +            return true;
 +        }

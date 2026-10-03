@@ -7,7 +7,7 @@ index 45289079e..3622fe6cb 100644
  
  static bool ggml_metal_ctime_barrier(void) {
      static int v = -1;
-     if (v < 0) { const char * s = getenv("TOSH_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
+     if (v < 0) { const char * s = getenv("KESTREL_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
      return v == 1;
  }
  
@@ -22,7 +22,7 @@ index 45289079e..3622fe6cb 100644
  }
 @@ -705,16 +706,30 @@ static bool ggml_metal_bp_satisfied(void) {
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_BP_SATISFIED=1, the collective does not "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_BP_SATISFIED=1, the collective does not "
                              "wait before reusing the staging block. Benchmark only.\n");
          }
      }
@@ -34,7 +34,7 @@ index 45289079e..3622fe6cb 100644
 +static bool ggml_metal_tp2_fused_boundary(int64_t batch) {
 +    static int v = -2;
 +    if (v == -2) {
-+        const char * s = getenv("TOSH_MGPU_TP2_FUSED_BOUNDARY");
++        const char * s = getenv("KESTREL_MGPU_TP2_FUSED_BOUNDARY");
 +        v = s ? (s[0] == '1' ? 1 : 0) : -1;
 +    }
 +    if (v >= 0) {
@@ -46,10 +46,10 @@ index 45289079e..3622fe6cb 100644
  static bool ggml_metal_wait_satisfied(void) {
      static int v = -1;
      if (v < 0) {
-         const char * s = getenv("TOSH_MGPU_WAIT_SATISFIED");
+         const char * s = getenv("KESTREL_MGPU_WAIT_SATISFIED");
          v = (s && s[0] == '1') ? 1 : 0;
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_WAIT_SATISFIED=1, the collective never "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_WAIT_SATISFIED=1, the collective never "
                              "waits for the peer and the output is meaningless. Benchmark only.\n");
 @@ -810,16 +825,17 @@ static void tosh_mgpu_trace_report(void) {
              _Atomic uint64_t * hh[3] = {g_ct_hp, g_ct_hw, g_ct_hr};
@@ -78,12 +78,12 @@ index 45289079e..3622fe6cb 100644
  
  // acc += a plain buffer laid out exactly like acc. The collective's partner publishes its
  // partial that way, so the add can read it straight across the fabric with no tensor to wrap.
-+// TOSH_MGPU_FB_ADD_RB=0 keeps the generic add below. A single row goes through the row-broadcast
++// KESTREL_MGPU_FB_ADD_RB=0 keeps the generic add below. A single row goes through the row-broadcast
 +// float4 variant the graph already uses for the residual, since bin_one strides a few threads
 +// across the whole row and is several times slower on it.
 +static bool ggml_metal_fb_add_rb(void) {
 +    static int v = -1;
-+    if (v < 0) { const char * s = getenv("TOSH_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
++    if (v < 0) { const char * s = getenv("KESTREL_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
 +    return v == 1;
 +}
 +
@@ -179,7 +179,7 @@ index 45289079e..3622fe6cb 100644
          uint64_t cbase = 0;
          const bool cbar = ggml_metal_ctime_barrier();
          if (cts != nil) {
-             cbase = (atomic_fetch_add(&ctx_self->ct_idx, 1) % TOSH_CT_SLOTS)*TOSH_CT_PER;
+             cbase = (atomic_fetch_add(&ctx_self->ct_idx, 1) % KESTREL_CT_SLOTS)*KESTREL_CT_PER;
          }
  
 -        id<MTLBlitCommandEncoder> enc_out = [cmd_buf blitCommandEncoder];

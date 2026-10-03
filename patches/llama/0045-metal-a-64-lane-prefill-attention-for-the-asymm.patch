@@ -11,13 +11,13 @@ index e79b4c680..8f5c9f96e 100644
          // PF always dispatches 256 threads and subdivides them into logical
          // 16-lane query groups, so the same specialization works on wave32
          // (8 physical simdgroups) and wave64 (4 physical simdgroups).
-+        if (getenv("TOSH_FA_PF_DEBUG") != nullptr) {
++        if (getenv("KESTREL_FA_PF_DEBUG") != nullptr) {
 +            fprintf(stderr, "FA_PF gate dk=%d dv=%d ne01=%d head_ok=%d ktype=%s vtype=%s\n",
 +                    (int) ne00, (int) ne20, (int) ne01, (int) fa_pf_head_ok,
 +                    ggml_type_name(op->src[1]->type), ggml_type_name(op->src[2]->type));
 +        }
          if ((props_dev->simd_width == 32 || props_dev->simd_width == 64) &&
-             ne01 >= 32 && fa_pf_head_ok && getenv("TOSH_FA_PF_DISABLE") == NULL) {
+             ne01 >= 32 && fa_pf_head_ok && getenv("KESTREL_FA_PF_DISABLE") == NULL) {
              char fa_pf_pipeline[80];
 +            bool fa_pf_asym = false;
              if (fa_pf_mla) {
@@ -35,20 +35,20 @@ index e79b4c680..8f5c9f96e 100644
  
                  // the 64-lane twin lives in fa_w64.metal, with the lane group as a parameter.
                  // Only the symmetric heads have one; MLA and the asymmetric pairs stay above.
-                 // TOSH_FA_PF_LG picks the group so the three can be compared; 16 reproduces
+                 // KESTREL_FA_PF_LG picks the group so the three can be compared; 16 reproduces
                  // the 32-lane kernel exactly and is the control.
 @@ -4019,17 +4027,17 @@ int ggml_metal_op_flash_attn_ext(ggml_metal_op_t ctx, int idx) {
                  }();
-                 // TOSH_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
+                 // KESTREL_FA_PF_BK picks the key-block twin: the counterpart of BQ on the other
                  // side of the K/V reuse, so a bigger block pays the same traffic fewer times
                  static const int pf_bk = []() {
-                     const char * s = getenv("TOSH_FA_PF_BK");
+                     const char * s = getenv("KESTREL_FA_PF_BK");
                      return s ? atoi(s) : 0;
                  }();
                  if (props_dev->simd_width == 64 && (pf_lg == 16 || pf_lg == 32 || pf_lg == 64) &&
 -                    (ne00 == 64 || ne00 == 128 || ne00 == 256) &&
 +                    (ne00 == 64 || ne00 == 128 || ne00 == 256 || ne00 == 512) &&
-                     getenv("TOSH_FA_PF_W64_DISABLE") == nullptr) {
+                     getenv("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
                      char w64_name[96];
                      if (pf_bq > 0) {
                          snprintf(w64_name, sizeof(w64_name), "%s_w64_lg%dq%dk%d", fa_pf_pipeline, pf_lg, pf_bq,
@@ -68,11 +68,11 @@ index e79b4c680..8f5c9f96e 100644
 +            // the asymmetric heads compose their name in the branches above, so their twin is
 +            // picked here instead. Same group of sixteen; the fallback is the 32-lane kernel.
 +            if (fa_pf_asym && props_dev->simd_width == 64 &&
-+                getenv("TOSH_FA_PF_W64_DISABLE") == nullptr) {
++                getenv("KESTREL_FA_PF_W64_DISABLE") == nullptr) {
 +                char w64_name[96];
 +                // sixteen reproduces the 32-lane kernel exactly, so it is the control; the
 +                // sweep that closed the symmetric heads there never covered an asymmetric one
-+                const char * slg = getenv("TOSH_FA_PF_LG");
++                const char * slg = getenv("KESTREL_FA_PF_LG");
 +                snprintf(w64_name, sizeof(w64_name), "%s_w64_lg%d", fa_pf_pipeline, slg ? atoi(slg) : 16);
 +                if (ggml_metal_library_get_pipeline(lib, w64_name).pipeline ||
 +                    ggml_metal_library_compile_pipeline(lib, w64_name, w64_name, nullptr).pipeline) {
@@ -87,7 +87,7 @@ index e79b4c680..8f5c9f96e 100644
  
 +            // Which twin a head actually lands on cannot be read from the timings: a switch that
 +            // never reaches the kernel gives the same number on both sides.
-+            if (getenv("TOSH_FA_PF_DEBUG") != nullptr) {
++            if (getenv("KESTREL_FA_PF_DEBUG") != nullptr) {
 +                fprintf(stderr, "FA_PF dk=%d dv=%d bq=%d -> %s%s\n",
 +                        (int) ne00, (int) ne20, fa_pf_bq, fa_pf_pipeline,
 +                        pipeline.pipeline ? "" : "  (NO EXISTE, cae al tile)");

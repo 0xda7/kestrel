@@ -11,7 +11,7 @@ index fe7f401c4..a2ac49127 100644
 -    ggml_backend_metal_set_n_cb(backend, 1);
 +    // diagnostic: how many threads encode the graph beside the main one
 +    static const int n_cb_env = []() {
-+        const char * e = getenv("TOSH_METAL_N_CB");
++        const char * e = getenv("KESTREL_METAL_N_CB");
 +        return e ? atoi(e) : 1;
 +    }();
 +    ggml_backend_metal_set_n_cb(backend, n_cb_env > 0 ? n_cb_env : 1);
@@ -29,7 +29,7 @@ index fe7f401c4..a2ac49127 100644
 -    ggml_backend_metal_set_n_cb(backend, 1);
 +    // diagnostic: how many threads encode the graph beside the main one
 +    static const int n_cb_env = []() {
-+        const char * e = getenv("TOSH_METAL_N_CB");
++        const char * e = getenv("KESTREL_METAL_N_CB");
 +        return e ? atoi(e) : 1;
 +    }();
 +    ggml_backend_metal_set_n_cb(backend, n_cb_env > 0 ? n_cb_env : 1);

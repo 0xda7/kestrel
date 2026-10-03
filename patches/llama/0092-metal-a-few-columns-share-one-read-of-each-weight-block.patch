@@ -13,21 +13,21 @@ index 59909db0d..02bee5e3e 100644
  
 +// a pair of columns shares one read of each block, where one pass per column would read and
 +// unpack the weights twice. Four columns go as two pairs where that measured faster.
-+// TOSH_MV_NC2_PROBE=R opens the untuned widths with R rows, for measuring
++// KESTREL_MV_NC2_PROBE=R opens the untuned widths with R rows, for measuring
 +static int nc2_probe() {
-+    static const int r = TOSH_ENV("TOSH_MV_NC2_PROBE") ? atoi(TOSH_ENV("TOSH_MV_NC2_PROBE")) : 0;
++    static const int r = KESTREL_ENV("KESTREL_MV_NC2_PROBE") ? atoi(KESTREL_ENV("KESTREL_MV_NC2_PROBE")) : 0;
 +    return r;
 +}
 +
 +int ggml_metal_mv_nc2_rows(ggml_type type, int simd_width, int ne11) {
-+    static const bool disabled = TOSH_ENV("TOSH_MV_NC2_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_MV_NC2_DISABLE") != nullptr;
 +    if (disabled || ne11 < 2 || ne11 > 4) {
 +        return 0;
 +    }
 +    const bool w64 = simd_width == 64;
 +    // three columns in one pass, where that beat the batched kernel
 +    if (ne11 == 3) {
-+        static const bool nc3_off = TOSH_ENV("TOSH_MV_NC3_DISABLE") != nullptr;
++        static const bool nc3_off = KESTREL_ENV("KESTREL_MV_NC3_DISABLE") != nullptr;
 +        if (w64 || nc3_off) {
 +            return 0;
 +        }
@@ -78,7 +78,7 @@ index 59909db0d..02bee5e3e 100644
 +        suffix = nc_sfx;
 +        // only q4_K has a 64-lane twin; the others run their one kernel at either width
 +        w64 = simd_width == 64 && tsrc0 == GGML_TYPE_Q4_K;
-+        if (const char * sg = TOSH_ENV("TOSH_MV_NC2_SG")) {
++        if (const char * sg = KESTREL_ENV("KESTREL_MV_NC2_SG")) {
 +            nsg = atoi(sg);
 +        }
 +    }
@@ -123,7 +123,7 @@ index e1394d247..773c14e5c 100644
 @@ -3233,16 +3233,34 @@ static int ggml_metal_op_mul_mat_qvk(ggml_metal_op_t ctx, int idx) {
  static int kquant_ext_floor() {
      static const int v = []() {
-         const char * s = TOSH_ENV("TOSH_EXT_KQ_FLOOR");
+         const char * s = KESTREL_ENV("KESTREL_EXT_KQ_FLOOR");
          return s ? atoi(s) : 2;
      }();
      return v;
@@ -132,7 +132,7 @@ index e1394d247..773c14e5c 100644
 +// on 64 lanes the batched kernel loses to one mat-vec pass per column for these types: at every
 +// width for the table lookups and q2_K, and at two columns for the rest
 +static bool ext_loses_w64(ggml_type t, int ne11) {
-+    static const bool disabled = TOSH_ENV("TOSH_EXT_W64_SKIP_DISABLE") != nullptr;
++    static const bool disabled = KESTREL_ENV("KESTREL_EXT_W64_SKIP_DISABLE") != nullptr;
 +    if (disabled) {
 +        return false;
 +    }
@@ -161,7 +161,7 @@ index e1394d247..773c14e5c 100644
      // these should be efficient for BS [2, ~8]
      // ext kernel derives its row split from the simdgroup width, so it runs on both
      // wave32 and wave64. wave64 rides on wave64_decode (matches the mat-vec gating).
-     static const bool ext_disabled = TOSH_ENV("TOSH_EXT_DISABLE") != nullptr;
+     static const bool ext_disabled = KESTREL_ENV("KESTREL_EXT_DISABLE") != nullptr;
      if (!ext_disabled &&
          (props_dev->simd_width == 32 || (props_dev->simd_width == 64 && props_dev->wave64_decode)) &&
 +        !(props_dev->simd_width == 64 && ext_loses_w64(op->src[0]->type, ne11)) &&

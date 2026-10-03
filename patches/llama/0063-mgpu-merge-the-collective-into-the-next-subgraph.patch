@@ -37,11 +37,11 @@ index 910ca4d26..94c6c6bc8 100644
                      }
                  }
  
-+                // TOSH_TP_ANATOMY=1 lists every cut, which is one collective each: the partial
++                // KESTREL_TP_ANATOMY=1 lists every cut, which is one collective each: the partial
 +                // node that forced it, where the delay moved it to, and what consumes the result.
 +                static int anatomy = -1;
 +                if (anatomy < 0) {
-+                    anatomy = getenv("TOSH_TP_ANATOMY") != nullptr;
++                    anatomy = getenv("KESTREL_TP_ANATOMY") != nullptr;
 +                }
 +                if (anatomy) {
 +                    ggml_tensor * part = cgraph->nodes[i];
@@ -104,8 +104,8 @@ index a2728d31d..8dacceed9 100644
      ggml_metal_event_t ev_cpy; // for async copies
      ggml_metal_event_t ev_sync; // destination completion signal
  
-+    id<MTLCounterSampleBuffer> ct_buf;   // trace only, TOSH_MGPU_CTIME
-+    id<MTLSharedEvent>         ev_wait_dummy;   // benchmark only, TOSH_MGPU_WAIT_SATISFIED
++    id<MTLCounterSampleBuffer> ct_buf;   // trace only, KESTREL_MGPU_CTIME
++    id<MTLSharedEvent>         ev_wait_dummy;   // benchmark only, KESTREL_MGPU_WAIT_SATISFIED
 +    _Atomic uint64_t           ct_idx;
 +
      // Synchronization and resources shared by both cross-device copy paths.
@@ -119,7 +119,7 @@ index a2728d31d..8dacceed9 100644
 @@ -369,23 +373,492 @@ static bool ggml_metal_defer_waits(void) {
      static int val = -1;
      if (val < 0) {
-         const char * v = getenv("TOSH_MGPU_DEFER_WAITS");
+         const char * v = getenv("KESTREL_MGPU_DEFER_WAITS");
          val = (v && v[0] == '1') ? 1 : 0;
      }
      return val;
@@ -134,7 +134,7 @@ index a2728d31d..8dacceed9 100644
 +static _Atomic uint64_t g_tr_waits       = 0; // cross-device event waits encoded
 +
 +
-+// TOSH_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
++// KESTREL_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
 +// when it is on, so a release run pays one cached branch per crossing.
 +static _Atomic uint64_t g_tr_reduce      = 0; // exchange_reduce calls
 +static _Atomic uint64_t g_tr_copy        = 0; // plain cross-device copies
@@ -150,7 +150,7 @@ index a2728d31d..8dacceed9 100644
 +static bool tosh_mgpu_trace(void) {
 +    static int on = -1;
 +    if (on < 0) {
-+        const char * v = getenv("TOSH_MGPU_TRACE");
++        const char * v = getenv("KESTREL_MGPU_TRACE");
 +        on = (v && v[0] == '1') ? 1 : 0;
 +    }
 +    return on == 1;
@@ -164,12 +164,12 @@ index a2728d31d..8dacceed9 100644
 +// side, when each GPU started the collective, and the signed order of both. The collective
 +// loop is serial on the CPU, so a GPU-start difference is not evidence of compute imbalance
 +// until the commit difference is subtracted from it.
-+#define TOSH_SKEW_SLOTS 8192
++#define KESTREL_SKEW_SLOTS 8192
 +static struct {
 +    _Atomic uint64_t seq[2];
 +    _Atomic uint64_t commit_ns[2];
 +    _Atomic uint64_t gpu_ns[2];
-+} g_skew[TOSH_SKEW_SLOTS];
++} g_skew[KESTREL_SKEW_SLOTS];
 +
 +static _Atomic uint64_t g_sk_n;
 +static _Atomic uint64_t g_sk_gpu_hist[8], g_sk_com_hist[8];
@@ -182,14 +182,14 @@ index a2728d31d..8dacceed9 100644
 +}
 +
 +static void tosh_skew_commit(uint64_t seq, int side, uint64_t t_ns) {
-+    const int slot = (int) (seq % TOSH_SKEW_SLOTS);
++    const int slot = (int) (seq % KESTREL_SKEW_SLOTS);
 +    atomic_store(&g_skew[slot].gpu_ns[side], 0);
 +    atomic_store(&g_skew[slot].commit_ns[side], t_ns);
 +    atomic_store(&g_skew[slot].seq[side], seq);
 +}
 +
 +static void tosh_skew_started(uint64_t seq, int side, double gpu_start) {
-+    const int slot = (int) (seq % TOSH_SKEW_SLOTS);
++    const int slot = (int) (seq % KESTREL_SKEW_SLOTS);
 +    atomic_store(&g_skew[slot].gpu_ns[side], (uint64_t) (gpu_start*1e9));
 +
 +    const int other = side ^ 1;
@@ -207,7 +207,7 @@ index a2728d31d..8dacceed9 100644
 +    if (side != 1 && atomic_load(&g_skew[slot].gpu_ns[other]) == 0) {
 +        return;
 +    }
-+    static _Atomic uint64_t claimed[TOSH_SKEW_SLOTS];
++    static _Atomic uint64_t claimed[KESTREL_SKEW_SLOTS];
 +    uint64_t was = atomic_exchange(&claimed[slot], seq);
 +    if (was == seq) {
 +        return;                                  // already accounted
@@ -238,7 +238,7 @@ index a2728d31d..8dacceed9 100644
 +    _Atomic uint64_t ord[2];
 +    _Atomic uint64_t start_ns[2];
 +    _Atomic uint64_t end_ns[2];
-+} g_gr[TOSH_SKEW_SLOTS];
++} g_gr[KESTREL_SKEW_SLOTS];
 +
 +static _Atomic uint64_t g_gr_n;
 +static _Atomic uint64_t g_gr_hs[8], g_gr_hd[8], g_gr_he[8];      // |start|, |duration|, |end| deltas
@@ -265,7 +265,7 @@ index a2728d31d..8dacceed9 100644
 +        if (cb.GPUStartTime <= 0 || cb.GPUEndTime <= 0) {
 +            return;
 +        }
-+        const int slot = (int) (ord % TOSH_SKEW_SLOTS);
++        const int slot = (int) (ord % KESTREL_SKEW_SLOTS);
 +        const uint64_t st = (uint64_t) (cb.GPUStartTime*1e9);
 +        const uint64_t en = (uint64_t) (cb.GPUEndTime*1e9);
 +
@@ -286,7 +286,7 @@ index a2728d31d..8dacceed9 100644
 +        if (s0 == 0 || s1 == 0 || e0 == 0 || e1 == 0) {
 +            return;
 +        }
-+        static _Atomic uint64_t claimed[TOSH_SKEW_SLOTS];
++        static _Atomic uint64_t claimed[KESTREL_SKEW_SLOTS];
 +        uint64_t was = atomic_exchange(&claimed[slot], ord + 1);
 +        if (was == ord + 1) {
 +            return;
@@ -352,22 +352,22 @@ index a2728d31d..8dacceed9 100644
 +    g_snap_passes = atomic_load(ggml_backend_meta_pass_counter());
 +}
 +
-+// TOSH_MGPU_CTIME=1, trace only. GPU timestamps inside the staged exchange, the path batch-1
++// KESTREL_MGPU_CTIME=1, trace only. GPU timestamps inside the staged exchange, the path batch-1
 +// decode actually takes. Four samples, all from one device, so no cross-GPU clock correlation
 +// is involved: S0/S1 bracket the publish blit, S2/S3 the staging read. S1 to S2 is a
 +// WAIT-WINDOW, not a pure event wait: it spans the signal, the peer wait and the encoder switch.
-+#define TOSH_CT_SLOTS 4096
-+#define TOSH_CT_PER   4
++#define KESTREL_CT_SLOTS 4096
++#define KESTREL_CT_PER   4
 +
 +static bool ggml_metal_ctime(void) {
 +    static int v = -1;
-+    if (v < 0) { const char * s = getenv("TOSH_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
++    if (v < 0) { const char * s = getenv("KESTREL_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
 +    return v == 1;
 +}
 +
 +static bool ggml_metal_ctime_barrier(void) {
 +    static int v = -1;
-+    if (v < 0) { const char * s = getenv("TOSH_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
++    if (v < 0) { const char * s = getenv("KESTREL_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
 +    return v == 1;
 +}
 +
@@ -391,7 +391,7 @@ index a2728d31d..8dacceed9 100644
 +        }
 +        if (ts == nil) { return nil; }
 +        MTLCounterSampleBufferDescriptor * d = [MTLCounterSampleBufferDescriptor new];
-+        d.counterSet = ts; d.sampleCount = TOSH_CT_SLOTS*TOSH_CT_PER; d.storageMode = MTLStorageModeShared;
++        d.counterSet = ts; d.sampleCount = KESTREL_CT_SLOTS*KESTREL_CT_PER; d.storageMode = MTLStorageModeShared;
 +        NSError * err = nil;
 +        ctx->ct_buf = [dev newCounterSampleBufferWithDescriptor:d error:&err];
 +        if (ctx->ct_buf == nil) {
@@ -413,12 +413,12 @@ index a2728d31d..8dacceed9 100644
 +
 +static void tosh_ct_record(id<MTLCounterSampleBuffer> cs, uint64_t base) {
 +    if (@available(macOS 10.15, *)) {
-+        NSData * d = [cs resolveCounterRange:NSMakeRange(base, TOSH_CT_PER)];
-+        if (d == nil || d.length < TOSH_CT_PER*sizeof(MTLCounterResultTimestamp)) {
++        NSData * d = [cs resolveCounterRange:NSMakeRange(base, KESTREL_CT_PER)];
++        if (d == nil || d.length < KESTREL_CT_PER*sizeof(MTLCounterResultTimestamp)) {
 +            atomic_fetch_add(&g_ct_fail, 1); return;
 +        }
 +        const MTLCounterResultTimestamp * t = (const MTLCounterResultTimestamp *) d.bytes;
-+        for (int i = 0; i < TOSH_CT_PER; i++) {
++        for (int i = 0; i < KESTREL_CT_PER; i++) {
 +            if (t[i].timestamp == MTLCounterErrorValue) { atomic_fetch_add(&g_ct_fail, 1); return; }
 +        }
 +        const double k = g_ct_ns_per_tick;
@@ -436,21 +436,21 @@ index a2728d31d..8dacceed9 100644
 +    }
 +}
 +
-+// TOSH_MGPU_WAIT_SATISFIED=1, benchmark only. The staged collective keeps every encoder, every
++// KESTREL_MGPU_WAIT_SATISFIED=1, benchmark only. The staged collective keeps every encoder, every
 +// signal, the same command buffer and the same sampling points; the only change is that the
 +// peer-ready wait names a private event that is already signalled, so it can never stall. The
 +// read then observes whatever the partner left behind and the output is wrong by construction.
 +// Subtracting this run's central window from the normal one isolates the real peer stall
 +// without adding an encoder to the interval being measured.
 +// The same trick for the other wait in the path, the one guarding reuse of the shared host
-+// block. TOSH_MGPU_BP_SATISFIED=1, benchmark only, same warning applies.
++// block. KESTREL_MGPU_BP_SATISFIED=1, benchmark only, same warning applies.
 +static bool ggml_metal_bp_satisfied(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_BP_SATISFIED");
++        const char * s = getenv("KESTREL_MGPU_BP_SATISFIED");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +        if (v) {
-+            fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_BP_SATISFIED=1, the collective does not "
++            fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_BP_SATISFIED=1, the collective does not "
 +                            "wait before reusing the staging block. Benchmark only.\n");
 +        }
 +    }
@@ -460,10 +460,10 @@ index a2728d31d..8dacceed9 100644
 +static bool ggml_metal_wait_satisfied(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_WAIT_SATISFIED");
++        const char * s = getenv("KESTREL_MGPU_WAIT_SATISFIED");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +        if (v) {
-+            fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_WAIT_SATISFIED=1, the collective never "
++            fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_WAIT_SATISFIED=1, the collective never "
 +                            "waits for the peer and the output is meaningless. Benchmark only.\n");
 +        }
 +    }
@@ -483,7 +483,7 @@ index a2728d31d..8dacceed9 100644
 +    const uint64_t peer   = atomic_load(&g_tr_bytes_peer);
 +    const uint64_t host   = atomic_load(&g_tr_bytes_host);
 +
-+    fprintf(stderr, "TOSH_MGPU_TRACE\n");
++    fprintf(stderr, "KESTREL_MGPU_TRACE\n");
 +    fprintf(stderr, "  allreduce exchanges   %llu\n", (unsigned long long) reduce);
 +    fprintf(stderr, "  plain xdev copies     %llu\n", (unsigned long long) atomic_load(&g_tr_copy));
 +    fprintf(stderr, "  peer-direct bytes     %llu\n", (unsigned long long) peer);
@@ -747,7 +747,7 @@ index a2728d31d..8dacceed9 100644
  }
  
  
--// TOSH_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
+-// KESTREL_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
 -// when it is on, so a release run pays one cached branch per crossing.
 -static _Atomic uint64_t g_tr_reduce      = 0; // exchange_reduce calls
 -static _Atomic uint64_t g_tr_copy        = 0; // plain cross-device copies
@@ -763,7 +763,7 @@ index a2728d31d..8dacceed9 100644
 -static bool tosh_mgpu_trace(void) {
 -    static int on = -1;
 -    if (on < 0) {
--        const char * v = getenv("TOSH_MGPU_TRACE");
+-        const char * v = getenv("KESTREL_MGPU_TRACE");
 -        on = (v && v[0] == '1') ? 1 : 0;
 -    }
 -    return on == 1;
@@ -778,7 +778,7 @@ index a2728d31d..8dacceed9 100644
 -    const uint64_t peer   = atomic_load(&g_tr_bytes_peer);
 -    const uint64_t host   = atomic_load(&g_tr_bytes_host);
 -
--    fprintf(stderr, "TOSH_MGPU_TRACE\n");
+-    fprintf(stderr, "KESTREL_MGPU_TRACE\n");
 -    fprintf(stderr, "  allreduce exchanges   %llu\n", (unsigned long long) reduce);
 -    fprintf(stderr, "  plain xdev copies     %llu\n", (unsigned long long) atomic_load(&g_tr_copy));
 -    fprintf(stderr, "  peer-direct bytes     %llu\n", (unsigned long long) peer);
@@ -825,30 +825,30 @@ index a2728d31d..8dacceed9 100644
      }];
  }
  
-+// TOSH_MGPU_NOWAIT=1, benchmark only: the collective still publishes, still signals and still
++// KESTREL_MGPU_NOWAIT=1, benchmark only: the collective still publishes, still signals and still
 +// reduces, but never waits for the partner. The output is wrong by construction. Subtracting
 +// this from the normal run measures the stall at the wait inside the real collective, instead
 +// of inferring it from whole-command-buffer completion timestamps.
 +static bool ggml_metal_collective_nowait(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_NOWAIT");
++        const char * s = getenv("KESTREL_MGPU_NOWAIT");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +        if (v) {
-+            fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_NOWAIT=1, the collective does not wait "
++            fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_NOWAIT=1, the collective does not wait "
 +                            "for the peer and the output is meaningless. Benchmark only.\n");
 +        }
 +    }
 +    return v == 1;
 +}
 +
- // TOSH_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
+ // KESTREL_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
  // same GPU (GGML_METAL_DEVICE_LIST=0,0), which needs no bridge: the queues are still
  // separate, so the cross-device ordering is testable on a single card.
  static bool ggml_metal_peer_self(void) {
      static int val = -1;
      if (val < 0) {
-         const char * v = getenv("TOSH_MGPU_PEER_SELF");
+         const char * v = getenv("KESTREL_MGPU_PEER_SELF");
          val = (v && v[0] == '1') ? 1 : 0;
 @@ -1252,34 +1690,39 @@ static bool ggml_metal_cpy_xdev_peer(ggml_metal_t ctx_src, ggml_metal_t ctx_dst,
  
@@ -1103,7 +1103,7 @@ index a2728d31d..8dacceed9 100644
      // decode, and it costs a second kernel.
      static int fused = -1;
      if (fused < 0) {
-         const char * v = getenv("TOSH_MGPU_PEER_FUSED");
+         const char * v = getenv("KESTREL_MGPU_PEER_FUSED");
          fused = v == NULL ? 1 : atoi(v);
 @@ -2273,35 +2743,65 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
      const uint64_t seq_out  = seq;
@@ -1127,7 +1127,7 @@ index a2728d31d..8dacceed9 100644
 +        uint64_t cbase = 0;
 +        const bool cbar = ggml_metal_ctime_barrier();
 +        if (cts != nil) {
-+            cbase = (atomic_fetch_add(&ctx_self->ct_idx, 1) % TOSH_CT_SLOTS)*TOSH_CT_PER;
++            cbase = (atomic_fetch_add(&ctx_self->ct_idx, 1) % KESTREL_CT_SLOTS)*KESTREL_CT_PER;
          }
  
          id<MTLBlitCommandEncoder> enc_out = [cmd_buf blitCommandEncoder];
@@ -1236,14 +1236,14 @@ index a2728d31d..8dacceed9 100644
  }
  #endif
  
-+// TOSH_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
++// KESTREL_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
 +// command buffer for each collective plus one for each subgraph that follows it. With this on,
 +// the collective leaves its buffer open and the next subgraph encodes into it instead of
 +// submitting its own, which halves the command buffers a split token creates.
 +static bool ggml_metal_merge_graph(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_MERGE");
++        const char * s = getenv("KESTREL_MGPU_MERGE");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +    }
 +    return v == 1;
@@ -1262,7 +1262,7 @@ index a2728d31d..8dacceed9 100644
          return GGML_STATUS_FAILED;
      }
  
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
      bool staged_moe = false;
 @@ -3113,42 +3632,61 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
          // short-hand
@@ -1377,16 +1377,16 @@ index ddad25afd..c90cb36e3 100644
      delete comm_ctx;
  }
  
-+// TOSH_MGPU_ALLREDUCE_NOOP=1 keeps the split graph and every subgraph submission but performs
++// KESTREL_MGPU_ALLREDUCE_NOOP=1 keeps the split graph and every subgraph submission but performs
 +// no reduction and no cross-device synchronisation at all. The output is wrong by construction.
 +// It exists for one measurement: what tensor-split decode would cost if communication were free.
 +static bool ggml_backend_metal_comm_allreduce_noop(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_ALLREDUCE_NOOP");
++        const char * s = getenv("KESTREL_MGPU_ALLREDUCE_NOOP");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +        if (v) {
-+            fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_ALLREDUCE_NOOP=1, the reduction is "
++            fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_ALLREDUCE_NOOP=1, the reduction is "
 +                            "skipped and the output is meaningless. Benchmark only.\n");
 +        }
 +    }
@@ -1416,13 +1416,13 @@ index ddad25afd..c90cb36e3 100644
              // which is what a two-card TensorMesh row already relies on.
              const bool pair = 2*offset_max == 2;
 -            for (size_t j = 0; j < 2*offset_max && ok; j++) {
-+            // TOSH_MGPU_SUBMIT_ORDER, benchmark only: 0 normal, 1 reversed, 2 alternating.
++            // KESTREL_MGPU_SUBMIT_ORDER, benchmark only: 0 normal, 1 reversed, 2 alternating.
 +            // The loop below is serial on the host while ordinary subgraphs have been encoded
 +            // concurrently since patch 0017, so the side encoded first can reach the GPU well
 +            // ahead of the other. These modes make that visible without touching semantics.
 +            static int order = -1;
 +            if (order < 0) {
-+                const char * v = getenv("TOSH_MGPU_SUBMIT_ORDER");
++                const char * v = getenv("KESTREL_MGPU_SUBMIT_ORDER");
 +                order = v ? atoi(v) : 0;
 +            }
 +            const bool flip = order == 1 || (order == 2 && (seq_round & 1));

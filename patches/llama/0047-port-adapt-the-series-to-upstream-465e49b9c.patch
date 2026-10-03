@@ -309,7 +309,7 @@ index bac07fb44..3648d2643 100644
 +static bool ggml_metal_xdev_link_reserve(ggml_metal_t ctx_src, ggml_metal_t ctx_dst,
 +                                        struct ggml_metal_xdev_link * link, size_t size) {
 +    if (link->cap == 0) {
-+        GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (TOSH_MGPU_EVENTS)\n", __func__);
++        GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (KESTREL_MGPU_EVENTS)\n", __func__);
 +    }
 +
 +    if (link->cap < size) {
@@ -348,13 +348,13 @@ index bac07fb44..3648d2643 100644
 +}
 +
 +
-+// TOSH_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
++// KESTREL_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
 +// same GPU (GGML_METAL_DEVICE_LIST=0,0), which needs no bridge: the queues are still
 +// separate, so the cross-device ordering is testable on a single card.
 +static bool ggml_metal_peer_self(void) {
 +    static int val = -1;
 +    if (val < 0) {
-+        const char * v = getenv("TOSH_MGPU_PEER_SELF");
++        const char * v = getenv("KESTREL_MGPU_PEER_SELF");
 +        val = (v && v[0] == '1') ? 1 : 0;
 +    }
 +    return val;
@@ -476,7 +476,7 @@ index bac07fb44..3648d2643 100644
 +static _Atomic uint64_t g_xdev_ev = 0, g_xdev_peer = 0, g_xdev_gen = 0;
 +
 +static void tosh_xdev_report(void) {
-+    fprintf(stderr, "TOSH_XDEV  events=%llu  peer=%llu  generic=%llu\n",
++    fprintf(stderr, "KESTREL_XDEV  events=%llu  peer=%llu  generic=%llu\n",
 +            (unsigned long long) atomic_load(&g_xdev_ev),
 +            (unsigned long long) atomic_load(&g_xdev_peer),
 +            (unsigned long long) atomic_load(&g_xdev_gen));
@@ -546,23 +546,23 @@ index bac07fb44..3648d2643 100644
 +        // both buffers must be private for the cross-device blits
 +        static int use_events = -1;
 +        if (use_events < 0) {
-+            const char * v = getenv("TOSH_MGPU_EVENTS");
++            const char * v = getenv("KESTREL_MGPU_EVENTS");
 +            use_events = (v && v[0] == '1') ? 1 : 0;
 +        }
 +        // Infinity Fabric peer copy is opt-in until validated on bridged hardware:
 +        // a success that silently returns wrong data has no fallback.
 +        static int use_peer = -1;
 +        if (use_peer < 0) {
-+            const char * v = getenv("TOSH_MGPU_PEER");
++            const char * v = getenv("KESTREL_MGPU_PEER");
 +            use_peer = (v && v[0] == '1') ? 1 : 0;
 +        }
 +        ggml_backend_buffer_t ebsrc = src->view_src ? src->view_src->buffer : src->buffer;
 +        ggml_backend_buffer_t ebdst = dst->view_src ? dst->view_src->buffer : dst->buffer;
 +        // which of the three hand-offs actually runs is not visible otherwise, and the flag
-+        // alone does not tell: TOSH_MGPU_XDEV_COUNT reports the tally at exit
++        // alone does not tell: KESTREL_MGPU_XDEV_COUNT reports the tally at exit
 +        static int count = -1;
 +        if (count < 0) {
-+            count = getenv("TOSH_MGPU_XDEV_COUNT") != NULL;
++            count = getenv("KESTREL_MGPU_XDEV_COUNT") != NULL;
 +            if (count) {
 +                atexit(tosh_xdev_report);
 +            }
@@ -697,11 +697,11 @@ index d895cb10a..c277008a1 100644
  #import "ggml-metal-impl.h"
 -#import "ggml-metal-common.h"
  
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
  #import "tosh-moe.h"
  #else
- enum { TOSH_MOE_OFF = 0 };
- static inline int tosh_moe_mode(void) { return TOSH_MOE_OFF; }
+ enum { KESTREL_MOE_OFF = 0 };
+ static inline int tosh_moe_mode(void) { return KESTREL_MOE_OFF; }
  #endif
 +#import "ggml-metal-common.h"
  
@@ -759,7 +759,7 @@ index d895cb10a..c277008a1 100644
  
 -
  // tensor split blocks the main thread on the queue's in-flight command buffer limit (64 by
- // default), so allow raising it: TOSH_MTL_QUEUE_DEPTH
+ // default), so allow raising it: KESTREL_MTL_QUEUE_DEPTH
  // macOS can hand out an integrated iGPU (isLowPower, ~1 GB) as the system
  // default. Auto-selection skips it; explicit DEVICE_INDEX/LIST can still pin it.
  static id<MTLDevice> ggml_metal_device_default_discrete(void) {
@@ -777,7 +777,7 @@ index d895cb10a..c277008a1 100644
  
 +
  static id<MTLCommandQueue> ggml_metal_new_queue(id<MTLDevice> device) {
-     const char * s = getenv("TOSH_MTL_QUEUE_DEPTH");
+     const char * s = getenv("KESTREL_MTL_QUEUE_DEPTH");
      const int depth = s ? atoi(s) : 0;
  
      if (depth > 0) {
@@ -1056,20 +1056,20 @@ index 8f5c9f96e..d059614b1 100644
  }
  
 +
-+// TOSH_OPPROF=1: CPU time spent encoding each op kind, to compare dispatch cost across engines
++// KESTREL_OPPROF=1: CPU time spent encoding each op kind, to compare dispatch cost across engines
 +#include <time.h>
 +static uint64_t g_opprof_ns[GGML_OP_COUNT];
 +static uint64_t g_opprof_n [GGML_OP_COUNT];
 +static bool tosh_opprof_on(void) {
 +    static int v = -1;
-+    if (v < 0) { v = getenv("TOSH_OPPROF") != nullptr; }
++    if (v < 0) { v = getenv("KESTREL_OPPROF") != nullptr; }
 +    return v;
 +}
 +static void tosh_opprof_dump(void) {
 +    if (!tosh_opprof_on()) return;
 +    for (int i = 0; i < GGML_OP_COUNT; i++) {
 +        if (g_opprof_n[i] == 0) continue;
-+        fprintf(stderr, "TOSH_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
++        fprintf(stderr, "KESTREL_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
 +                ggml_op_name((enum ggml_op) i),
 +                (unsigned long long) g_opprof_n[i],
 +                g_opprof_ns[i]/1e3, (double) g_opprof_ns[i]/g_opprof_n[i]/1e3);
@@ -1159,7 +1159,7 @@ index 8f5c9f96e..d059614b1 100644
 +    // Only banks of small rows gain: those are read scattered from host and the copy makes them
 +    // contiguous. A bank of few, large rows already reads well and the copy is pure extra traffic.
 +    static const size_t stage_row_max = []() {
-+        const char * s = getenv("TOSH_MOE_STAGE_ROW_KIB");
++        const char * s = getenv("KESTREL_MOE_STAGE_ROW_KIB");
 +        return (size_t) (s ? atoi(s) : 1024) << 10;
 +    }();
 +
@@ -1210,7 +1210,7 @@ index 8f5c9f96e..d059614b1 100644
 +        // A batch routes to a fraction of the bank, so rebuilding every row is most of the
 +        // traffic of this path. Mark the routed ones and let the assemble skip the rest; a row
 +        // nothing routes to is never read, so leaving it stale is safe.
-+        static const bool compact = getenv("TOSH_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
++        static const bool compact = getenv("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
 +        ggml_metal_buffer_id ab = ggml_metal_get_buffer_id(state);
 +        ab.offs += tosh_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
 +        if (compact) {
@@ -1315,7 +1315,7 @@ index 8f5c9f96e..d059614b1 100644
 +
 +        // a whole expert is megabytes: one threadgroup per row leaves the device idle
 +        static const int n_chunks = []() {
-+            const char * s = getenv("TOSH_MOE_FETCH_CHUNKS");
++            const char * s = getenv("KESTREL_MOE_FETCH_CHUNKS");
 +            const int v = s ? atoi(s) : 16;
 +            return v > 0 ? v : 1;
 +        }();
@@ -1344,7 +1344,7 @@ index 8f5c9f96e..d059614b1 100644
 +
 +        ggml_metal_op_concurrency_reset(ctx);
 +
-+        static const bool raw_ids = getenv("TOSH_MOE_RAW_IDS") != nullptr;
++        static const bool raw_ids = getenv("KESTREL_MOE_RAW_IDS") != nullptr;
 +        if (!raw_ids) {
 +            bid_src2 = bid_state;
 +            bid_src2.offs = bid_state.offs + tosh_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
@@ -1353,7 +1353,7 @@ index 8f5c9f96e..d059614b1 100644
 +
 +    // escape hatch: revert wave64 MoE prefill to the mat-vec route
 +    const bool mm_id_manual_ok = props_dev->simd_width == 32 ||
-+        getenv("TOSH_W64_MMID_PREFILL_DISABLE") == NULL;
++        getenv("KESTREL_W64_MMID_PREFILL_DISABLE") == NULL;
 +
 +    if (ggml_metal_op_mul_mat_id_use_mm(op, props_dev->has_simdgroup_mm || (props_dev->use_mm_manual && mm_id_manual_ok))) {
          // some Metal matrix data types require aligned pointers
@@ -1369,7 +1369,7 @@ index 8f5c9f96e..d059614b1 100644
      const bool fa_amd_width_ok = props_dev->simd_width == 32
          ? props_dev->has_simdgroup_reduction
          : props_dev->wave64_decode;
-     if (getenv("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
+     if (getenv("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
          !props_dev->has_simdgroup_mm && fa_amd_width_ok &&
          !has_bias && !has_scap) {
  
@@ -1617,7 +1617,7 @@ index cd029ff6f..da3ef5d22 100644
 +        // cause severe paging under random expert traffic. Keep it as an internal experiment;
 +        // the fast default remains the allocated/pinned host bank.
 +        const bool is_bank_buft = (const void *) buft == tosh_moe_host_buft();
-+        const bool map_bank     = tosh_moe_slots_want() > 0 && getenv("TOSH_MOE_MMAP_BANK") != nullptr;
++        const bool map_bank     = tosh_moe_slots_want() > 0 && getenv("KESTREL_MOE_MMAP_BANK") != nullptr;
 +        const bool map_this     = map_bank ? is_bank_buft : is_default_buft;
 +
          std::vector<ggml_backend_buffer_ptr> bufs;

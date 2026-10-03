@@ -43,6 +43,7 @@ It opens, detects your hardware, and recommends models that will actually run we
 
 - **Native chat** — multiple persistent conversations, full Markdown with code-copy, regenerate, system prompt, live tokens/sec, file attachments, conversation forking and per-message metrics
 - **Agent tools and MCP** — the model can read, edit and run files and commands with per-step permission, run JavaScript in a sandbox, and use tools from external Model Context Protocol servers you connect
+- **Choose your assistant backend** — a conversation answers through the local engine, a remote provider (OpenAI- or Anthropic-compatible, each with its own Keychain-stored API key), or an external agent CLI (latch, and the pi runtime of llm-space); pi chat turns run tool-confined with per-turn JSONL traces, and every reply is attributed to the engine that produced it
 - **GPU speech and subtitle studio** — Whisper.cpp transcribes microphone dictation into one clean paragraph, while the Audio workspace can disable Silero VAD, use Whisper.cpp's native defaults or tune it with calibrated profiles, previews audio or video with a synchronized editable transcript, preserves recoverable original and translated tracks, keeps Chat translation consistent with context and a glossary, and exports SRT, VTT, TXT, JSON or a captioned MOV; nothing leaves the Mac
 - **Vision** — attach images (or paste a screenshot with Cmd+V) and vision-capable models describe them; the matching projector (`mmproj`) is paired automatically
 - **Image generation (beta)** — a local text-to-image studio (stable-diffusion.cpp on the same AMD Metal stack): text-to-image and image-to-image, with a model catalog sized to your VRAM, a live preview of the image forming, and an **upscaler** that takes your own photos too (x2/x4, batches, and a drag-to-compare view)
@@ -181,12 +182,12 @@ The design is an independent llama.cpp/Metal implementation inspired by the publ
 #### How to enable it
 
 1. Select the bundled engine and a MoE GGUF.
-2. In **Settings → Extra arguments**, add `TOSH_MOE_UI=1`.
+2. In **Settings → Extra arguments**, add `KESTREL_MOE_UI=1`.
 3. The private **Dynamic MoE (experimental)** panel appears. Turn it on.
 4. Open **Benchmarks** and press **Optimize dMoE**. Kestrel measures normal execution, learns a complete expert ranking, sweeps K, then tunes prompt prefetch without accepting more than a 3% TG regression at the chosen K.
 5. The resulting **Automatic** profile is activated for the integrated chat. **Manual cache** remains available to vary K and prefetch by hand.
 
-`TOSH_MOE_UI=1` only reveals the controls. Removing it, turning Dynamic MoE off, selecting a custom engine, or letting Auto reject the configuration returns the same binary to unmodified llama.cpp execution. The feature is not yet used by router or multi-GPU mode.
+`KESTREL_MOE_UI=1` only reveals the controls. Removing it, turning Dynamic MoE off, selecting a custom engine, or letting Auto reject the configuration returns the same binary to unmodified llama.cpp execution. The feature is not yet used by router or multi-GPU mode.
 
 #### The normal `ncmoe` architecture
 
@@ -373,7 +374,7 @@ These older AMD GPUs use a 64-wide wavefront ("wave64"), while llama.cpp's Metal
 
 The gains landed in three steps. `mul_mm_id` in 0.81.67 took a 35B MoE's prompt speed from 167 to **285 t/s (+70%)** on a Vega II. Then 0.83.9 moved the remaining quant types off the CPU: on a Radeon RX Vega 64, Qwen3 4B Q3_K_M went from **3.96 to 44 t/s** of generation, and gpt-oss 20B reached 18.2 t/s generation / 191 t/s prompt with the experts of 16 layers on the CPU. And 0.83.10 brought long prompts up on the same card, Qwen3 4B from **295 to 457 t/s at 8k of context** and Llama 3.2 1B from 917 to 1553, with identical perplexity.
 
-Two contributed data points frame what to expect. On an **RX 580** a tester measured a K-quant model go from **1.3 t/s (CPU decode) to ~51 t/s (GPU decode)**, coherent. On a **Radeon Pro Vega II** (Mac Pro 2019), Qwen3.6-35B-A3B Q4_K_S with every expert in VRAM runs at **285 t/s prompt / 42 t/s generation**. Recommended on these cards: a K-quant model, Flash Attention left **ON** (not off), and the KV cache at f16 (q8_0 keys cost ~2% here, so it's a fair trade for long context). The GPU path is on by default; `GGML_METAL_WAVE64_DECODE_DISABLE=1` in **Extra arguments** falls back to the CPU, and `TOSH_W64_PREFILL_DISABLE=1` / `TOSH_W64_MMID_PREFILL_DISABLE=1` revert the two prompt-matmul routes if you want to compare.
+Two contributed data points frame what to expect. On an **RX 580** a tester measured a K-quant model go from **1.3 t/s (CPU decode) to ~51 t/s (GPU decode)**, coherent. On a **Radeon Pro Vega II** (Mac Pro 2019), Qwen3.6-35B-A3B Q4_K_S with every expert in VRAM runs at **285 t/s prompt / 42 t/s generation**. Recommended on these cards: a K-quant model, Flash Attention left **ON** (not off), and the KV cache at f16 (q8_0 keys cost ~2% here, so it's a fair trade for long context). The GPU path is on by default; `GGML_METAL_WAVE64_DECODE_DISABLE=1` in **Extra arguments** falls back to the CPU, and `KESTREL_W64_PREFILL_DISABLE=1` / `KESTREL_W64_MMID_PREFILL_DISABLE=1` revert the two prompt-matmul routes if you want to compare.
 
 #### Aligned reads on GCN before Vega, and a flag for testers
 
@@ -382,10 +383,10 @@ A weight block of 22, 34, 98, 110 or 210 bytes leaves every other one two bytes 
 Which card needs it is read from `MTLDevice.architecture`, the ISA target: `amdgpu_gfx803` is Polaris, `amdgpu_gfx900` and `amdgpu_gfx906` are Vega, and anything below gfx900 gets the aligned path. On macOS 12 and 13 that property does not exist and the card name decides instead, granting the fast path only to the names known to tolerate the wide read, so an unrecognised card stays correct rather than fast. The startup log always says which way it went and why:
 
 ```
-ggml_metal: aligned mat-vec reads off by amdgpu_gfx906 (override with TOSH_MV_ALIGN=1 or =0)
+ggml_metal: aligned mat-vec reads off by amdgpu_gfx906 (override with KESTREL_MV_ALIGN=1 or =0)
 ```
 
-`TOSH_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `TOSH_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `TOSH_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/0xda7/kestrel/issues): the fast list can only grow from cards the project does not own.
+`KESTREL_MV_ALIGN` in **Extra arguments** forces either path on any card, and this is where reports help. If you have a GCN 3 or 4 card and want to know whether it really needs the aligned reads, run the engine check in the **Logs** tab with `KESTREL_MV_ALIGN=0`: a card that needs them fails `MUL_MAT` on `q5_0`, `q6_K` and the other odd-sized types, and a card that does not passes clean and can join the fast list. Expect corrupt output while that flag is set on a card that needs alignment... it is a measurement, not a mode. The same applies in reverse on an unusual Vega-class card with `KESTREL_MV_ALIGN=1`. Either result is worth [an issue](https://github.com/0xda7/kestrel/issues): the fast list can only grow from cards the project does not own.
 
 > The wave64 path is validated on RDNA (wave32) as a byte-exact no-op, so it never affects Apple Silicon or AMD RDNA cards. On real GCN/Vega hardware it is still being validated with testers — if you have one of these cards, [your benchmark and coherence reports](https://github.com/0xda7/kestrel/issues) are exactly what moves it forward.
 

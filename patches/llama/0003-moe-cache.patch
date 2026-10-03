@@ -1412,17 +1412,17 @@ index 000000000..c2a583a93
 +
 +enum tosh_moe_mode tosh_moe_mode(void) {
 +    static const enum tosh_moe_mode m = []() {
-+        const char * s = getenv("TOSH_MOE_MODE");
++        const char * s = getenv("KESTREL_MOE_MODE");
 +        if (!s || strcmp(s, "off") == 0) {
-+            return TOSH_MOE_OFF;
++            return KESTREL_MOE_OFF;
 +        }
 +        if (strcmp(s, "cache") == 0) {
-+            return TOSH_MOE_CACHE;
++            return KESTREL_MOE_CACHE;
 +        }
 +        if (strcmp(s, "hybrid") == 0) {
-+            return TOSH_MOE_HYBRID;
++            return KESTREL_MOE_HYBRID;
 +        }
-+        return TOSH_MOE_OFF;
++        return KESTREL_MOE_OFF;
 +    }();
 +
 +    return m;
@@ -1430,10 +1430,10 @@ index 000000000..c2a583a93
 +
 +int tosh_moe_slots_want(void) {
 +    static const int n = []() {
-+        if (tosh_moe_mode() == TOSH_MOE_OFF) {
++        if (tosh_moe_mode() == KESTREL_MOE_OFF) {
 +            return 0;
 +        }
-+        const char * s = getenv("TOSH_MOE_SLOTS");
++        const char * s = getenv("KESTREL_MOE_SLOTS");
 +        const int v = s ? atoi(s) : 0;
 +        return v > 0 ? v : 0;
 +    }();
@@ -1487,11 +1487,11 @@ index 000000000..c2a583a93
 +}
 +
 +void tosh_moe_seen_dump(void) {
-+    if (const char * path = getenv("TOSH_MOE_HOT_MAP_OUT")) {
++    if (const char * path = getenv("KESTREL_MOE_HOT_MAP_OUT")) {
 +        const std::string temporary = std::string(path) + ".tmp";
 +        FILE * fp = fopen(temporary.c_str(), "w");
 +        if (fp) {
-+            const int want = std::max(1, getenv("TOSH_MOE_HOT_MAP_K") ? atoi(getenv("TOSH_MOE_HOT_MAP_K")) : 75);
++            const int want = std::max(1, getenv("KESTREL_MOE_HOT_MAP_K") ? atoi(getenv("KESTREL_MOE_HOT_MAP_K")) : 75);
 +            std::vector<int> order;
 +            for (const auto & kv : g_seen) {
 +                order.resize(kv.second.size());
@@ -1775,7 +1775,7 @@ index 000000000..235508a7c
 +
 +static std::unordered_map<int, hot_history> load_hot_map() {
 +    std::unordered_map<int, hot_history> out;
-+    const char * path = getenv("TOSH_MOE_HOT_MAP");
++    const char * path = getenv("KESTREL_MOE_HOT_MAP");
 +    if (!path) return out;
 +    std::ifstream in(path);
 +    std::string line;
@@ -1898,7 +1898,7 @@ index 000000000..235508a7c
 +        // batches. Do not seed it through Metal's partial tensor-set path: the first decode
 +        // token fills all K slots anyway, and avoiding the eager seed also avoids invalid
 +        // range lookups on discrete-GPU model buffers.
-+        const bool cpu_bank = getenv("TOSH_MOE_CPU_BANK") != nullptr;
++        const bool cpu_bank = getenv("KESTREL_MOE_CPU_BANK") != nullptr;
 +
 +        // start with the first experts already in, so a fresh cache is not one big miss
 +        if (split_bank) {
@@ -1908,7 +1908,7 @@ index 000000000..235508a7c
 +                init[tosh_moe_off_cold_for_id(n_expert, n_slots, max_fetch) + e] = -1;
 +                init[tosh_moe_off_id_of_slot(n_expert, n_slots, max_fetch) + s] = e;
 +            }
-+        } else if (!cpu_bank && getenv("TOSH_MOE_NO_SEED") == nullptr) {
++        } else if (!cpu_bank && getenv("KESTREL_MOE_NO_SEED") == nullptr) {
 +            const size_t row = host->nb[2];
 +            for (int s = 0; s < n_slots && s < n_expert; s++) {
 +                ggml_backend_tensor_set(slots, (const char *) host->data + (size_t) s*row, (size_t) s*row, row);
@@ -2219,9 +2219,9 @@ index 000000000..3e62af81b
 +void tosh_moe_cache_stats_get(const struct tosh_moe_cache * c, struct tosh_moe_cache_stats * out);
 +
 +enum tosh_moe_mode {
-+    TOSH_MOE_OFF = 0,
-+    TOSH_MOE_CACHE,    // every expert on the device, a miss is filled before it runs
-+    TOSH_MOE_HYBRID,   // the device runs what it holds, the host runs the rest
++    KESTREL_MOE_OFF = 0,
++    KESTREL_MOE_CACHE,    // every expert on the device, a miss is filled before it runs
++    KESTREL_MOE_HYBRID,   // the device runs what it holds, the host runs the rest
 +};
 +
 +enum tosh_moe_mode tosh_moe_mode(void);
@@ -2235,10 +2235,10 @@ index 000000000..3e62af81b
 +// at offsets instead of needing seven buffers of their own.
 +// Widest batch whose remapped routing still fits the state. The ids are padded to one entry
 +// per expert, so the room needed is tokens times experts, not tokens times experts used.
-+#define TOSH_MOE_MAX_TOKENS 512
++#define KESTREL_MOE_MAX_TOKENS 512
 +
 +static inline int tosh_moe_ids_room(int n_expert) {
-+    return TOSH_MOE_MAX_TOKENS*n_expert;
++    return KESTREL_MOE_MAX_TOKENS*n_expert;
 +}
 +
 +static inline int tosh_moe_state_ints(int n_expert, int n_slots, int max_fetch) {

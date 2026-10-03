@@ -28,7 +28,7 @@ index b5f738e20..84782433a 100644
              } break;
          case GGML_TYPE_Q2_K:
              {
-                 if ((simd_width == 64 || getenv("TOSH_MV_R8") != nullptr) && getenv("TOSH_MV_R8_DISABLE") == nullptr) {
+                 if ((simd_width == 64 || getenv("KESTREL_MV_R8") != nullptr) && getenv("KESTREL_MV_R8_DISABLE") == nullptr) {
                      nsg = 1;
                      nr0 = 8;
                      suffix = "_r8";

@@ -55,7 +55,7 @@ jobs:
     env:
       # The no-AVX2 leg lowers the CPU baseline in build-engines.sh and stamps the
       # bundle (make-app.sh) so the updater keeps it on its own release channel.
-      TOSH_NO_AVX2: ${{ matrix.variant == 'noavx2' && '1' || '' }}
+      KESTREL_NO_AVX2: ${{ matrix.variant == 'noavx2' && '1' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -102,7 +102,7 @@ jobs:
 
       - name: Build app (x86_64)
         if: github.event_name != 'pull_request' || steps.scope.outputs.build == 'true'
-        run: TOSH_ARCH=x86_64 ./make-app.sh
+        run: KESTREL_ARCH=x86_64 ./make-app.sh
 
       # Developer ID signing + notarization, skipped when the secrets are absent.
       # A submission can cost an hour in Apple's queue, so only tags get one;

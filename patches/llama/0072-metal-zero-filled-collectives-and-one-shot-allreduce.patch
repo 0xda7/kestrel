@@ -13,9 +13,9 @@ index da733d9e8..1fb695fc4 100644
              if (!backend_allreduce_success) {
 +                // the metal comm path declined this collective; the fallback costs ~10 command
 +                // buffers per visit, so a persistent decline is the first thing to chase when
-+                // decode underperforms. TOSH_MGPU_TRACE=1 prints it once per point.
++                // decode underperforms. KESTREL_MGPU_TRACE=1 prints it once per point.
 +                static int tosh_trace_fb = -1;
-+                if (tosh_trace_fb < 0) { tosh_trace_fb = getenv("TOSH_MGPU_TRACE") ? 1 : 0; }
++                if (tosh_trace_fb < 0) { tosh_trace_fb = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
 +                static thread_local std::vector<ggml_tensor *> seen;
 +                bool first_seen = false;
 +                if (tosh_trace_fb) {
@@ -107,7 +107,7 @@ index 3622fe6cb..cd9dfa040 100644
  static _Atomic uint64_t g_tr_waits       = 0; // cross-device event waits encoded
  
  
- // TOSH_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
+ // KESTREL_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
  // when it is on, so a release run pays one cached branch per crossing.
  static _Atomic uint64_t g_tr_reduce      = 0; // exchange_reduce calls
 +static _Atomic uint64_t g_tr_oneshot     = 0; // one-shot all-reduce collectives
@@ -146,7 +146,7 @@ index 3622fe6cb..cd9dfa040 100644
  #endif
  }
  
-+// TOSH_MGPU_ONESHOT=1 engages the one-shot round for decode batches. Default off: at n=4 the
++// KESTREL_MGPU_ONESHOT=1 engages the one-shot round for decode batches. Default off: at n=4 the
 +// measurements say the staged butterfly wins, 38.0 vs 35.8 t/s. The one-shot's publish is one
 +// round instead of two, but every card then waits on every partner in the same held command
 +// buffer, so each queue stalls on the slowest of the four every collective: NOWAIT decode is
@@ -154,7 +154,7 @@ index 3622fe6cb..cd9dfa040 100644
 +static bool ggml_metal_oneshot_enabled(void) {
 +    static int v = -1;
 +    if (v < 0) {
-+        const char * s = getenv("TOSH_MGPU_ONESHOT");
++        const char * s = getenv("KESTREL_MGPU_ONESHOT");
 +        v = (s && s[0] == '1') ? 1 : 0;
 +    }
 +    return v == 1;
@@ -534,7 +534,7 @@ index c90cb36e3..348a24c1e 100644
  
 @@ -1088,48 +1092,64 @@ static bool ggml_backend_metal_comm_allreduce_noop(void) {
          if (v) {
-             fprintf(stderr, "ggml_metal: WARNING TOSH_MGPU_ALLREDUCE_NOOP=1, the reduction is "
+             fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_ALLREDUCE_NOOP=1, the reduction is "
                              "skipped and the output is meaningless. Benchmark only.\n");
          }
      }
@@ -556,7 +556,7 @@ index c90cb36e3..348a24c1e 100644
      const size_t n_backends = comm_ctx->backends.size();
  
 +    static int tosh_trace_al = -1;
-+    if (tosh_trace_al < 0) { tosh_trace_al = getenv("TOSH_MGPU_TRACE") ? 1 : 0; }
++    if (tosh_trace_al < 0) { tosh_trace_al = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
 +
      if (tensors[0] == nullptr || tensors[0]->type != GGML_TYPE_F32) {
 +        if (tosh_trace_al) fprintf(stderr, "allreduce bail: t0=%p type=%d\n", (void*)tensors[0], tensors[0] ? (int)tensors[0]->type : -1);
@@ -621,7 +621,7 @@ index c90cb36e3..348a24c1e 100644
      // buffer stays open between the two calls
      static int fuse = -1;
      if (fuse < 0) {
-         fuse = getenv("TOSH_MGPU_FUSE_ADD_DISABLE") == NULL ? 1 : 0;
+         fuse = getenv("KESTREL_MGPU_FUSE_ADD_DISABLE") == NULL ? 1 : 0;
      }
      const bool hold_dst = fuse == 1;
  
@@ -663,7 +663,7 @@ index c90cb36e3..348a24c1e 100644
      // so the copies all go out before any of the adds.
      static int fused = -1;
      if (fused < 0) {
-         fused = getenv("TOSH_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
+         fused = getenv("KESTREL_MGPU_FUSED_EXCHANGE_DISABLE") == NULL ? 1 : 0;
      }
  
      for (size_t offset = offset_max; offset >= 1; offset /= 2) {
@@ -694,7 +694,7 @@ index c90cb36e3..348a24c1e 100644
 +            if (!ok) {
 +                return false;
 +            }
-             // TOSH_MGPU_SUBMIT_ORDER, benchmark only: 0 normal, 1 reversed, 2 alternating.
+             // KESTREL_MGPU_SUBMIT_ORDER, benchmark only: 0 normal, 1 reversed, 2 alternating.
 -            // The loop below is serial on the host while ordinary subgraphs have been encoded
 -            // concurrently since patch 0017, so the side encoded first can reach the GPU well
 -            // ahead of the other. These modes make that visible without touching semantics.
@@ -702,19 +702,19 @@ index c90cb36e3..348a24c1e 100644
 +            // anything for the serial path below (which mirrors pre-parallelism behaviour).
              static int order = -1;
              if (order < 0) {
-                 const char * v = getenv("TOSH_MGPU_SUBMIT_ORDER");
+                 const char * v = getenv("KESTREL_MGPU_SUBMIT_ORDER");
                  order = v ? atoi(v) : 0;
              }
              const bool flip = order == 1 || (order == 2 && (seq_round & 1));
 +
-+            // TOSH_MGPU_COMM_PARALLEL=1 fans the round's exchanges out on GCD threads.
++            // KESTREL_MGPU_COMM_PARALLEL=1 fans the round's exchanges out on GCD threads.
 +            // Default off: measured worse at both device counts (TP2 41 vs 57, TP4 36.5 vs
 +            // 38.0, with ±9 t/s variance) - the per-card encodes are too short to pay for
 +            // the thread handoff, and concurrent event encoding on peer-group devices shows
 +            // driver contention. Kept because the failure mode is a clue for later work.
 +            static int comm_parallel = -1;
 +            if (comm_parallel < 0) {
-+                const char * s_cp = getenv("TOSH_MGPU_COMM_PARALLEL");
++                const char * s_cp = getenv("KESTREL_MGPU_COMM_PARALLEL");
 +                comm_parallel = s_cp ? atoi(s_cp) : 0;
 +            }
 +#ifdef __APPLE__

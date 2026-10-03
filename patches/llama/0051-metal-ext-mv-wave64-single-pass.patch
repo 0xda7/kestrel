@@ -7,7 +7,7 @@ index 6fe035ae2..42be66833 100644
  
          // the wave64 q6_K variant keeps four rows per simdgroup, so the row split does not apply
          // keep the gate in sync with the pipeline picker in ggml_metal_library_get_pipeline_mul_mv_ext
-         static const bool ext_w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
+         static const bool ext_w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
          const bool ext_w64_q6k = !ext_w64_disable &&
                                   props_dev->simd_width == 64 && op->src[0]->type == GGML_TYPE_Q6_K;
  

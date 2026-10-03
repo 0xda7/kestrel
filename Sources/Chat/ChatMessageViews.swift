@@ -308,7 +308,6 @@ struct MessageBubble: View, Equatable {
     }
 
     private var rawOutput: String {
-        if let raw = message.rawOutput, !raw.isEmpty { return raw }
         var sections = [message.content]
         for call in message.toolCalls ?? [] {
             sections.append("[tool_call \(call.serverID ?? call.id.uuidString)]\n\(call.name)\n\(call.arguments)")

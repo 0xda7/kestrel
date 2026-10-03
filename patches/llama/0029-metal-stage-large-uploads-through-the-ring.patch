@@ -17,9 +17,9 @@ index 5fb37f18a..0fb45b20d 100644
 +            // Only measured with one device so far, so several cards keep the wrap until it is.
 +            static int stage_load = -1;
 +            if (stage_load < 0) {
-+                if (getenv("TOSH_STAGE_LOAD_DISABLE") != NULL) {
++                if (getenv("KESTREL_STAGE_LOAD_DISABLE") != NULL) {
 +                    stage_load = 0;
-+                } else if (getenv("TOSH_STAGE_LOAD") != NULL) {
++                } else if (getenv("KESTREL_STAGE_LOAD") != NULL) {
 +                    stage_load = 1;
 +                } else {
 +                    const char * n = getenv("GGML_METAL_DEVICES");

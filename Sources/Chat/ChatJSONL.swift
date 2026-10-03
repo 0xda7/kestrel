@@ -126,10 +126,13 @@ enum ChatJSONL {
         for record in records {
             if let id = record["id"] as? String { idMap[id] = UUID(uuidString: id) ?? UUID() }
         }
-        let byID = Dictionary(uniqueKeysWithValues: records.compactMap { record -> (String, [String: Any])? in
+        // uniquingKeysWith: a foreign/hand-edited file can repeat an id — a
+        // precondition crash here would take the whole app down on import;
+        // first record wins instead.
+        let byID = Dictionary(records.compactMap { record -> (String, [String: Any])? in
             guard let id = record["id"] as? String else { return nil }
             return (id, record)
-        })
+        }, uniquingKeysWith: { first, _ in first })
         let parentIDs = Set(records.compactMap { $0["parent"] as? String })
         var leaves = records.compactMap { $0["id"] as? String }.filter { !parentIDs.contains($0) }
         if let current = header["currNode"] as? String, byID[current] != nil, !leaves.contains(current) {

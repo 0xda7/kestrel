@@ -12,6 +12,9 @@ actor MCPStdioTransport {
     private let stdout = Pipe()
     private let stderr = Pipe()
     private var pending: [Int: CheckedContinuation<[String: Any], Error>] = [:]
+    /// Responses that arrived before their waiter parked (send writes the
+    /// request before parking, so an eager server can answer in between).
+    private var earlyResults: [Int: [String: Any]] = [:]
     private var buffer = Data()
     private var readerTask: Task<Void, Never>?
     private var finished = false
@@ -114,11 +117,20 @@ actor MCPStdioTransport {
         guard !line.isEmpty,
               let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
         // A notification from the server has no id and nothing is waiting on it.
-        guard let id = object["id"] as? Int, let continuation = pending.removeValue(forKey: id) else { return }
+        guard let id = object["id"] as? Int else { return }
+        let result: Result<[String: Any], Error>
         if let error = object["error"] as? [String: Any] {
-            continuation.resume(throwing: MCPError.remote(error["message"] as? String ?? "MCP JSON-RPC error"))
+            result = .failure(MCPError.remote(error["message"] as? String ?? "MCP JSON-RPC error"))
         } else {
-            continuation.resume(returning: object["result"] as? [String: Any] ?? [:])
+            result = .success(object["result"] as? [String: Any] ?? [:])
+        }
+        // Normal case: a waiter is parked. If the response beat the park
+        // (send wrote the request before parking), keep it for park() to
+        // drain — dropping it here would hang the request until timeout.
+        if let continuation = pending.removeValue(forKey: id) {
+            continuation.resume(with: result)
+        } else if case .success(let value) = result {
+            earlyResults[id] = value
         }
     }
 
@@ -130,34 +142,61 @@ actor MCPStdioTransport {
             try stdin.fileHandleForWriting.write(contentsOf: line)
             return [:]
         }
+        // The request is written synchronously on the actor BEFORE the waiter
+        // parks, and deliver() may only see the response after that — an
+        // early response lands in `earlyResults` (actor-isolated, so the
+        // ordering is race-free) and park() drains it instead of waiting.
+        // This closes the leak where a cancelled timeout race left a checked
+        // continuation parked in `pending` forever.
+        do {
+            try stdin.fileHandleForWriting.write(contentsOf: line)
+        } catch {
+            throw error
+        }
         return try await withThrowingTaskGroup(of: [String: Any].self) { group in
-            group.addTask {
+            group.addTask { [id] in
                 try await withCheckedThrowingContinuation { continuation in
-                    Task { await self.register(id: id, continuation: continuation, line: line) }
+                    Task { await self.park(id: id, continuation: continuation) }
                 }
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(max(5, timeout)))
                 throw MCPError.launchFailed("\(self.name) did not answer in time.")
             }
-            defer { group.cancelAll() }
+            defer {
+                group.cancelAll()
+                // Whichever waiter lost the race must still be resumed, or
+                // the checked continuation leaks: detach the cleanup so it
+                // runs even though the group is cancelled.
+                Task { await self.abandonPending(id: id) }
+            }
             guard let first = try await group.next() else { throw MCPError.invalidResponse }
             return first
         }
     }
 
-    private func register(id: Int, continuation: CheckedContinuation<[String: Any], Error>, line: Data) {
-        pending[id] = continuation
-        do {
-            try stdin.fileHandleForWriting.write(contentsOf: line)
-        } catch {
-            pending.removeValue(forKey: id)?.resume(throwing: error)
+    /// Parks the continuation, or drains an early result if the response
+    /// already arrived between the write and this park.
+    private func park(id: Int, continuation: CheckedContinuation<[String: Any], Error>) {
+        if let result = earlyResults.removeValue(forKey: id) {
+            continuation.resume(returning: result)
+        } else {
+            pending[id] = continuation
         }
+    }
+
+    /// After the timeout/cancel wins the race, resume the parked
+    /// continuation so it cannot leak; drop a stale early result with it.
+    private func abandonPending(id: Int) {
+        earlyResults.removeValue(forKey: id)
+        guard let continuation = pending.removeValue(forKey: id) else { return }
+        continuation.resume(throwing: MCPError.launchFailed("\(name) did not answer in time."))
     }
 
     private func failPending(_ error: Error) {
         for continuation in pending.values { continuation.resume(throwing: error) }
         pending.removeAll()
+        earlyResults.removeAll()
     }
 
     func stop() {
@@ -165,6 +204,19 @@ actor MCPStdioTransport {
         readerTask?.cancel()
         failPending(CancellationError())
         try? stdin.fileHandleForWriting.close()
-        if process.isRunning { process.terminate() }
+        if process.isRunning {
+            process.terminate()
+            // Escalate and reap: an MCP server that ignores SIGTERM must not
+            // survive a disconnect holding its resources, and an exited child
+            // must be waited on or it stays a zombie.
+            let pid = process.processIdentifier
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) { [weak self] in
+                guard pid > 0 else { return }
+                if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+                self?.process.waitUntilExit()
+            }
+        } else {
+            process.waitUntilExit()
+        }
     }
 }

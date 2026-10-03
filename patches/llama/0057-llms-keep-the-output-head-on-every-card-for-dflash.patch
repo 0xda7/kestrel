@@ -15,7 +15,7 @@ index da3ef5d22..4493680b3 100644
 +            // A DFlash draft has no head of its own: its selector runs a top-k over the target's
 +            // logits, and a head split by vocabulary leaves no device holding a whole row of them.
 +            // The caller sets this when it pairs such a draft with a tensor split.
-+            if (is_dsv4 || getenv("TOSH_MIRROR_OUTPUT_HEAD") != nullptr) {
++            if (is_dsv4 || getenv("KESTREL_MIRROR_OUTPUT_HEAD") != nullptr) {
                  return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_MIRRORED);
              }
              return get_tensor_config_impl(GGML_BACKEND_SPLIT_AXIS_1);

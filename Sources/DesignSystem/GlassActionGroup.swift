@@ -10,7 +10,7 @@ struct GlassActionGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        #if compiler(>=6.2) && !TOSH_LEGACY_UI
+        #if compiler(>=6.2) && !KESTREL_LEGACY_UI
         if #available(macOS 26.0, *) {
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) { content }

@@ -27,7 +27,7 @@ index f0a9dbc..66cfeee 100644
                  last_time  = (t2 - t1) / 1000.0f;
                  pretty_progress(tile_count, num_tiles, last_time);
              }
-+            if (const char* value = getenv("TOSH_VAE_TILE_YIELD_MS")) {
++            if (const char* value = getenv("KESTREL_VAE_TILE_YIELD_MS")) {
 +                const long delay_ms = std::clamp(strtol(value, nullptr, 10), 0L, 1000L);
 +                if (delay_ms > 0) {
 +                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));

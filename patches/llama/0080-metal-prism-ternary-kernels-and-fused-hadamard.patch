@@ -55,8 +55,8 @@ index 32477974b..affa01c93 100644
 -    snprintf(base, 256, "kernel_gated_delta_net_%s_%d", ggml_type_name(op->src[0]->type), nsg);
 -    snprintf(name, 256, "%s_ne20=%d_ne30=%d_K=%d", base, ne20, ne30, K);
 +    // rows of 128 split over 16 lanes instead of 32: the per-token reductions get shorter and each
-+    // lane reads q and k as whole vectors. TOSH_GDN_LPR picks another split, 0 the 32-lane kernel
-+    static const int lpr_env = []() { const char * e = getenv("TOSH_GDN_LPR"); return e ? atoi(e) : 16; }();
++    // lane reads q and k as whole vectors. KESTREL_GDN_LPR picks another split, 0 the 32-lane kernel
++    static const int lpr_env = []() { const char * e = getenv("KESTREL_GDN_LPR"); return e ? atoi(e) : 16; }();
 +    const int lpr = (ne20 == 128 && ggml_is_contiguous_rows(op->src[0]) && ggml_is_contiguous_rows(op->src[1])) ? lpr_env : 0;
 +
 +    if (lpr) {
@@ -219,7 +219,7 @@ index 32477974b..affa01c93 100644
          case GGML_TYPE_Q4_0:
              {
                  // eight lanes per block with four rows each: +5.8% of generation
-                 if (simd_width == 64 && getenv("TOSH_MV_Q4_0_W64_DISABLE") == nullptr) {
+                 if (simd_width == 64 && getenv("KESTREL_MV_Q4_0_W64_DISABLE") == nullptr) {
                      nsg    = 1;
                      nr0    = 4;
                      suffix = "_L8r4";
@@ -734,7 +734,7 @@ index 9a6f441fb..3aed316f3 100644
 +}
 +
 +static bool ggml_metal_gdn_state_fusion_on(ggml_metal_op_t ctx) {
-+    static const bool disabled = getenv("TOSH_GDN_STATE_FUSION_DISABLE") != nullptr;
++    static const bool disabled = getenv("KESTREL_GDN_STATE_FUSION_DISABLE") != nullptr;
 +    return ctx->use_fusion && !ctx->use_concurrency && !disabled;
 +}
 +
@@ -953,7 +953,7 @@ index 9a6f441fb..3aed316f3 100644
 +// rms_norm -> mul by the norm weight -> the Hadamard transform of a folded weight's input, all
 +// adjacent: one kernel writes the transform, and the norm too when other nodes read it
 +static int ggml_metal_op_rms_norm_fwht(ggml_metal_op_t ctx, int idx) {
-+    static const bool disabled = getenv("TOSH_NORM_FWHT_FUSION_DISABLE") != nullptr;
++    static const bool disabled = getenv("KESTREL_NORM_FWHT_FUSION_DISABLE") != nullptr;
 +    if (disabled || idx + 3 >= ctx->n_nodes()) {
 +        return 0;
 +    }
@@ -1165,7 +1165,7 @@ index 9a6f441fb..3aed316f3 100644
 +// output. The three nodes are adjacent, so writing that output early only needs it apart from
 +// the activation the kernel reads.
 +static int ggml_metal_op_mul_mat_swiglu(ggml_metal_op_t ctx, int idx) {
-+    static const bool disabled = getenv("TOSH_SWIGLU_FUSION_DISABLE") != nullptr;
++    static const bool disabled = getenv("KESTREL_SWIGLU_FUSION_DISABLE") != nullptr;
 +    if (disabled || !ctx->use_fusion || idx + 2 >= ctx->n_nodes()) {
 +        return 0;
 +    }

@@ -6,14 +6,14 @@ index 395e5b8dc..1ec17c6a3 100644
      }
  
      if (n_devs % (size_t) g != 0) {
-         LLAMA_LOG_WARN("%s: TOSH_MGPU_TENSOR_GROUP=%ld does not divide %zu devices, using one group\n",
+         LLAMA_LOG_WARN("%s: KESTREL_MGPU_TENSOR_GROUP=%ld does not divide %zu devices, using one group\n",
                  __func__, g, n_devs);
          return n_devs;
      }
  
 +    // the grouping is invisible in the log otherwise, so there is no way to tell whether the
 +    // variable took effect
-+    LLAMA_LOG_INFO("%s: TOSH_MGPU_TENSOR_GROUP=%ld: %zu devices in %zu groups of %ld\n",
++    LLAMA_LOG_INFO("%s: KESTREL_MGPU_TENSOR_GROUP=%ld: %zu devices in %zu groups of %ld\n",
 +            __func__, g, n_devs, n_devs / (size_t) g, g);
 +
      return (size_t) g;

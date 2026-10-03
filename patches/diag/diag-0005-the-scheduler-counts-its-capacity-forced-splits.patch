@@ -73,7 +73,7 @@ index 1e13a6f81..629c8f90f 100644
      sched->splits = (ggml_backend_sched_split *) calloc(initial_splits_capacity, sizeof(sched->splits[0]));
      sched->splits_capacity = initial_splits_capacity;
  
-+    g_sched_stats.on = getenv("TOSH_SCHED_STATS") != nullptr;
++    g_sched_stats.on = getenv("KESTREL_SCHED_STATS") != nullptr;
 +
      sched->graph_inputs_capacity = GGML_SCHED_MAX_SPLIT_INPUTS;
      sched->graph_inputs = (struct ggml_tensor **) calloc(sched->graph_inputs_capacity, sizeof(struct ggml_tensor *));

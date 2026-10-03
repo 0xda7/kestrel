@@ -54,7 +54,7 @@ index 4c298f677..40c78e2ea 100644
      char name[256];
  
 @@ -1856,7 +1891,7 @@ ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mm_id(ggml_m
-                      TOSH_ENV("TOSH_MMID_W64_DISABLE") == nullptr;
+                      KESTREL_ENV("KESTREL_MMID_W64_DISABLE") == nullptr;
  
      snprintf(base, 256, "kernel_mul_mm_id_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
 -    snprintf(name, 256, "%s_bci=%d_mm=%d_af=%d", base, bc_inp, use_mm_manual, acc_f32);
@@ -141,9 +141,9 @@ index cb5c19496..17aeabdca 100644
 +        ggml_metal_buffer_id bid_amax = bid_ids;
 +        bid_amax.offs += ggml_metal_op_mul_mat_id_extra_ids(op);
 +
-+        // diagnostic: TOSH_NAN_OFF=1 encodes the op exactly as before the rescale, for an A/B in
++        // diagnostic: KESTREL_NAN_OFF=1 encodes the op exactly as before the rescale, for an A/B in
 +        // one binary
-+        static const bool nan_off = TOSH_ENV("TOSH_NAN_OFF") != nullptr;
++        static const bool nan_off = KESTREL_ENV("KESTREL_NAN_OFF") != nullptr;
 +
 +        const int npart_amax = N_MM_NPART_AMAX;
 +
@@ -239,7 +239,7 @@ index cb5c19496..17aeabdca 100644
 +        // known on the GPU. Two pipelines, each returning at once when the scale is not its own,
 +        // keep the common case on the registers it had. Where one accumulator serves both,
 +        // a single pipeline takes every magnitude.
-+        // diagnostic: TOSH_NAN_ONE_PIPE=1 serves both magnitudes from one pipeline, to price
++        // diagnostic: KESTREL_NAN_ONE_PIPE=1 serves both magnitudes from one pipeline, to price
 +        // the second dispatch apart from the reduction that feeds it
 +        {
 +            // one pipeline takes both magnitudes: the factor leaves the products small enough
@@ -283,7 +283,7 @@ index cb5c19496..17aeabdca 100644
 -            // them on half the engines and a multiple of four on a single one (measured 1.8x and
 -            // 3.4x). One inert tile restores the spread; it returns before reading anything.
 -            if (props_dev->simd_width == 64 && ntg0 % 2 == 0 &&
--                TOSH_ENV("TOSH_MMID_ODD_GRID_DISABLE") == nullptr) {
+-                KESTREL_ENV("KESTREL_MMID_ODD_GRID_DISABLE") == nullptr) {
 -                ntg0 += 1;
 -            }
 +                const size_t smem = pipeline.smem;
@@ -296,7 +296,7 @@ index cb5c19496..17aeabdca 100644
  
 -            // on 32 lanes these tile counts leave part of the card idle, and one or two more inert
 -            // tiles avoid them; like the tile above they return before reading anything
--            if (props_dev->simd_width == 32 && TOSH_ENV("TOSH_MMID_RDNA2_GRID_DISABLE") == nullptr) {
+-            if (props_dev->simd_width == 32 && KESTREL_ENV("KESTREL_MMID_RDNA2_GRID_DISABLE") == nullptr) {
 -                if (ntg0 == 3 || ntg0 == 5) {
 +                // a 64-lane card hands consecutive threadgroups to its four shader engines in turn,
 +                // and only the first token tile of an expert has work while the experts stay narrower
@@ -304,7 +304,7 @@ index cb5c19496..17aeabdca 100644
 +                // them on half the engines and a multiple of four on a single one (measured 1.8x and
 +                // 3.4x). One inert tile restores the spread; it returns before reading anything.
 +                if (props_dev->simd_width == 64 && ntg0 % 2 == 0 &&
-+                    TOSH_ENV("TOSH_MMID_ODD_GRID_DISABLE") == nullptr) {
++                    KESTREL_ENV("KESTREL_MMID_ODD_GRID_DISABLE") == nullptr) {
                      ntg0 += 1;
 -                } else if (ntg0 == 9 || ntg0 == 10) {
 -                    ntg0 = 11;
@@ -314,7 +314,7 @@ index cb5c19496..17aeabdca 100644
 -            ggml_metal_encoder_dispatch_threadgroups(enc, ntg0, (ne01 + 63)/64, ne02_run, 128, 1, 1);
 +                // on 32 lanes these tile counts leave part of the card idle, and one or two more inert
 +                // tiles avoid them; like the tile above they return before reading anything
-+                if (props_dev->simd_width == 32 && TOSH_ENV("TOSH_MMID_RDNA2_GRID_DISABLE") == nullptr) {
++                if (props_dev->simd_width == 32 && KESTREL_ENV("KESTREL_MMID_RDNA2_GRID_DISABLE") == nullptr) {
 +                    if (ntg0 == 3 || ntg0 == 5) {
 +                        ntg0 += 1;
 +                    } else if (ntg0 == 9 || ntg0 == 10) {

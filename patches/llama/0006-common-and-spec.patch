@@ -71,14 +71,14 @@ index d8319cd9a..bd3b10e1d 100644
  
 +// Stamped by build-engines.sh from VERSION. Passed unquoted so the value needs no
 +// escaping through cmake, hence the stringify.
-+#ifndef TOSH_VERSION
-+#define TOSH_VERSION unknown
++#ifndef KESTREL_VERSION
++#define KESTREL_VERSION unknown
 +#endif
-+#define TOSH_STRINGIFY2(x) #x
-+#define TOSH_STRINGIFY(x) TOSH_STRINGIFY2(x)
++#define KESTREL_STRINGIFY2(x) #x
++#define KESTREL_STRINGIFY(x) KESTREL_STRINGIFY2(x)
 +
 +const char * common_tosh_version(void) {
-+    return TOSH_STRINGIFY(TOSH_VERSION);
++    return KESTREL_STRINGIFY(KESTREL_VERSION);
 +}
 +
  void common_params_print_info(const common_params & params, bool print_devices) {
@@ -92,7 +92,7 @@ index d8319cd9a..bd3b10e1d 100644
 +    // The build number above only tracks the upstream commit, unchanged across
 +    // releases that only touch the patch. No env var means a direct CLI run.
 +    {
-+        const char * app_version = std::getenv("TOSH_APP_VERSION");
++        const char * app_version = std::getenv("KESTREL_APP_VERSION");
 +        COM_INF("%s: Kestrel engine %s (app %s)\n", __func__, common_tosh_version(),
 +                app_version ? app_version : "standalone");
 +    }
@@ -228,9 +228,9 @@ index 77dfe9535..88e97d8e5 100644
          std::vector<int32_t> i_block_beg(n_seq, -1);
          std::vector<int32_t> n_block    (n_seq,  0);
  
-+        static const float acc_min    = getenv("TOSH_DFLASH_ACC_MIN")   ? (float) atof(getenv("TOSH_DFLASH_ACC_MIN"))   : 0.6f;
-+        static const int   probe_base = getenv("TOSH_DFLASH_PROBE")     ?         atoi(getenv("TOSH_DFLASH_PROBE"))     : 8;
-+        static const int   probe_cap  = getenv("TOSH_DFLASH_PROBE_CAP") ?         atoi(getenv("TOSH_DFLASH_PROBE_CAP")) : 64;
++        static const float acc_min    = getenv("KESTREL_DFLASH_ACC_MIN")   ? (float) atof(getenv("KESTREL_DFLASH_ACC_MIN"))   : 0.6f;
++        static const int   probe_base = getenv("KESTREL_DFLASH_PROBE")     ?         atoi(getenv("KESTREL_DFLASH_PROBE"))     : 8;
++        static const int   probe_cap  = getenv("KESTREL_DFLASH_PROBE_CAP") ?         atoi(getenv("KESTREL_DFLASH_PROBE_CAP")) : 64;
 +        if ((int) acc_ewma.size() != (int) n_seq) {
 +            acc_ewma.assign(n_seq, 1.0f);
 +            n_last_draft.assign(n_seq, 0);
@@ -302,7 +302,7 @@ index 77dfe9535..88e97d8e5 100644
 +        if ((int) acc_ewma.size() != (int) n_seq || n_last_draft[seq_id] <= 0) {
 +            return;
 +        }
-+        static const float alpha = getenv("TOSH_DFLASH_EWMA") ? (float) atof(getenv("TOSH_DFLASH_EWMA")) : 0.5f;
++        static const float alpha = getenv("KESTREL_DFLASH_EWMA") ? (float) atof(getenv("KESTREL_DFLASH_EWMA")) : 0.5f;
 +        const float acc = std::min(1.0f, (float) n_accepted / (float) n_last_draft[seq_id]);
 +        const float a = acc > acc_ewma[seq_id] ? 0.2f : alpha;  // rise fast, fall at alpha
 +        acc_ewma[seq_id] = a * acc_ewma[seq_id] + (1.0f - a) * acc;
@@ -367,12 +367,12 @@ index 77dfe9535..88e97d8e5 100644
 +        cold_rows.assign(n_seq, {});
 +        cold_h.assign(n_seq, {});
 +
-+        cold_defer = getenv("TOSH_MTP_COLD_DEFER_DISABLE") == nullptr;
++        cold_defer = getenv("KESTREL_MTP_COLD_DEFER_DISABLE") == nullptr;
 +        // 0.65 sat above the acceptance real content reaches, so it backed off where drafting
 +        // still paid; 0.60 keeps the win and still catches the unpredictable case.
-+        acc_min    = getenv("TOSH_MTP_ACC_MIN")   ? (float) atof(getenv("TOSH_MTP_ACC_MIN"))   : acc_min;
-+        probe_base = getenv("TOSH_MTP_PROBE")     ?         atoi(getenv("TOSH_MTP_PROBE"))     : probe_base;
-+        probe_cap  = getenv("TOSH_MTP_PROBE_CAP") ?         atoi(getenv("TOSH_MTP_PROBE_CAP")) : probe_cap;
++        acc_min    = getenv("KESTREL_MTP_ACC_MIN")   ? (float) atof(getenv("KESTREL_MTP_ACC_MIN"))   : acc_min;
++        probe_base = getenv("KESTREL_MTP_PROBE")     ?         atoi(getenv("KESTREL_MTP_PROBE"))     : probe_base;
++        probe_cap  = getenv("KESTREL_MTP_PROBE_CAP") ?         atoi(getenv("KESTREL_MTP_PROBE_CAP")) : probe_cap;
 +
          i_last.assign(n_seq, -1);
          i_batch_beg.assign(n_seq, -1);
@@ -640,7 +640,7 @@ index 77dfe9535..88e97d8e5 100644
          }
  
 +        if ((int) acc_ewma.size() == (int) n_seq && n_last_draft[seq_id] > 0) {
-+            static const float alpha = getenv("TOSH_MTP_EWMA") ? (float) atof(getenv("TOSH_MTP_EWMA")) : 0.5f;
++            static const float alpha = getenv("KESTREL_MTP_EWMA") ? (float) atof(getenv("KESTREL_MTP_EWMA")) : 0.5f;
 +            const float acc = std::min(1.0f, (float) n_accepted / (float) n_last_draft[seq_id]);
 +            const float a = acc > acc_ewma[seq_id] ? 0.2f : alpha;  // rise fast, fall at alpha
 +            acc_ewma[seq_id] = a * acc_ewma[seq_id] + (1.0f - a) * acc;

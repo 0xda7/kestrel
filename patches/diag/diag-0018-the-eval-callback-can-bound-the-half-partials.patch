@@ -14,7 +14,7 @@ index 4ce8d600b..21af6a645 100644
 +#include <cstdlib>
 +#include <map>
 +
-+// TOSH_AMAX=1: for every matrix product wide enough to take the tiled path, the largest
++// KESTREL_AMAX=1: for every matrix product wide enough to take the tiled path, the largest
 +// activation and the largest sum of |x| over a 32-deep slice, times the largest weight.
 +// That product bounds the half partial the AMD tile keeps; 65504 is where it breaks.
 +struct tosh_amax_row { double x_max = 0, s32 = 0, w_max = 0, bound = 0; int n = 0; long long ne11 = 0; };
@@ -74,11 +74,11 @@ index 4ce8d600b..21af6a645 100644
 +static void tosh_amax_dump() {
 +    double worst = 0;
 +    for (auto & [k, r] : g_amax) {
-+        fprintf(stderr, "TOSH_AMAX %-44s n=%-4d tok=%-5lld x_max=%-10.3g s32=%-10.3g w_max=%-8.3g bound=%-10.3g headroom=%.1fx\n",
++        fprintf(stderr, "KESTREL_AMAX %-44s n=%-4d tok=%-5lld x_max=%-10.3g s32=%-10.3g w_max=%-8.3g bound=%-10.3g headroom=%.1fx\n",
 +            k.c_str(), r.n, r.ne11, r.x_max, r.s32, r.w_max, r.bound, r.bound > 0 ? 65504.0/r.bound : 0.0);
 +        worst = std::max(worst, r.bound);
 +    }
-+    fprintf(stderr, "TOSH_AMAX worst bound=%.4g headroom=%.1fx\n", worst, worst > 0 ? 65504.0/worst : 0.0);
++    fprintf(stderr, "KESTREL_AMAX worst bound=%.4g headroom=%.1fx\n", worst, worst > 0 ? 65504.0/worst : 0.0);
 +}
 +
  static bool run(llama_context * ctx, const common_params & params) {
@@ -88,7 +88,7 @@ index 4ce8d600b..21af6a645 100644
      // it will be executed for each node during the graph computation
      params.cb_eval = common_debug_cb_eval;
      params.cb_eval_user_data = &cb_data;
-+    const bool amax = getenv("TOSH_AMAX") != nullptr;
++    const bool amax = getenv("KESTREL_AMAX") != nullptr;
 +    if (amax) {
 +        params.cb_eval = tosh_amax_cb;
 +        params.cb_eval_user_data = nullptr;

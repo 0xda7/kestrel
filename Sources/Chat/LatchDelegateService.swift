@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Darwin
 import Foundation
 
 /// Delegates a self-contained task to the latch harness as an app-side tool.
@@ -14,6 +15,10 @@ enum LatchDelegateService {
     static let defaultTimeoutSeconds = 300
     static let maximumTimeoutSeconds = 900
     static let maximumOutputCharacters = 12_000
+    /// Hard cap on a successful primary-assistant reply. Far above any real
+    /// report (the delegate tool caps at maximumOutputCharacters), but keeps a
+    /// runaway harness from growing memory without bound.
+    static let maximumReplyCharacters = 512_000
 
     static var defaultBinaryPath: String { "~/.latch/bin/latch-harness" }
 
@@ -141,9 +146,9 @@ enum LatchDelegateService {
     /// raw chunk and then the FULL output so far (copied under the same lock),
     /// so callers can snapshot-replace instead of racing accumulation of their
     /// own. The pipe still accumulates under a lock — a full 64 KiB pipe
-    /// deadlocks the child mid-run. Stderr is drained and discarded here (it is
-    /// agent-loop chatter, including transient API errors latch retries
-    /// through); the reply is stdout only.
+    /// deadlocks the child mid-run. Stderr is drained into a bounded tail and
+    /// surfaced on failure (provider auth errors, missing model), but never
+    /// mixed into a successful reply — the reply is stdout only.
     static func runStreaming(argv: [String], workingDirectory: String?, timeout: Int,
                              onLaunch: (@Sendable (Process) -> Void)?,
                              onOutput: (@Sendable (String, String) -> Void)?) async -> RunOutcome {
@@ -161,10 +166,19 @@ enum LatchDelegateService {
         // 64 KiB pipe buffer deadlocks the child mid-run.
         let lock = NSLock()
         var outData = Data()
+        var stderrTail = ""
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock(); outData.append(chunk); lock.unlock()
+            lock.lock()
+            // Stop accumulating past the reply cap: a runaway harness must
+            // not grow memory without bound during the run (the cap was
+            // previously applied only after exit), and bounded accumulation
+            // also bounds the per-chunk full-snapshot decode.
+            if outData.count < LatchDelegateService.maximumReplyCharacters {
+                outData.append(chunk)
+            }
+            lock.unlock()
             if let onOutput {
                 lock.lock()
                 let full = String(decoding: outData, as: UTF8.self)
@@ -175,6 +189,12 @@ enum LatchDelegateService {
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
+            lock.lock()
+            stderrTail += String(decoding: chunk, as: UTF8.self)
+            if stderrTail.count > 4000 {
+                stderrTail = String(stderrTail.suffix(2000))
+            }
+            lock.unlock()
         }
 
         do { try process.run() } catch {
@@ -189,29 +209,72 @@ enum LatchDelegateService {
             }
             group.addTask { @Sendable in
                 try? await Task.sleep(nanoseconds: UInt64(timeout) * 1_000_000_000)
-                if process.isRunning { process.terminate(); return true }
-                return false
+                guard process.isRunning else { return false }
+                process.terminate()
+                // SIGKILL escalation runs detached: the budget verdict must
+                // not wait on the grace period, or a fast-dying child wins
+                // the race and the run is misread as a clean exit.
+                Task.detached { @Sendable in
+                    for _ in 0..<50 {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        if !process.isRunning { return }
+                    }
+                    kill(process.processIdentifier, SIGKILL)
+                }
+                return true
             }
             let first = await group.next() ?? false
             group.cancelAll()
             return first
         }
 
-        if timedOut {
+        // Finalization under the reader lock, routed through a synchronous
+        // helper so the lock is never taken from an async context. Both pipes
+        // drain to EOF first — the child has exited (or SIGKILL escalation
+        // bounds the wait), so stderr written just before exit is captured
+        // instead of being lost to the async handler's lag.
+        func collectResults() -> (output: String, stderr: String) {
             lock.lock()
-            let partial = String(String(decoding: outData, as: UTF8.self)
-                .prefix(maximumOutputCharacters))
+            var tail = stderrTail
+            stderrTail = ""
             lock.unlock()
-            return .failed(reason: "latch exceeded its \(timeout)s budget and was stopped. Partial output:\n\(partial)")
+            stdout.fileHandleForReading.readabilityHandler = nil
+            stderr.fileHandleForReading.readabilityHandler = nil
+            let stdoutLeftover = stdout.fileHandleForReading.readDataToEndOfFile()
+            let stderrLeftover = stderr.fileHandleForReading.readDataToEndOfFile()
+            lock.lock()
+            let output = String(decoding: outData + stdoutLeftover, as: UTF8.self)
+            outData.removeAll()
+            tail += String(decoding: stderrLeftover, as: UTF8.self)
+            if tail.count > 4000 { tail = String(tail.suffix(2000)) }
+            lock.unlock()
+            return (output, tail)
         }
-        lock.lock()
-        let finalOutput = String(decoding: outData, as: UTF8.self)
-        outData.removeAll()
-        lock.unlock()
-        stdout.fileHandleForReading.readabilityHandler = nil
-        stderr.fileHandleForReading.readabilityHandler = nil
-        return process.terminationStatus == 0
-            ? .completed(output: finalOutput)
-            : .exited(status: process.terminationStatus, output: finalOutput)
+        let results = collectResults()
+        let finalOutput = results.output
+        let err = results.stderr
+
+        func withStderr(_ headline: String) -> String {
+            let trimmed = err.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? headline : headline + "\n\nlatch stderr: " + trimmed.prefix(600)
+        }
+
+        if timedOut {
+            let partial = String(finalOutput.prefix(maximumOutputCharacters))
+            return .failed(reason: withStderr(
+                "latch exceeded its \(timeout)s budget and was stopped. Partial output:\n\(partial)"))
+        }
+        if process.terminationStatus == 0 {
+            let output = String(finalOutput.prefix(maximumReplyCharacters))
+            return .completed(output: output)
+        }
+        // Raw output plus a bounded stderr suffix: abnormal-exit diagnostics
+        // (provider auth errors, missing model) reach the user, while the
+        // callers keep composing their own status headline.
+        let status = process.terminationStatus
+        let trimmedErr = err.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stderrSuffix = trimmedErr.isEmpty
+            ? "" : "\n\nlatch stderr: " + String(trimmedErr.prefix(600))
+        return .exited(status: status, output: finalOutput + stderrSuffix)
     }
 }

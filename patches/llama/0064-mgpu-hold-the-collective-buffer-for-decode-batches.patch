@@ -9,7 +9,7 @@ index 8dacceed9..45289079e 100644
      return ggml_metal_add_inplace_into(ctx, nil, acc, add);
  }
  
- // TOSH_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
+ // KESTREL_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
  // latency and the shared host block is faster.
 +// rows in the exchanged tensor: one for a generated token, the whole prompt for a prefill
 +static int64_t tosh_batch_of(const struct ggml_tensor * t) {
@@ -20,13 +20,13 @@ index 8dacceed9..45289079e 100644
  static int64_t ggml_metal_peer_min_batch(void) {
      static int64_t v = -1;
      if (v < 0) {
-         const char * s = getenv("TOSH_MGPU_PEER_MIN_BATCH");
+         const char * s = getenv("KESTREL_MGPU_PEER_MIN_BATCH");
          v = s ? atoll(s) : 32;
      }
      return v;
  }
  
--// TOSH_MGPU_HOLD=1 leaves the exchange's command buffer open so whatever the graph encodes
+-// KESTREL_MGPU_HOLD=1 leaves the exchange's command buffer open so whatever the graph encodes
 -// next lands in it, trading a later start for one fewer submission. Measured neutral on the
 -// Vega II Duo (991.3 against 990.8 pp512, 47.96 against 47.90 tg128): the submission is not on
 -// the critical path, the card is already waiting on the partner's event. Kept as a switch.
@@ -39,11 +39,11 @@ index 8dacceed9..45289079e 100644
 +// and then only when the batch is small. A token of one row crosses 72 times and each crossing
 +// carries its own pair of command buffers, so halving them is worth ~3% of decode; a prompt
 +// amortises the submissions over the whole batch and loses ~2% instead, hence the batch gate.
-+// TOSH_MGPU_HOLD=1 forces it on, =0 off, unset follows the batch.
++// KESTREL_MGPU_HOLD=1 forces it on, =0 off, unset follows the batch.
 +static bool ggml_metal_collective_hold_batch(int64_t batch) {
 +    static int v = -2;
 +    if (v == -2) {
-         const char * s = getenv("TOSH_MGPU_HOLD");
+         const char * s = getenv("KESTREL_MGPU_HOLD");
 -        v = (s && s[0] == '1') ? 1 : 0;
 +        v = s ? (s[0] == '1' ? 1 : 0) : -1;
      }
@@ -137,14 +137,14 @@ index 8dacceed9..45289079e 100644
          atomic_fetch_add(&g_tr_encode_ns, tosh_now_ns() - t_enter);
      }
 @@ -3455,17 +3467,19 @@ done:
- // TOSH_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
+ // KESTREL_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
  // command buffer for each collective plus one for each subgraph that follows it. With this on,
  // the collective leaves its buffer open and the next subgraph encodes into it instead of
  // submitting its own, which halves the command buffers a split token creates.
  static bool ggml_metal_merge_graph(void) {
      static int v = -1;
      if (v < 0) {
-         const char * s = getenv("TOSH_MGPU_MERGE");
+         const char * s = getenv("KESTREL_MGPU_MERGE");
 -        v = (s && s[0] == '1') ? 1 : 0;
 +        // on by default: it is inert unless a collective left a buffer held, which only the
 +        // batch gate above does, so a prompt never sees it

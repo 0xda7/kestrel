@@ -3,15 +3,15 @@ index 6816a77e0..92b845d9e 100644
 --- a/ggml/src/ggml-metal/ggml-metal-ops.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal-ops.cpp
 @@ -4049,11 +4049,14 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
-         // diagnostic: TOSH_NAN_ONE_PIPE=1 serves both magnitudes from one pipeline, to price
+         // diagnostic: KESTREL_NAN_ONE_PIPE=1 serves both magnitudes from one pipeline, to price
          // the second dispatch apart from the reduction that feeds it
          {
              // one pipeline takes both magnitudes: the factor leaves the products small enough
              // for the accumulator this path already had
 -            const int scaled = nan_off ? 3 : 2;
-+            // diagnostic: TOSH_NAN_RED_ONLY=1 keeps the reduction but runs the unscaled tile,
++            // diagnostic: KESTREL_NAN_RED_ONLY=1 keeps the reduction but runs the unscaled tile,
 +            // to price the reduction apart from the scaled tile
-+            static const bool red_only = TOSH_ENV("TOSH_NAN_RED_ONLY") != nullptr;
++            static const bool red_only = KESTREL_ENV("KESTREL_NAN_RED_ONLY") != nullptr;
 +            const int scaled = (nan_off || red_only) ? 3 : 2;
  
                  auto pipeline = ggml_metal_library_get_pipeline_mul_mm_id(lib, op, scaled);

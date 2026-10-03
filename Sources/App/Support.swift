@@ -103,6 +103,19 @@ enum SettingsKeys {
     /// When on, new conversations answer through the latch harness instead of
     /// the model engine. Per-conversation overrides can still flip back.
     static let latchPrimaryEnabled = "latchPrimaryEnabled"
+    /// pi sidecar (llm-space / earendil-works engine): binary path, model
+    /// pattern, provider, and timeout. All runtime-selectable — nothing
+    /// model-specific is compiled in.
+    static let piBinaryPath = "piBinaryPath"
+    static let piPrimaryEnabled = "piPrimaryEnabled"
+    static let piModel = "piModel"
+    static let piProvider = "piProvider"
+    static let piTimeout = "piTimeout"
+    /// Thinking level passed to `pi --thinking` when thinking is on
+    /// (off|minimal|low|medium|high|xhigh|max; empty = pi's own default).
+    static let piThinkingLevel = "piThinkingLevel"
+    /// Stop sequences for chat sampling, comma/newline separated.
+    static let chatStopSequences = "chatStopSequences"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
     /// external memory server already covers the job and the model mixes the two.
     static let memoryToolsEnabled = "memoryToolsEnabled"
@@ -259,6 +272,7 @@ enum SettingsKeys {
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
         latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
+        piBinaryPath, piPrimaryEnabled, piModel, piProvider, piTimeout, piThinkingLevel,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
@@ -268,7 +282,7 @@ enum SettingsKeys {
         menuBarIcon, menuBarGPU, autoStart, updateAutoCheck, appAccent,
         chatTemp, chatMaxTokens, chatSystem, chatThinking, chatReasoningEffort,
         chatTopP, chatMinP, chatTopK,
-        chatRepeatPenalty, chatRepeatLastN, chatSeed,
+        chatRepeatPenalty, chatRepeatLastN, chatSeed, chatStopSequences,
         chatDynatempRange, chatDynatempExponent, chatXTCProbability, chatXTCThreshold,
         chatTypicalP, chatPresencePenalty, chatFrequencyPenalty, chatDryMultiplier,
         chatDryBase, chatDryAllowedLength, chatDryPenaltyLastN, chatSamplers,
@@ -526,8 +540,10 @@ enum EngineLock {
             guard length > 0 else { continue }
             let path = String(cString: buffer)
 
-            // Only processes from a Kestrel bundle are ours to kill.
-            guard path.contains("Kestrel.app/Contents/Resources/bin") else { continue }
+            // Only processes from a Kestrel bundle are ours to kill. Matched
+            // on path components (exact "Kestrel.app" component), not a
+            // substring: a foreign "MyKestrel.app" must never be a target.
+            guard Self.isKestrelEnginePath(path) else { continue }
 
             AppLog.app.warning("Reaping orphaned engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
@@ -537,6 +553,18 @@ enum EngineLock {
         }
         save([])
         return reaped
+    }
+
+    /// True when `path` points inside a Kestrel.app bundle's Resources/bin —
+    /// matched on path components with an exact "Kestrel.app" component, so a
+    /// foreign "MyKestrel.app" on the same machine is never a kill target.
+    static func isKestrelEnginePath(_ path: String) -> Bool {
+        let components = path.split(separator: "/").map(String.init)
+        guard let appIndex = components.lastIndex(of: "Kestrel.app") else { return false }
+        return components.count > appIndex + 3
+            && components[appIndex + 1] == "Contents"
+            && components[appIndex + 2] == "Resources"
+            && components[appIndex + 3] == "bin"
     }
 
     /// Kills engines from one of our bundles that launchd has adopted: a router child whose
@@ -555,7 +583,7 @@ enum EngineLock {
             var buffer = [CChar](repeating: 0, count: 4096)
             guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { continue }
             let path = String(cString: buffer)
-            guard path.contains("Kestrel.app/Contents/Resources/bin"), path.hasSuffix("/llama-server") else { continue }
+            guard Self.isKestrelEnginePath(path), path.hasSuffix("/llama-server") else { continue }
             AppLog.app.warning("Reaping stray engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {

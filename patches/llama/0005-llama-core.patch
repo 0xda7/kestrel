@@ -54,7 +54,7 @@ index 07ca49ad0..2807aa4e2 100644
 @@ -1,10 +1,24 @@
  #include "llama-graph.h"
  
-+#ifdef TOSH_ENABLE_DYNAMIC_MOE
++#ifdef KESTREL_ENABLE_DYNAMIC_MOE
 +#include "tosh-moe.h"
 +static inline ggml_tensor * tosh_moe_bank_of(ggml_tensor * t) {
 +    return t ? (ggml_tensor *) tosh_moe_bank_ptr(t) : t;
@@ -103,7 +103,7 @@ index 07ca49ad0..2807aa4e2 100644
 +        const int n_bank_experts = tosh_moe_experts_of(moe_first);
 +        const bool whole_bank = bank && n_bank_experts > 0 && moe_first->ne[2] >= n_bank_experts;
 +        const bool split_wide = tosh_moe_fixed_of(moe_first) > 0 &&
-+            getenv("TOSH_MOE_BOUNDED_STAGE") != nullptr;
++            getenv("KESTREL_MOE_BOUNDED_STAGE") != nullptr;
 +        moe_cached = whole_bank || split_wide || n_tokens*n_expert_used <= moe_first->ne[2];
 +    }
 +
@@ -205,7 +205,7 @@ index 07ca49ad0..2807aa4e2 100644
                   int   il) const {
 +    // TurboQuant pre-rotate-queries: WHT-rotate Q so <Q_rot, K_rot> preserves scores.
 +    // K is stored WHT-rotated by the turbo quantizer; the orthogonal rotation cancels.
-+    static const bool diag_no_wht = getenv("TOSH_DIAG_NO_WHT") != nullptr;
++    static const bool diag_no_wht = getenv("KESTREL_DIAG_NO_WHT") != nullptr;
 +    if (q->ne[0] < k->ne[0]) {
 +        q = ggml_pad(ctx0, q, k->ne[0] - q->ne[0], 0, 0, 0);
 +    }
@@ -231,7 +231,7 @@ index 07ca49ad0..2807aa4e2 100644
 -    const bool use_flash_attn = cparams.flash_attn && kq_b == nullptr;
 +    // AMD FA wins decode, while the decomposed graph wins long prefill for the
 +    // measured head sizes.
-+    const char * metal_simd_width = getenv("TOSH_METAL_SIMD_WIDTH");
++    const char * metal_simd_width = getenv("KESTREL_METAL_SIMD_WIDTH");
 +    const bool measured_head_size =
 +        q->ne[0] == 64 || q->ne[0] == 128 || q->ne[0] == 256 || q->ne[0] == 512;
 +    // Head 64/128 beat the decomposed route at every depth on both wave widths; bias
@@ -241,7 +241,7 @@ index 07ca49ad0..2807aa4e2 100644
 +        metal_simd_width != nullptr &&
 +        (strcmp(metal_simd_width, "32") == 0 || strcmp(metal_simd_width, "64") == 0) &&
 +        hparams.f_max_alibi_bias == 0.0f && !hparams.attn_soft_cap &&
-+        getenv("TOSH_FA_PF_DISABLE") == nullptr;
++        getenv("KESTREL_FA_PF_DISABLE") == nullptr;
 +    // Head-256 is neutral through 1024 tokens and only pulls ahead on longer
 +    // prompts; keep FA for pp512, where it measured slightly faster.
 +    const int64_t decomposed_min_tokens = q->ne[0] == 256 ? 512 : 32;
@@ -254,7 +254,7 @@ index 07ca49ad0..2807aa4e2 100644
 +        v->type == GGML_TYPE_F16 || v->type == GGML_TYPE_Q8_0 || v->type == GGML_TYPE_Q4_0;
 +    const bool decomposed_kv_ok =
 +        (k->type == GGML_TYPE_F16 && v->type == GGML_TYPE_F16) ||
-+        (getenv("TOSH_QK_PREFILL_DISABLE") == nullptr && decomposed_k_ok && decomposed_v_ok);
++        (getenv("KESTREL_QK_PREFILL_DISABLE") == nullptr && decomposed_k_ok && decomposed_v_ok);
 +    // the dequantization of a quantized V below only exists on the device, so layers a
 +    // partial offload leaves in host memory keep flash attention
 +    const ggml_tensor * v_alloc = v;
@@ -265,14 +265,14 @@ index 07ca49ad0..2807aa4e2 100644
 +        !ggml_is_quantized(v->type) ||
 +        (v_alloc != nullptr && !ggml_backend_buft_is_host(ggml_backend_buffer_get_type(v_alloc->buffer)));
 +    const bool amd_prefill_decomposed =
-+        getenv("TOSH_FA_AMD") != nullptr &&
++        getenv("KESTREL_FA_AMD") != nullptr &&
 +        decomposed_v_on_device &&
-+        getenv("TOSH_FA_AMD_PREFILL_DECOMPOSED_DISABLE") == nullptr &&
-+        getenv("TOSH_FA_AMD_HEAD64_PREFILL_DISABLE") == nullptr &&
++        getenv("KESTREL_FA_AMD_PREFILL_DECOMPOSED_DISABLE") == nullptr &&
++        getenv("KESTREL_FA_AMD_HEAD64_PREFILL_DISABLE") == nullptr &&
 +        metal_simd_width != nullptr &&
 +        // wave64 validated on GCN/Vega (parity + long-prompt wins); hatch opts out
 +        (strcmp(metal_simd_width, "32") == 0 ||
-+         (strcmp(metal_simd_width, "64") == 0 && getenv("TOSH_W64_PREFILL_DISABLE") == nullptr)) &&
++         (strcmp(metal_simd_width, "64") == 0 && getenv("KESTREL_W64_PREFILL_DISABLE") == nullptr)) &&
 +        n_tokens > decomposed_min_tokens && measured_head_size &&
 +        decomposed_kv_ok && !amd_prefill_fa_blocked;
 +    const bool use_flash_attn = cparams.flash_attn && kq_b == nullptr && !amd_prefill_decomposed;
@@ -390,7 +390,7 @@ index 07ca49ad0..2807aa4e2 100644
  }
  
 +bool llm_graph_context::mtp_kv_only() const {
-+    static const bool disabled = getenv("TOSH_MTP_KV_ONLY_DISABLE") != nullptr;
++    static const bool disabled = getenv("KESTREL_MTP_KV_ONLY_DISABLE") != nullptr;
 +
 +    return !disabled && n_outputs == 0;
 +}
@@ -701,7 +701,7 @@ index 332d1abe0..f39fa6b9b 100644
 +    // already does as a neox rope; the per-cell 2D extras are untouched. ref: PR #13870
      if (hparams.n_pos_per_embd() > 1) {
 -        return false;
-+        return getenv("TOSH_MROPE_SHIFT_DISABLE") == nullptr;
++        return getenv("KESTREL_MROPE_SHIFT_DISABLE") == nullptr;
      }
      return true;
  }
@@ -1021,7 +1021,7 @@ index 43c396f15..266b11735 100644
 @@ -1,10 +1,26 @@
  #include "llama-model-loader.h"
  
-+#ifdef TOSH_ENABLE_DYNAMIC_MOE
++#ifdef KESTREL_ENABLE_DYNAMIC_MOE
 +#include "tosh-moe.h"
 +#else
 +static inline int          tosh_moe_slots_want(void)                     { return 0; }
@@ -1119,14 +1119,14 @@ index 43c396f15..266b11735 100644
 +        (const void *) buft == tosh_moe_host_buft() &&
 +        std::string(ggml_get_name(&t_meta)).find("_exps.weight") != std::string::npos) {
 +        const int64_t n_exp = t_meta.ne[2];
-+        const bool split_bank = getenv("TOSH_MOE_SPLIT_BANK") != nullptr && n_slots < n_exp;
++        const bool split_bank = getenv("KESTREL_MOE_SPLIT_BANK") != nullptr && n_slots < n_exp;
 +
 +        ggml_backend_buffer_type_t buft_dev = ggml_backend_dev_buffer_type(ggml_backend_buft_get_device(buft));
 +
 +        // A CPU-owned bank lets the existing scheduler build real host -> Metal prefetch
 +        // splits for wide batches. Decode still wraps these stable pages for direct GPU fetch.
 +        ggml_context * host_ctx = ctx;
-+        if (split_bank || getenv("TOSH_MOE_CPU_BANK") != nullptr) {
++        if (split_bank || getenv("KESTREL_MOE_CPU_BANK") != nullptr) {
 +            host_ctx = ctx_for_buft(ggml_backend_cpu_buffer_type());
 +        }
 +        ggml_tensor host_meta = t_meta;
@@ -1136,7 +1136,7 @@ index 43c396f15..266b11735 100644
 +        ggml_tensor * host = ggml_dup_tensor(host_ctx, &host_meta);
 +
 +        ggml_tensor slots_meta = t_meta;
-+        const int split_ring = split_bank ? std::max(1, std::min((int) n_exp - n_slots, getenv("TOSH_MOE_SPLIT_RING") ? atoi(getenv("TOSH_MOE_SPLIT_RING")) : 8)) : 0;
++        const int split_ring = split_bank ? std::max(1, std::min((int) n_exp - n_slots, getenv("KESTREL_MOE_SPLIT_RING") ? atoi(getenv("KESTREL_MOE_SPLIT_RING")) : 8)) : 0;
 +        slots_meta.ne[2] = n_slots + split_ring;
 +
 +        const std::string slots_name = std::string(ggml_get_name(&t_meta)) + ".slots";
@@ -1308,7 +1308,7 @@ index e195f50d0..6274fc5cd 100644
 @@ -1,10 +1,18 @@
  #include "llama-model.h"
  
-+#ifdef TOSH_ENABLE_DYNAMIC_MOE
++#ifdef KESTREL_ENABLE_DYNAMIC_MOE
 +#include "tosh-moe.h"
 +#else
 +static inline void tosh_moe_seed_banks(void) {}
@@ -1427,7 +1427,7 @@ index ad6612647..9a1f11812 100644
 +        // only ever be restored as the wrong state: skip their copies. The ubatch token count is
 +        // part of the graph reuse key, so the two topologies never share a cached graph.
 +        const int64_t n_ut  = conv_input->ne[0] - conv_states->ne[0];
-+        const int64_t K_eff = getenv("TOSH_RS_SLOTS_FULL") ? K : std::min<int64_t>(K, n_ut + 1);
++        const int64_t K_eff = getenv("KESTREL_RS_SLOTS_FULL") ? K : std::min<int64_t>(K, n_ut + 1);
 +
 +        for (int64_t t = K - K_eff + 1; t <= K; ++t) {
              const int64_t s_idx  = std::max<int64_t>(0, conv_input->ne[0] - conv_states->ne[0] - K + t);

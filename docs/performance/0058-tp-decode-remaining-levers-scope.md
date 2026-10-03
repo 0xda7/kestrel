@@ -41,7 +41,7 @@ chain: sites drop ~255 → ~200 µs → **est. 30 → 34–38 t/s**.
 Boundary nodes are only two kinds: the row-parallel output matmul (`o_proj`/`down_proj`) and, at
 sites where the device's slice was zero, the 0056 broadcast (already handled separately).
 
-**Probe before committing** (reuse the `TOSH_MGPU_XDEV_MEASURE` harness from 0057): add mode
+**Probe before committing** (reuse the `KESTREL_MGPU_XDEV_MEASURE` harness from 0057): add mode
 `kstore` = a trivial compute kernel writing 16 KiB into `wrap_src` instead of the blit, same
 event bookkeeping. If `kstore` blit-substitution measures < 20 µs, implement; if not, close A.
 

@@ -11,7 +11,7 @@ index d410f00a4..38dff9f84 100644
  }
  
  
-+// TOSH_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
++// KESTREL_MGPU_TRACE: where the collective's time and bytes go. The counters are only touched
 +// when it is on, so a release run pays one cached branch per crossing.
 +static _Atomic uint64_t g_tr_reduce      = 0; // exchange_reduce calls
 +static _Atomic uint64_t g_tr_copy        = 0; // plain cross-device copies
@@ -27,7 +27,7 @@ index d410f00a4..38dff9f84 100644
 +static bool tosh_mgpu_trace(void) {
 +    static int on = -1;
 +    if (on < 0) {
-+        const char * v = getenv("TOSH_MGPU_TRACE");
++        const char * v = getenv("KESTREL_MGPU_TRACE");
 +        on = (v && v[0] == '1') ? 1 : 0;
 +    }
 +    return on == 1;
@@ -42,7 +42,7 @@ index d410f00a4..38dff9f84 100644
 +    const uint64_t peer   = atomic_load(&g_tr_bytes_peer);
 +    const uint64_t host   = atomic_load(&g_tr_bytes_host);
 +
-+    fprintf(stderr, "TOSH_MGPU_TRACE\n");
++    fprintf(stderr, "KESTREL_MGPU_TRACE\n");
 +    fprintf(stderr, "  allreduce exchanges   %llu\n", (unsigned long long) reduce);
 +    fprintf(stderr, "  plain xdev copies     %llu\n", (unsigned long long) atomic_load(&g_tr_copy));
 +    fprintf(stderr, "  peer-direct bytes     %llu\n", (unsigned long long) peer);
@@ -89,13 +89,13 @@ index d410f00a4..38dff9f84 100644
 +    }];
 +}
 +
- // TOSH_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
+ // KESTREL_MGPU_PEER_SELF runs the peer hand-off between two logical devices backed by the
  // same GPU (GGML_METAL_DEVICE_LIST=0,0), which needs no bridge: the queues are still
  // separate, so the cross-device ordering is testable on a single card.
  static bool ggml_metal_peer_self(void) {
      static int val = -1;
      if (val < 0) {
-         const char * v = getenv("TOSH_MGPU_PEER_SELF");
+         const char * v = getenv("KESTREL_MGPU_PEER_SELF");
          val = (v && v[0] == '1') ? 1 : 0;
 @@ -1122,44 +1200,60 @@ static bool ggml_metal_cpy_xdev_peer(ggml_metal_t ctx_src, ggml_metal_t ctx_dst,
              return false;
@@ -225,6 +225,6 @@ index d410f00a4..38dff9f84 100644
  
  
  
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
  static bool ggml_metal_moe_encode_range(
          ggml_metal_t ctx, struct ggml_cgraph * gf, id<MTLCommandBuffer> cmd_buf, int start, int end) {

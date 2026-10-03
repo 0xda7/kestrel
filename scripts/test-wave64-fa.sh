@@ -15,7 +15,7 @@ BIN="vendor/llama.cpp/build-static/bin"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-export TOSH_FA_AMD=1
+export KESTREL_FA_AMD=1
 
 echo "=== GPU"
 "$BIN/llama-bench" -m "$MODEL" -p 0 -n 1 -r 1 2>&1 | grep -iE "probed SIMD-group width|found device" || true
@@ -30,7 +30,7 @@ fi
 echo "\n=== correctness (must be all OK)"
 # Older llama.cpp checkouts name the target export-graph-ops (no test- prefix).
 if [ -x "$BIN/test-export-graph-ops" ]; then EXPORT="$BIN/test-export-graph-ops"; else EXPORT="$BIN/export-graph-ops"; fi
-TOSH_METAL_SIMD_WIDTH="$WIDTH" "$EXPORT" -m "$MODEL" -c 8192 -ub 512 -b 512 -fa on -o "$TMP/ops.txt" > /dev/null 2>&1
+KESTREL_METAL_SIMD_WIDTH="$WIDTH" "$EXPORT" -m "$MODEL" -c 8192 -ub 512 -b 512 -fa on -o "$TMP/ops.txt" > /dev/null 2>&1
 awk '$1==74' "$TMP/ops.txt" > "$TMP/fa.txt"
 echo "shapes: $(wc -l < "$TMP/fa.txt")"
 "$BIN/test-backend-ops" test -b MTL0 --test-file "$TMP/fa.txt" 2>&1 | grep -E "tests passed|FAIL"

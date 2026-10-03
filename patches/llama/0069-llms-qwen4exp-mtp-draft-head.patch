@@ -14,9 +14,9 @@ index 88e97d8e5..c14bf7192 100644
 -        is_mem_shared = llama_get_ctx_other(ctx_dft) == ctx_tgt;
 +        char arch[64] = {0};
 +        llama_model_meta_val_str(llama_get_model(ctx_dft), "general.architecture", arch, sizeof(arch));
-+        if (std::strcmp(arch, "qwen4exp") == 0 && getenv("TOSH_QWEN4EXP_MTP_EXPERIMENTAL") == nullptr) {
++        if (std::strcmp(arch, "qwen4exp") == 0 && getenv("KESTREL_QWEN4EXP_MTP_EXPERIMENTAL") == nullptr) {
 +            throw std::runtime_error("QWEN4EXP MTP is experimental and disabled by default; "
-+                                     "set TOSH_QWEN4EXP_MTP_EXPERIMENTAL=1 to test it");
++                                     "set KESTREL_QWEN4EXP_MTP_EXPERIMENTAL=1 to test it");
 +        }
 +        is_mem_shared = llama_get_ctx_other(ctx_dft) == ctx_tgt && std::strcmp(arch, "gemma4-assistant") == 0;
          chain_heads   = n_mtp_layers > 1 && !is_mem_shared;

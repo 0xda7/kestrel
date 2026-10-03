@@ -114,7 +114,7 @@ struct ServerSettings {
     /// Legacy profile field kept for decoding older saved settings. MTP is now
     /// selected automatically from model capability and expert offload.
     var specMTP: Bool = false
-    /// Route attention through the AMD Metal Flash-Attention kernel (TOSH_FA_AMD).
+    /// Route attention through the AMD Metal Flash-Attention kernel (KESTREL_FA_AMD).
     var faAmd: Bool = true
     /// MoE-offload prefill boost: overlap expert uploads with compute
     /// (GGML_SCHED_PREFETCH_EXPERTS) and keep CPU experts unpacked so their
@@ -157,12 +157,12 @@ struct ServerSettings {
     /// prompt speed without paying the per-layer wait across every card.
     var splitGroupSize: Int = 0
     /// Hand off activations between GPUs with shared Metal events instead of
-    /// draining both queues on every copy (TOSH_MGPU_EVENTS). Inert on a layer
+    /// draining both queues on every copy (KESTREL_MGPU_EVENTS). Inert on a layer
     /// split; on a tensor split it is most of the generation speed.
     var mgpuEvents: Bool = true
     /// When two split GPUs share a Metal peer group (Infinity Fabric Link, e.g. a
     /// W6800X/Vega II Duo), copy activations die-to-die instead of via host
-    /// (TOSH_MGPU_PEER). Worth 16% of the prefill, and only safe alongside mgpuEvents.
+    /// (KESTREL_MGPU_PEER). Worth 16% of the prefill, and only safe alongside mgpuEvents.
     var mgpuPeer: Bool = true
     /// Force VRAM-resident (private) Metal buffers. The backend forces shared ones
     /// for external GPUs, which streams weights over Thunderbolt every op; this
@@ -365,13 +365,15 @@ struct ServerSettings {
         if agentToolsEnabled {
             if !args.contains("--jinja") { args.append("--jinja") }
             args += ["--tools", "all"]
-            // Without the MCP proxy endpoint this engine build answers
-            // POST /tools with 404 "this feature is disabled" (verified in the
-            // live-fire of 2026-10-01): the tools list, but calls fail.
-            if !uiMcpProxy { args.append("--webui-mcp-proxy") }
+            // The MCP proxy endpoint is REQUIRED for agent tools: without it
+            // this engine build answers POST /tools with 404 "this feature is
+            // disabled" (verified in the live-fire of 2026-10-01) — the tools
+            // list, but calls fail. The flag is the engine's documented-risky
+            // /cors-proxy relay, so it stays loopback-only unless the LAN
+            // refusal above has been satisfied with an API key.
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
-        if uiMcpProxy { args.append("--ui-mcp-proxy") }
+        if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
         if persistCache && effectiveFaAmd {
             args += ["--slot-save-path", Self.slotCacheDir(port: port).path]
         }
@@ -434,11 +436,11 @@ struct ServerSettings {
         args.append("--metrics")
         if agentToolsEnabled {
             args += ["--jinja", "--tools", "all"]
-            // Same engine-404 guard as the main path above.
-            if !uiMcpProxy { args.append("--webui-mcp-proxy") }
+            // Same engine-404 guard as the main path above; the proxy flag is
+            // what registers POST /tools, so it rides whenever tools do.
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
-        if uiMcpProxy { args.append("--ui-mcp-proxy") }
+        if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
         if apiKeyEnabled { args += ["--api-key", Keychain.apiKey()] }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
         args += extraArgTokens.cli
@@ -628,7 +630,7 @@ struct ServerSettings {
         env["PATH"] = VideoRuntimeAvailability.augmentedPath(env["PATH"])
         // The engine logs this, so a log pasted from a bug report identifies the
         // app build even when the engine binary is older than the app.
-        env["TOSH_APP_VERSION"] = AppInfo.version
+        env["KESTREL_APP_VERSION"] = AppInfo.version
         env["GGML_METAL_VRAM_RESERVE_MB"] = String(vramReserveMB)
         // Physical GPU selection (consumed by the patched Metal backend, which maps
         // these to MTLCopyAllDevices() — the same order as the app's GPU picker).
@@ -659,46 +661,46 @@ struct ServerSettings {
         if forcePrivateBuffers || selectedExternal || anyExternalInSplit {
             env["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
         }
-        if effectiveFaAmd { env["TOSH_FA_AMD"] = "1" }
+        if effectiveFaAmd { env["KESTREL_FA_AMD"] = "1" }
         // Only a tensor split reduces across cards, which is the copy the bridge speeds up.
         // A layer split has nothing for it to carry.
-        if mgpuPeer && isSplitting && effectiveSplitMode == "tensor" { env["TOSH_MGPU_PEER"] = "1" }
-        if mgpuEvents && isSplitting { env["TOSH_MGPU_EVENTS"] = "1" }
+        if mgpuPeer && isSplitting && effectiveSplitMode == "tensor" { env["KESTREL_MGPU_PEER"] = "1" }
+        if mgpuEvents && isSplitting { env["KESTREL_MGPU_EVENTS"] = "1" }
         // Groups only mean anything inside a tensor split, and only when they are
         // smaller than the split itself and divide it evenly.
         if effectiveSplitMode == "tensor", let g = effectiveSplitGroupSize {
-            env["TOSH_MGPU_TENSOR_GROUP"] = String(g)
+            env["KESTREL_MGPU_TENSOR_GROUP"] = String(g)
         }
         // A DFlash draft runs its selector over the target's logits, so a head split by
         // vocabulary leaves no card holding a whole row and the engine aborts. Keep the head
         // on every card for that pairing; it costs its size per card and nothing otherwise.
         if isSplitting, effectiveSplitMode == "tensor", !effectiveDynamicMoe,
            dflashSelection(modelPath: modelPath, ncmoe: ncmoe) != nil {
-            env["TOSH_MIRROR_OUTPUT_HEAD"] = "1"
+            env["KESTREL_MIRROR_OUTPUT_HEAD"] = "1"
         }
         // Router mode has no single ncmoe (it's per-model, in the INI); the envs are
         // no-ops for dense models anyway.
         if effectiveDynamicMoe {
-            env["TOSH_MOE_MODE"] = "cache"
-            if dynamicMoePolicy == "auto" { env["TOSH_MOE_AUTO"] = "1" }
-            env["TOSH_MOE_SLOTS"] = String(effectiveDynamicMoeSlots)
-            env["TOSH_MOE_CPU_BANK"] = "1"
+            env["KESTREL_MOE_MODE"] = "cache"
+            if dynamicMoePolicy == "auto" { env["KESTREL_MOE_AUTO"] = "1" }
+            env["KESTREL_MOE_SLOTS"] = String(effectiveDynamicMoeSlots)
+            env["KESTREL_MOE_CPU_BANK"] = "1"
             env["GGML_SCHED_PREFETCH_EXPERTS"] = String(effectiveDynamicMoePrefetch)
             env["GGML_METAL_NCB"] = "8"
             if dynamicMoeExecutionRoute == .split {
                 let profile = dynamicMoeOptimizationProfile
-                env["TOSH_MOE_SPLIT_BANK"] = "1"
-                env["TOSH_MOE_SLOTS"] = String(dynamicMoeSlotSplit.fixed)
-                env["TOSH_MOE_SPLIT_RING"] = String(dynamicMoeSlotSplit.ring)
-                env["TOSH_MOE_BOUNDED_STAGE"] = "1"
-                env["TOSH_MOE_BOUNDED_STAGE_FORCE"] = "1"
-                env["TOSH_MOE_DOUBLE_BUFFER"] = "1"
+                env["KESTREL_MOE_SPLIT_BANK"] = "1"
+                env["KESTREL_MOE_SLOTS"] = String(dynamicMoeSlotSplit.fixed)
+                env["KESTREL_MOE_SPLIT_RING"] = String(dynamicMoeSlotSplit.ring)
+                env["KESTREL_MOE_BOUNDED_STAGE"] = "1"
+                env["KESTREL_MOE_BOUNDED_STAGE_FORCE"] = "1"
+                env["KESTREL_MOE_DOUBLE_BUFFER"] = "1"
                 if let mapPath = profile?.hotMapPath,
                    FileManager.default.fileExists(atPath: mapPath) {
-                    env["TOSH_MOE_HOT_MAP"] = mapPath
-                    env["TOSH_MOE_HOT_MAP_OUT"] = mapPath
+                    env["KESTREL_MOE_HOT_MAP"] = mapPath
+                    env["KESTREL_MOE_HOT_MAP_OUT"] = mapPath
                     if let experts = dynamicMoeModelInfo?.expertCount {
-                        env["TOSH_MOE_HOT_MAP_K"] = String(experts)
+                        env["KESTREL_MOE_HOT_MAP_K"] = String(experts)
                     }
                 }
             }
@@ -716,9 +718,9 @@ struct ServerSettings {
         for (k, v) in extraArgTokens.env { env[k] = v }
         // K is structural: a value larger than the GGUF's expert dimension makes
         // the backend skip cache creation. Keep the model-derived/clamped value even
-        // when an old Extra arguments recipe still contains TOSH_MOE_SLOTS.
+        // when an old Extra arguments recipe still contains KESTREL_MOE_SLOTS.
         if effectiveDynamicMoe {
-            env["TOSH_MOE_SLOTS"] = String(dynamicMoeExecutionRoute == .split
+            env["KESTREL_MOE_SLOTS"] = String(dynamicMoeExecutionRoute == .split
                 ? dynamicMoeSlotSplit.fixed : effectiveDynamicMoeSlots)
         }
         return env.compactMapValues { $0 }
@@ -878,7 +880,7 @@ struct ServerSettings {
 
     /// Router presets load models independently and cannot carry the per-tensor
     /// override required by this prototype, so keep the experiment fixed-model only.
-    var dynamicMoeUIUnlocked: Bool { extraArgTokens.env["TOSH_MOE_UI"] == "1" }
+    var dynamicMoeUIUnlocked: Bool { extraArgTokens.env["KESTREL_MOE_UI"] == "1" }
     var dynamicMoeGPU: GPUDevice? {
         let selected = ServerController.availableGPUs().filter { selectedGPUIndices.contains($0.index) }
         return selected.max { $0.vramMB < $1.vramMB }
@@ -1885,6 +1887,19 @@ final class ServerController: ObservableObject {
             state = .failed(msg)
             return
         }
+        if settings.localNetworkDiscovery && settings.agentToolsEnabled
+            && !settings.apiKeyEnabled {
+            // Refusal, not a warning: a LAN-exposed engine with agent tools
+            // enabled would serve exec/write tools unauthenticated (any LAN
+            // host becomes code execution on this machine). The key
+            // requirement is already the recommended pairing in Settings;
+            // this makes it non-negotiable when tools are in play.
+            let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
+            state = .failed(lang == "es"
+                ? "No se puede iniciar en la red local: las herramientas del agente exigen proteger la API con clave. Activa «Proteger la API con clave» en Ajustes o desactiva las herramientas del agente."
+                : "Cannot start on the local network: agent tools require the API key. Enable \"Protect the API with a key\" in Settings or turn agent tools off.")
+            return
+        }
         if settings.routerMode {
             let models = LocalModel.scan(in: ServerSettings.modelsDirectory)
             guard !models.isEmpty else {
@@ -1990,14 +2005,14 @@ final class ServerController: ObservableObject {
         }.joined(separator: "\n")
         let envKeys = ["GGML_METAL_VRAM_RESERVE_MB",
                        "GGML_METAL_DEVICE_INDEX", "GGML_METAL_DEVICES", "GGML_METAL_DEVICE_LIST",
-                       "GGML_METAL_SHARED_BUFFERS_DISABLE", "TOSH_FA_AMD",
+                       "GGML_METAL_SHARED_BUFFERS_DISABLE", "KESTREL_FA_AMD",
                        "GGML_SCHED_PREFETCH_EXPERTS", "GGML_CPU_NO_REPACK",
-                       "TOSH_MOE_UI", "TOSH_MOE_MODE", "TOSH_MOE_SLOTS", "TOSH_MOE_CPU_BANK",
-                       "TOSH_MOE_SPLIT_BANK", "TOSH_MOE_SPLIT_RING", "TOSH_MOE_BOUNDED_STAGE",
-                       "TOSH_MOE_BOUNDED_STAGE_FORCE", "TOSH_MOE_DOUBLE_BUFFER", "TOSH_MOE_HOT_MAP",
-                       "TOSH_MOE_HOT_MAP_OUT", "TOSH_MOE_HOT_MAP_K",
+                       "KESTREL_MOE_UI", "KESTREL_MOE_MODE", "KESTREL_MOE_SLOTS", "KESTREL_MOE_CPU_BANK",
+                       "KESTREL_MOE_SPLIT_BANK", "KESTREL_MOE_SPLIT_RING", "KESTREL_MOE_BOUNDED_STAGE",
+                       "KESTREL_MOE_BOUNDED_STAGE_FORCE", "KESTREL_MOE_DOUBLE_BUFFER", "KESTREL_MOE_HOT_MAP",
+                       "KESTREL_MOE_HOT_MAP_OUT", "KESTREL_MOE_HOT_MAP_K",
                        "GGML_METAL_NCB",
-                       "TOSH_MGPU_PEER", "TOSH_MGPU_PEER_DISABLE", "TOSH_MGPU_EVENTS"]
+                       "KESTREL_MGPU_PEER", "KESTREL_MGPU_PEER_DISABLE", "KESTREL_MGPU_EVENTS"]
         let env = settings.environment
         // Include user-provided environment variables in diagnostic logs.
         let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }.sorted()
@@ -2140,7 +2155,7 @@ final class ServerController: ObservableObject {
             if tail.contains("ggml_gallocr_reserve") {
                 return "La tarjeta rechazó un bloque de memoria del grafo: reduce el contexto, y si el modelo tiene visión baja el tope de tokens por imagen / the card refused a graph memory block: reduce context, and lower the image token cap if the model has vision"
             }
-            return "La tarjeta rechazó un bloque de memoria demasiado grande: reduce el contexto, o arranca con TOSH_METAL_MAX_BUFFER_MB=1024 para repartirlo / the card refused a single oversized memory block: reduce context, or start with TOSH_METAL_MAX_BUFFER_MB=1024 to split it"
+            return "La tarjeta rechazó un bloque de memoria demasiado grande: reduce el contexto, o arranca con KESTREL_METAL_MAX_BUFFER_MB=1024 para repartirlo / the card refused a single oversized memory block: reduce context, or start with KESTREL_METAL_MAX_BUFFER_MB=1024 to split it"
         }
         if tail.contains("out of memory") || tail.contains("failed to allocate")
             || tail.contains("insufficient memory") || tail.contains("kiogpucommandbuffercallbackerroroutofmemory") {
@@ -2336,11 +2351,22 @@ final class ServerController: ObservableObject {
     private func watchHealth(port: Int) {
         healthTask?.cancel()
         healthTask = Task { [weak self] in
-            let url = URL(string: "http://127.0.0.1:\(port)/health")!
+            var urlComponents = URLComponents()
+            urlComponents.scheme = "http"
+            urlComponents.host = "127.0.0.1"
+            urlComponents.port = port
+            urlComponents.path = "/health"
+            guard let url = urlComponents.url else { return }
             for _ in 0..<150 {   // up to ~5 min for large models
                 if Task.isCancelled { return }
-                if let (data, _) = try? await URLSession.shared.data(from: url),
-                   String(data: data, encoding: .utf8)?.contains("ok") == true {
+                // The engine answers {"status":"ok"} — parse it exactly. A
+                // substring check flipped a port collision with any foreign
+                // service whose body happened to contain "ok" into "running".
+                if let (data, response) = try? await URLSession.shared.data(from: url),
+                   (response as? HTTPURLResponse)?.statusCode == 200,
+                   let body = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                   body["status"] == "ok" {
+                    guard !Task.isCancelled else { return }
                     await MainActor.run {
                         self?.state = .running
                         self?.startedAt = Date()

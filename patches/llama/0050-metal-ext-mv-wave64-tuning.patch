@@ -12,8 +12,8 @@ index c6ba245e6..b56d88bd0 100644
      }
  
 -    if (nr0 > 1) {
-+    // q6_K on 64 lanes uses the wave64-shaped variant; TOSH_EXT_W64_DISABLE falls back to the generic kernel
-+    static const bool w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
++    // q6_K on 64 lanes uses the wave64-shaped variant; KESTREL_EXT_W64_DISABLE falls back to the generic kernel
++    static const bool w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
 +    const bool is_w64_q6k = !w64_disable && tsrc0 == GGML_TYPE_Q6_K && simd_width_lds == 64;
 +
 +    if (is_w64_q6k) {
@@ -43,7 +43,7 @@ index 1e82cb185..6fe035ae2 100644
 -        const int16_t r0ptg = nypsg*nsg*nr0;       // num src0 rows per threadgroup
 +        // the wave64 q6_K variant keeps four rows per simdgroup, so the row split does not apply
 +        // keep the gate in sync with the pipeline picker in ggml_metal_library_get_pipeline_mul_mv_ext
-+        static const bool ext_w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
++        static const bool ext_w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
 +        const bool ext_w64_q6k = !ext_w64_disable &&
 +                                 props_dev->simd_width == 64 && op->src[0]->type == GGML_TYPE_Q6_K;
 +

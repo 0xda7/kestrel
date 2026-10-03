@@ -8,7 +8,7 @@ index 0cc644c9d..32477974b 100644
  
      const bool w64 = simd_width == 64 && use_mm_manual && !has_tensor &&
                       op->ne[1] >= w64_floor &&
-                      getenv("TOSH_MM_W64_DISABLE") == nullptr;
+                      getenv("KESTREL_MM_W64_DISABLE") == nullptr;
  
      snprintf(base, 256, "kernel_mul_mm_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
 -    snprintf(name, 256, "%s_bci=%d_bco=%d_ne12=%d_ne13=%d_r2=%d_r3=%d_mm=%d_db=%d_af=%d",
@@ -16,7 +16,7 @@ index 0cc644c9d..32477974b 100644
 +    // measured on 32 lanes only; the 64-lane tile lives in its own kernel
 +    const bool uniform_scale = (tsrc0 == GGML_TYPE_Q4_K || tsrc0 == GGML_TYPE_Q5_K) && wide && !w64 &&
 +                               use_mm_manual && !has_tensor && simd_width == 32 &&
-+                               getenv("TOSH_MM_UNIFORM_SCALE_DISABLE") == nullptr;
++                               getenv("KESTREL_MM_UNIFORM_SCALE_DISABLE") == nullptr;
 +
 +    snprintf(name, 256, "%s_bci=%d_bco=%d_ne12=%d_ne13=%d_r2=%d_r3=%d_mm=%d_db=%d_af=%d_us=%d",
 +             base, bc_inp, bc_out, ne12, ne13, r2, r3, use_mm_manual + 2*narrow, use_mm_double_buffer, acc_f32, uniform_scale);

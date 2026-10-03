@@ -3,6 +3,68 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Security
+
+- **Servers: the local network needs a key when agent tools are on.** Starting a server bound to the local network with agent tools enabled but no API key is now refused with a bilingual message instead of serving exec/write tools unauthenticated to every LAN host.
+- **Servers: the MCP proxy flag is honest.** The experimental `/cors-proxy` relay was enabled by an inverted condition whenever agent tools were on, regardless of the toggle; the flag is now emitted exactly when the MCP proxy setting or agent tools require it (the proxy endpoint is what registers `POST /tools` on this engine build).
+- **Servers: the health check requires the real answer.** A foreign service on the same port whose body merely contained "ok" could flip the server state to running; the check now requires HTTP 200 with `{"status":"ok"}` and re-checks cancellation before applying it.
+- **Chat: the meta-prompt harness runs pi confined** — `--no-tools`, `--thinking off`, a pinned 600 s budget, and no session-resume flag ever.
+
+### Added
+
+- **Prompt Space: pi as the prompt creator (LLM Space meta-prompt harness).** The ported meta-prompt system prompt (llm-space, deer-flow/llm-space, MIT — attributed in AUTHORS.md) turns a task description into a full authored system prompt: Prompt Space gains "Create with pi…", which runs pi confined and saves the result as a template.
+- **Prompt Space: typed variables and A/B variants (llm-space workspace schema).** Templates can declare `currentDate`, `workingDirectory` and `skills` variables that resolve automatically at apply time (skills are discovered Claude-format from `~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.agents/skills` and Kestrel's own folder), and carry named variant bodies with one active — all backward-decodable with existing prompt-library.json files.
+- **Chat: the Anthropic dialect now maps the tool loop.** Assistant `tool_calls` become `tool_use` blocks and `role:"tool"` results become `tool_result` blocks paired by id — previously the Messages API rejected the turn outright. Verified by the behavioral driver; not yet live-fired against a real Anthropic endpoint.
+
+### Fixed
+
+- **Chat: a stalled remote stream no longer eats the next reply.** The remote-stall watchdog abandoned its stream task without cancelling it; the stale task later finished with empty text, deleting the next turn's just-appended reply slot. It now cancels like the local stall path.
+- **Chat: importing a JSONL archive with duplicate message ids no longer crashes** (precondition failure → first record wins).
+- **Chat: latch output is bounded during the run** — accumulation stops at the reply cap instead of growing without bound and re-decoding on every chunk.
+- **Chat: sidecar stop() can no longer miss the launch window.** The process handle reaches stop() synchronously via a lock-guarded box; previously a stop during the MainActor hop left a runaway sidecar running to its full budget.
+- **Chat: pi finalization cannot lose a late message_end** — records that reappear between the buffer drain and the handler teardown are applied.
+- **Prompt Library: a transient read failure no longer overwrites the library with seeds** — only an existing-but-undecodable file reseeds; an unreadable file is kept and the seeds are served in memory.
+- **MCP: hung servers are actually stopped.** Disconnect escalates to SIGKILL and reaps the child; a request timeout can no longer leak a parked continuation (an early response mailbox closes the write→park race).
+- **Servers: orphan reaping matches bundles by path components** — a foreign "MyKestrel.app" is no longer a kill target; SIGKILL fallbacks stay ordered after SIGTERM.
+- **Servers: the relaunch-after-update spawns `/usr/bin/open` directly** instead of interpolating the bundle path into a shell command.
+- **Naming: the last stale-product-name strings are gone.** The engine-side env-var prefix is `KESTREL_` across Swift, scripts, CI, translation help strings and the patch series — the llama.cpp, whisper.cpp and stable-diffusion.cpp engines were rebuilt from the renamed patches and verified: zero `TOSH_` strings in any binary, `KESTREL_FA_AMD` present, live completion served. Historical mission records and past-release changelog entries keep their original names by design. The stale personal `dev.engel.toshllm` defaults domain was exported to `.agents/backups/` and deleted.
+
+### Added
+
+- **Chat: pi (llm-space) as a selectable assistant.** The per-conversation assistant chip gains a "pi (llm-space)" option, and Chat's advanced settings gain a global "pi as primary assistant" toggle with the binary path, an optional model/provider passthrough, and a timeout. pi runs as its own process (like latch): it streams the reply as it is generated, a stop terminates it while keeping the partial text, and a crash or timeout finishes an explicit bilingual error — never a silent fallback to another engine. Its traces land under `pi-sessions` in the app data folder. When no model is set, pi uses its own configuration; Kestrel never hardcodes a model and never passes credentials to it. Attribution for Pi and llm-space lives in AUTHORS.md.
+
+- **Chat: stop sequences.** Chat sampling gains stop sequences (comma/newline separated), sent as `stop` to the engine and OpenAI-compatible providers and remapped to `stop_sequences` for Anthropic. Settings → Chat → Sampling.
+
+- **Settings: one credential per remote provider.** Each remote route stores its API key in its own Keychain item (device-only accessibility) instead of one shared key; routes without their own key still fall back to the inherited shared key until migrated, and the shared item is removed once every configured route owns its key.
+
+- **Settings: pi thinking level.** When pi's thinking is on, a configurable level (off, minimal, low, medium, high, xhigh, max — verified against pi 1.0.0) rides `--thinking`; empty keeps pi's own configured level.
+
+### Fixed
+
+- **Chat: pi chat turns are confined.** pi's default bash/read/edit/write tools were active in chat turns, and a "self-improve" turn wrote invalid Swift files into the repository. Chat turns now pass `--no-tools`; an explicit per-conversation agent opt-in (with a warning banner and a dedicated 1800 s budget) restores pi's native tools. Every turn keeps writing a JSONL trace under `pi-sessions` (`--no-session`, which suppressed the file entirely, is gone), the system prompt is enforced via `--system-prompt` instead of prompt preamble, and a clean exit with no visible text surfaces a failure notice instead of a blank bubble.
+
+- **Chat: remote replies now carry the model that actually answered.** With a remote provider route active, the persisted message `model` field was the local engine's router alias; it now records the route's model id, so attribution in history and exports is truthful.
+
+- **Chat: pi replies keep their reasoning.** Reasoning captured during a pi turn was dropped on success; it is now composed into the reply with the same `<think>` convention the local engine path uses, so it renders in the reasoning panel, persists, and rides history instead of disappearing.
+
+- **Chat: pi reasoning streams instead of freezing.** Reasoning deltas updated internal state without notifying the UI, so a thinking-only stretch rendered as frozen; the stream pump now receives snapshots on every delta.
+
+- **Chat: latch replies no longer vanish on clean-but-empty runs.** A latch run that exited 0 with empty stdout silently deleted the reply slot; as with pi, a bilingual failure notice now surfaces instead of a blank bubble.
+
+- **Chat: latch abnormal exits carry diagnostics.** The harness's stderr was drained and discarded, so provider failures surfaced zero context; a bounded stderr tail now rides failure and abnormal-exit messages (same contract as the pi sidecar). A clean latch run also keeps partial output on a timeout.
+
+- **Chat: stopped sidecars stay stopped.** A pi or latch process that ignored SIGTERM could outlive its budget; a SIGKILL escalation now runs after a 5 s grace without delaying the timeout verdict (a delayed escalation could misclassify a fast-dying child as a clean exit).
+
+- **Chat: stream accumulation is race-free and bounded.** pi's reply/reasoning buffers were mutated outside their lock (a data race against finalization) and grew without bound on long runs; both sidecars now mutate under the lock, deliver snapshots outside it, and cap accumulated text, and finalization deterministically drains both pipes so stderr written just before exit is never lost.
+
+### Improved
+
+- **Security: conversation store is user-only.** `conversations.json` and `projects.json` are now written with 0600 permissions (the enclosing folder was already 0700), keeping chat history unreadable to other local accounts even if folder permissions drift.
+
+- **Security: no force-unwraps on the request path.** Local wire URLs build through `URLComponents`, and invalid provider URLs degrade to a failed request instead of a crash.
+
 ## [0.88.0] - 2026-10-01
 
 ### Added

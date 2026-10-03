@@ -195,12 +195,16 @@ final class UpdateChecker: ObservableObject {
     }
 
     /// Launches the freshly installed copy and quits this one. The engine is
-    /// stopped by applicationWillTerminate on the way out.
+    /// stopped by applicationWillTerminate on the way out. No shell: the path
+    /// rides as a direct argv element (a bundle path containing quotes or
+    /// `$(…)` must never reach an interpreter).
     private func relaunch(_ url: URL) {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        p.arguments = ["-c", "sleep 1; /usr/bin/open \"\(url.path)\""]
-        try? p.run()
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            p.arguments = [url.path]
+            try? p.run()
+        }
         NSApp.terminate(nil)
     }
 

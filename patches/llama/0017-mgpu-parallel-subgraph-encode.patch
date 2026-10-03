@@ -34,7 +34,7 @@ index 4e4c57289..910ca4d26 100644
 +    // They only meet at the AllReduce below, so encode them at once.
 +    static int serial_encode = -1;
 +    if (serial_encode < 0) {
-+        const char * s_se = getenv("TOSH_MGPU_SERIAL_ENCODE");
++        const char * s_se = getenv("KESTREL_MGPU_SERIAL_ENCODE");
 +        serial_encode = s_se ? atoi(s_se) : 0;
 +    }
 +

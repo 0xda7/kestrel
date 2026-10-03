@@ -13,14 +13,14 @@ index 31ce26d16..6816a77e0 100644
 +            // the expert's token count), so padding the grid moves the geometry without moving the
 +            // work. It separates a pathology that follows the tile count from one that follows n.
 +            static const int gridx_pad = []() {
-+                const char * s = TOSH_ENV("TOSH_MMID_GRIDX_PAD");
++                const char * s = KESTREL_ENV("KESTREL_MMID_GRIDX_PAD");
 +                return s ? atoi(s) : 0;
 +            }();
 +            ntg0 += gridx_pad;
 +
-+            static const bool geom_dbg = TOSH_ENV("TOSH_MMID_GEOM") != nullptr;
++            static const bool geom_dbg = KESTREL_ENV("KESTREL_MMID_GEOM") != nullptr;
 +            if (geom_dbg) {
-+                fprintf(stderr, "TOSH_MMID_GEOM n=%d experts=%d m=%d k=%d nr1=%d grid=(%d,%d,%d) tpt=128 pad=%d\n",
++                fprintf(stderr, "KESTREL_MMID_GEOM n=%d experts=%d m=%d k=%d nr1=%d grid=(%d,%d,%d) tpt=128 pad=%d\n",
 +                        (int) ne21, (int) ne02_run, (int) ne01, (int) ne00, nr1,
 +                        ntg0, (int) ((ne01 + 63)/64), (int) ne02_run, gridx_pad);
 +            }

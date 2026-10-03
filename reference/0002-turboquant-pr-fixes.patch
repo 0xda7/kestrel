@@ -943,7 +943,7 @@ index 693e2ff6..258a7092 100644
 +            // fallback collapses with depth (e.g. turbo3 pp2048 ~6 t/s) while this
 +            // vec kernel stays flat (~100 t/s) and is validated correct, so the
 +            // GPU path always wins.
-+            if (getenv("TOSH_FA_AMD") != NULL &&
++            if (getenv("KESTREL_FA_AMD") != NULL &&
 +                !has_simdgroup_mm && has_simdgroup_reduction &&
 +                op->src[0]->ne[0] % 32 == 0) {
 +                float max_bias = 0.0f;
@@ -1359,7 +1359,7 @@ index 3e1c5833..d9ec0411 100644
 +    }
 +    // No ne01 cap: this kernel runs both decode and prefill on the GPU (the CPU
 +    // FA fallback that quantized/turbo KV would otherwise use collapses with depth).
-+    if (getenv("TOSH_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
++    if (getenv("KESTREL_FA_AMD") != NULL && fa_amd_pipeline[0] != '\0' &&
 +        !props_dev->has_simdgroup_mm && props_dev->has_simdgroup_reduction &&
 +        has_mask && !has_sinks && !has_bias && !has_scap) {
 +
@@ -1402,7 +1402,7 @@ index 3e1c5833..d9ec0411 100644
 +        // standard pairs are instantiated, turbo caches and decode keep the vec kernel
 +        const bool k_std_pair = (op->src[1]->type == GGML_TYPE_F16 || op->src[1]->type == GGML_TYPE_Q8_0 || op->src[1]->type == GGML_TYPE_Q4_0) &&
 +                                (op->src[2]->type == GGML_TYPE_F16 || op->src[2]->type == GGML_TYPE_Q8_0 || op->src[2]->type == GGML_TYPE_Q4_0);
-+        if (ne01 >= 16 && k_std_pair && getenv("TOSH_FA_TILE_DISABLE") == NULL) {
++        if (ne01 >= 16 && k_std_pair && getenv("KESTREL_FA_TILE_DISABLE") == NULL) {
 +            char fa_tile_pipeline[80];
 +            snprintf(fa_tile_pipeline, sizeof(fa_tile_pipeline), "kernel_flash_attn_ext_tile_amd_dk%d_k%s_v%s", (int) ne00,
 +                     ggml_metal_fa_amd_type_suffix(op->src[1]->type), ggml_metal_fa_amd_type_suffix(op->src[2]->type));

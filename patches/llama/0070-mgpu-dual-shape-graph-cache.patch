@@ -586,7 +586,7 @@ index 7ea1649e9..556bf3fe8 100644
 +    // metadata and no device memory. Only a session that alternates between two shapes gains
 +    // from it, so it is asked for: without alternation the swap below never hits.
 +    {
-+        const char * env = getenv("TOSH_MGPU_SHAPE_CACHE");
++        const char * env = getenv("KESTREL_MGPU_SHAPE_CACHE");
 +        if (env != nullptr && atoi(env) != 0) {
 +            gf_res_alt[0].reset(new llm_graph_result(max_nodes));
 +            gf_res_alt[1].reset(new llm_graph_result(max_nodes));
@@ -598,7 +598,7 @@ index 7ea1649e9..556bf3fe8 100644
 +            shape_slot  = 0;
 +            ggml_backend_sched_set_shape_slot(sched.get(), shape_slot);
 +            LLAMA_LOG_INFO("%s: shape cache on, two prepared shapes share the compute buffers\n", __func__);
-+            if (getenv("TOSH_MGPU_SHAPE_TRACE") != nullptr) {
++            if (getenv("KESTREL_MGPU_SHAPE_TRACE") != nullptr) {
 +                fprintf(stderr, "SHAPE cache on\n");
 +            }
 +        }
@@ -717,7 +717,7 @@ index 7ea1649e9..556bf3fe8 100644
 +            shape_reuse = hit;
 +        }
 +
-+        static const bool shape_trace = getenv("TOSH_MGPU_SHAPE_TRACE") != nullptr;
++        static const bool shape_trace = getenv("KESTREL_MGPU_SHAPE_TRACE") != nullptr;
 +        if (shape_trace) {
 +            fprintf(stderr, "SHAPE %s slot=%d n_tokens=%u\n", hit ? "hit" : "miss", shape_slot, ubatch.n_tokens);
 +        }

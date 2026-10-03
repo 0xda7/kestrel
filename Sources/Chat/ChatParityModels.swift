@@ -27,6 +27,11 @@ struct ChatSamplingSettings: Equatable {
     var samplers = ""
     var backendSampling = false
     var customJSON = ""
+    /// Stop sequences, comma- or newline-separated; empty = none. Sent as the
+    /// OpenAI/llama-server `stop` array and remapped to Anthropic's
+    /// `stop_sequences` by the wire transform. Declared last so existing
+    /// labeled memberwise calls keep compiling.
+    var stopSequences = ""
 }
 
 struct ChatTimings: Codable, Equatable {

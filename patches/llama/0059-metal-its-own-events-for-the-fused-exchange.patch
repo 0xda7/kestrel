@@ -80,7 +80,7 @@ index 3648d2643..d410f00a4 100644
  static bool ggml_metal_xdev_link_reserve(ggml_metal_t ctx_src, ggml_metal_t ctx_dst,
                                          struct ggml_metal_xdev_link * link, size_t size) {
      if (link->cap == 0) {
-         GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (TOSH_MGPU_EVENTS)\n", __func__);
+         GGML_LOG_INFO("%s: cross-device hand-off via shared events and host staging (KESTREL_MGPU_EVENTS)\n", __func__);
      }
  
      if (link->cap < size) {

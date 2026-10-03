@@ -14,9 +14,9 @@ index 78948dadb..bac07fb44 100644
 +#include <stdatomic.h>
 +#include <time.h>
 +
-+// TOSH_CB_PROFILE=1: per-command-buffer GPU accounting, bucketed by graph size.
++// KESTREL_CB_PROFILE=1: per-command-buffer GPU accounting, bucketed by graph size.
 +// Off by default, and it attaches no completion handler when off.
-+#define TOSH_CBP_MAX_BUCKETS 24
++#define KESTREL_CBP_MAX_BUCKETS 24
 +
 +struct tosh_cbp_bucket {
 +    _Atomic int      n_nodes;    // 0 = free slot
@@ -39,13 +39,13 @@ index 78948dadb..bac07fb44 100644
 +static _Atomic uint64_t g_cbp_commit_ns; // the commit call itself
 +static _Atomic uint64_t g_cbp_create_ns; // creating and enqueuing the buffers of a graph
 +
-+static struct tosh_cbp_bucket g_cbp[TOSH_CBP_MAX_BUCKETS];
++static struct tosh_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
 +static _Atomic int g_cbp_state = 0; // 0 unknown, 1 off, 2 on
 +
 +static bool tosh_cbp_on(void) {
 +    int st = atomic_load_explicit(&g_cbp_state, memory_order_relaxed);
 +    if (st == 0) {
-+        const char * e = getenv("TOSH_CB_PROFILE");
++        const char * e = getenv("KESTREL_CB_PROFILE");
 +        st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
 +        atomic_store_explicit(&g_cbp_state, st, memory_order_relaxed);
 +    }
@@ -53,7 +53,7 @@ index 78948dadb..bac07fb44 100644
 +}
 +
 +static struct tosh_cbp_bucket * tosh_cbp_bucket_for(int n_nodes) {
-+    for (int i = 0; i < TOSH_CBP_MAX_BUCKETS; ++i) {
++    for (int i = 0; i < KESTREL_CBP_MAX_BUCKETS; ++i) {
 +        int cur = atomic_load_explicit(&g_cbp[i].n_nodes, memory_order_relaxed);
 +        if (cur == n_nodes) {
 +            return &g_cbp[i];
@@ -143,7 +143,7 @@ index 78948dadb..bac07fb44 100644
 +    {
 +        const uint64_t dn = atomic_load_explicit(&g_tosh_d2h_n, memory_order_relaxed);
 +        const uint64_t hn = atomic_load_explicit(&g_tosh_h2d_n, memory_order_relaxed);
-+        fprintf(stderr, "TOSH_CBP  readback: %llu lecturas, %.2f MiB, %.1f ms | subidas: %llu, %.2f MiB, %.1f ms\n",
++        fprintf(stderr, "KESTREL_CBP  readback: %llu lecturas, %.2f MiB, %.1f ms | subidas: %llu, %.2f MiB, %.1f ms\n",
 +                (unsigned long long) dn,
 +                atomic_load_explicit(&g_tosh_d2h_bytes, memory_order_relaxed)/1048576.0,
 +                atomic_load_explicit(&g_tosh_d2h_ns,    memory_order_relaxed)/1e6,
@@ -159,7 +159,7 @@ index 78948dadb..bac07fb44 100644
 +    }
 +    {
 +        const uint64_t n = atomic_load_explicit(&g_cbp_sync_n, memory_order_relaxed);
-+        fprintf(stderr, "TOSH_CBP  pid=%d  syncs=%llu  cpu_wait=%.1f  upload_drain=%.1f  "
++        fprintf(stderr, "KESTREL_CBP  pid=%d  syncs=%llu  cpu_wait=%.1f  upload_drain=%.1f  "
 +                "encode_ops=%.1f  commit=%.1f  create=%.1f  (ms totales)\n",
 +                getpid(), (unsigned long long) n,
 +                atomic_load_explicit(&g_cbp_wait_ns,   memory_order_relaxed)/1e6,
@@ -174,9 +174,9 @@ index 78948dadb..bac07fb44 100644
 +        atomic_store_explicit(&g_cbp_commit_ns, 0, memory_order_relaxed);
 +        atomic_store_explicit(&g_cbp_create_ns, 0, memory_order_relaxed);
 +    }
-+    fprintf(stderr, "TOSH_CBP  %8s %8s %8s %12s %12s %12s %12s %12s %12s\n",
++    fprintf(stderr, "KESTREL_CBP  %8s %8s %8s %12s %12s %12s %12s %12s %12s\n",
 +            "n_nodes", "graphs", "cbs", "gpu_us/g", "gpu_us_min", "gpu_us_max", "kern_us/g", "span_us/g", "encode_us/g");
-+    for (int i = 0; i < TOSH_CBP_MAX_BUCKETS; ++i) {
++    for (int i = 0; i < KESTREL_CBP_MAX_BUCKETS; ++i) {
 +        const int nn = atomic_load_explicit(&g_cbp[i].n_nodes, memory_order_relaxed);
 +        if (nn == 0) {
 +            continue;
@@ -185,7 +185,7 @@ index 78948dadb..bac07fb44 100644
 +        if (ng == 0) {
 +            continue;
 +        }
-+        fprintf(stderr, "TOSH_CBP  %8d %8llu %8llu %12.1f %12.1f %12.1f %12.1f %12.1f %12.1f\n", nn,
++        fprintf(stderr, "KESTREL_CBP  %8d %8llu %8llu %12.1f %12.1f %12.1f %12.1f %12.1f %12.1f\n", nn,
 +                (unsigned long long) ng,
 +                (unsigned long long) atomic_load_explicit(&g_cbp[i].n_cbs, memory_order_relaxed),
 +                atomic_load_explicit(&g_cbp[i].gpu_ns,     memory_order_relaxed)/1000.0/ng,
@@ -281,10 +281,10 @@ index 78948dadb..bac07fb44 100644
  
      // number of nodes encoded by the main thread (empirically determined)
 -    const int n_main = MAX(64, 0.1*gf->n_nodes);
-+    // the split was tuned on unified memory; TOSH_N_MAIN overrides it to A/B the share here
++    // the split was tuned on unified memory; KESTREL_N_MAIN overrides it to A/B the share here
 +    static int n_main_env = -2;
 +    if (n_main_env == -2) {
-+        const char * v = getenv("TOSH_N_MAIN");
++        const char * v = getenv("KESTREL_N_MAIN");
 +        n_main_env = v ? atoi(v) : -1;
 +    }
 +    const int n_main = n_main_env >= 0 ? n_main_env : MAX(64, 0.1*gf->n_nodes);
@@ -471,7 +471,7 @@ index 12ba16fd8..14d306094 100644
  #import "ggml-metal-impl.h"
  #import "ggml-metal-common.h"
  
- #ifdef TOSH_ENABLE_DYNAMIC_MOE
+ #ifdef KESTREL_ENABLE_DYNAMIC_MOE
  #import "tosh-moe.h"
  #else
 @@ -1893,16 +1895,17 @@ void ggml_metal_device_event_synchronize(ggml_metal_device_t dev, ggml_metal_eve
@@ -502,7 +502,7 @@ index 12ba16fd8..14d306094 100644
      if (stage == nil || stage.length < size) {
          [stage release];
 +        static int wc_off = -1;
-+        if (wc_off < 0) { wc_off = getenv("TOSH_STAGE_WC_OFF") != NULL; }
++        if (wc_off < 0) { wc_off = getenv("KESTREL_STAGE_WC_OFF") != NULL; }
          stage = [dev->mtl_device newBufferWithLength:MAX(size, (size_t) 256*1024)
 -                                             options:MTLResourceStorageModeShared | MTLResourceCPUCacheModeWriteCombined];
 +                                             options:wc_off ? MTLResourceStorageModeShared
@@ -518,7 +518,7 @@ index 12ba16fd8..14d306094 100644
 @@ -3280,16 +3286,24 @@ bool ggml_metal_device_stage_get(ggml_metal_device_t dev, struct ggml_metal_buff
  
      if (t0) {
-         tosh_prof_add(TOSH_PROF_D2H_STAGE, size, t0);
+         tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
      }
  
      return true;
@@ -573,7 +573,7 @@ index 12ba16fd8..14d306094 100644
      }
 @@ -3342,28 +3370,55 @@ void ggml_metal_buffer_set_tensor(ggml_metal_buffer_t buf, struct ggml_tensor *
                      stage_load = 0;
-                 } else if (getenv("TOSH_STAGE_LOAD") != NULL) {
+                 } else if (getenv("KESTREL_STAGE_LOAD") != NULL) {
                      stage_load = 1;
                  } else {
                      const char * n = getenv("GGML_METAL_DEVICES");
@@ -585,7 +585,7 @@ index 12ba16fd8..14d306094 100644
 +                for (size_t done = 0; done < size;) {
 +                    static size_t slice = 0;
 +                    if (slice == 0) {
-+                        const char * v = getenv("TOSH_STAGE_SLICE_MB");
++                        const char * v = getenv("KESTREL_STAGE_SLICE_MB");
 +                        slice = v ? MIN((size_t) atoi(v)*1024*1024, GGML_METAL_STAGE_BUF_MAX) : GGML_METAL_STAGE_BUF_MAX;
 +                        if (slice == 0) { slice = GGML_METAL_STAGE_BUF_MAX; }
 +                    }
@@ -613,9 +613,9 @@ index 12ba16fd8..14d306094 100644
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
 -        id<MTLBuffer> buf_src = [buf->dev->mtl_device newBufferWithBytesNoCopy:data_ptr
 +        // wrapping the caller's pointer registers the whole tensor as a Metal resource for the
-+        // blit; TOSH_NO_HOST_WRAP skips it so the chunked staging path below is used instead
++        // blit; KESTREL_NO_HOST_WRAP skips it so the chunked staging path below is used instead
 +        static int no_wrap = -1;
-+        if (no_wrap < 0) { no_wrap = getenv("TOSH_NO_HOST_WRAP") != NULL; }
++        if (no_wrap < 0) { no_wrap = getenv("KESTREL_NO_HOST_WRAP") != NULL; }
 +        id<MTLBuffer> buf_src = no_wrap ? nil : [buf->dev->mtl_device newBufferWithBytesNoCopy:data_ptr
                                                                 length:size
                                                                options:MTLResourceStorageModeShared
@@ -633,17 +633,17 @@ index 12ba16fd8..14d306094 100644
          //[cmd_buf waitUntilCompleted];
  
          if (t0) {
-             tosh_prof_add(TOSH_PROF_H2D_DIRECT, size, t0);
+             tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
          }
      }
  }
  
-+// TOSH_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
++// KESTREL_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
 +// son lo que queda del hueco de decode una vez descartados commit, creacion y espera
 +static bool tosh_xfer_on(void) {
 +    int st = atomic_load_explicit(&g_tosh_xfer_state, memory_order_relaxed);
 +    if (st == 0) {
-+        const char * e = getenv("TOSH_CB_PROFILE");
++        const char * e = getenv("KESTREL_CB_PROFILE");
 +        st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
 +        atomic_store_explicit(&g_tosh_xfer_state, st, memory_order_relaxed);
 +    }
@@ -680,7 +680,7 @@ index f1c57487b..4920c9f23 100644
 @@ -2995,17 +2995,28 @@ int ggml_metal_op_mul_mat(ggml_metal_op_t ctx, int idx) {
  
          static const int nr0_env = []() {
-             const char * s = getenv("TOSH_EXT_NR0");
+             const char * s = getenv("KESTREL_EXT_NR0");
              return s ? atoi(s) : 0;
          }();
  
@@ -690,7 +690,7 @@ index f1c57487b..4920c9f23 100644
 +        // Four rows per thread doubles what a threadgroup covers, so a weight with few
 +        // rows stops filling the grid. The threshold is per row count, not per quant type.
 +        static const int64_t nr0_min_rows = []() {
-+            const char * s = getenv("TOSH_EXT_NR0_MINROWS");
++            const char * s = getenv("KESTREL_EXT_NR0_MINROWS");
 +            // off by default: the win depends on the weight's shape and one measured model
 +            // still regresses at four columns, so it stays opt-in until that is understood
 +            return s ? (int64_t) atoll(s) : (int64_t) 0;
@@ -719,17 +719,17 @@ index f1c57487b..4920c9f23 100644
 +        // the simdgroup count per head was never swept on either width; the pipeline caps it,
 +        // so an override that overruns is dropped below rather than dispatched
 +        // one value for every head size overruns the pipelines that cap lower, so the
-+        // override is per head size: TOSH_FA_AMD_NSG_64, _128, _WIDE
++        // override is per head size: KESTREL_FA_AMD_NSG_64, _128, _WIDE
 +        static const int nsg_env_64 = []() {
-+            const char * s = getenv("TOSH_FA_AMD_NSG_64");
++            const char * s = getenv("KESTREL_FA_AMD_NSG_64");
 +            return s ? atoi(s) : 0;
 +        }();
 +        static const int nsg_env_128 = []() {
-+            const char * s = getenv("TOSH_FA_AMD_NSG_128");
++            const char * s = getenv("KESTREL_FA_AMD_NSG_128");
 +            return s ? atoi(s) : 0;
 +        }();
 +        static const int nsg_env_wide = []() {
-+            const char * s = getenv("TOSH_FA_AMD_NSG_WIDE");
++            const char * s = getenv("KESTREL_FA_AMD_NSG_WIDE");
 +            return s ? atoi(s) : 0;
 +        }();
 +        const int nsg_env = ne00 == 64 ? nsg_env_64 : ne00 == 128 ? nsg_env_128 : nsg_env_wide;
@@ -746,7 +746,7 @@ index f1c57487b..4920c9f23 100644
 +        // for itself, so it carries its own threshold. The depth it turns at is not the same
 +        // on both widths, so each keeps its own.
          static const int64_t wg_dk128_env = []() {
-             const char * s = getenv("TOSH_FA_WG_DK128_MIN_KV");
+             const char * s = getenv("KESTREL_FA_WG_DK128_MIN_KV");
              return s ? (int64_t) atoll(s) : (int64_t) -1;
          }();
 +        const bool wg_wide_head =
@@ -757,9 +757,9 @@ index f1c57487b..4920c9f23 100644
 -        // head 64 turns at yet another depth and is not enabled by default
 +        const bool wg_dk128_width_ok = props_dev->simd_width == 32 || props_dev->simd_width == 64;
 +        // head 64 has the instantiations but no measured depth of its own yet;
-+        // TOSH_FA_WG_DK64=<kv> opens it so that one can be swept
++        // KESTREL_FA_WG_DK64=<kv> opens it so that one can be swept
          static const int64_t wg_dk64_min_kv = []() {
-             const char * s = getenv("TOSH_FA_WG_DK64");
+             const char * s = getenv("KESTREL_FA_WG_DK64");
              return s ? (int64_t) atoll(s) : (int64_t) 0;
          }();
 -        const bool wg_width_ok = props_dev->simd_width == 32 || props_dev->simd_width == 64;
@@ -777,7 +777,7 @@ index f1c57487b..4920c9f23 100644
              (wg_wide_head || wg_dk128) && ne01 == 1 && !has_sinks &&
              (props_dev->simd_width == 32 || props_dev->simd_width == 64) &&
              (wg_dk128 || ne11 >= 1024) &&
-             getenv("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
+             getenv("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
  
          char fa_amd_wg_pipeline[96];
          if (fa_amd_nwg > 1) {

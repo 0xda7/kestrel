@@ -84,8 +84,8 @@ index 947732000..0abe83b75 100644
      message(FATAL_ERROR "GGML_BACKEND_DL requires BUILD_SHARED_LIBS")
  endif()
  
-+if (TOSH_ENABLE_DYNAMIC_MOE)
-+    set(TOSH_MOE_SOURCES ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-cache.cpp ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-fill.cpp)
++if (KESTREL_ENABLE_DYNAMIC_MOE)
++    set(KESTREL_MOE_SOURCES ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-cache.cpp ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-fill.cpp)
 +endif()
 +
  add_library(ggml-base
@@ -106,12 +106,12 @@ index 947732000..0abe83b75 100644
              ggml-quants.c
              ggml-quants.h
 +            ggml-turbo-quant.c
-+            ${TOSH_MOE_SOURCES}
++            ${KESTREL_MOE_SOURCES}
              gguf.cpp)
  
-+if (TOSH_ENABLE_DYNAMIC_MOE)
++if (KESTREL_ENABLE_DYNAMIC_MOE)
 +    target_include_directories(ggml-base PUBLIC ${CMAKE_SOURCE_DIR}/tosh-moe)
-+    target_compile_definitions(ggml-base PUBLIC TOSH_ENABLE_DYNAMIC_MOE)
++    target_compile_definitions(ggml-base PUBLIC KESTREL_ENABLE_DYNAMIC_MOE)
 +endif()
 +
  set_target_properties(ggml-base PROPERTIES
@@ -371,10 +371,10 @@ index 20bf96501..d6b3705ed 100644
          int split_backend_id = split->backend_id;
          ggml_backend_t split_backend = sched->backends[split_backend_id];
  
-+        // TOSH_MOE_PROFILE: dump the first splits once, to map which ops run where
++        // KESTREL_MOE_PROFILE: dump the first splits once, to map which ops run where
 +        static int tosh_split_dump = -1;
 +        if (tosh_split_dump < 0) {
-+            const char * v = getenv("TOSH_MOE_PROFILE");
++            const char * v = getenv("KESTREL_MOE_PROFILE");
 +            tosh_split_dump = (v && v[0] == '1') ? 90 : 0;
 +        }
 +        if (tosh_split_dump > 0) {

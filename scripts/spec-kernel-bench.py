@@ -85,7 +85,7 @@ def main() -> int:
         parser.error("--draft is required for dflash")
 
     env = os.environ.copy()
-    env.update({"GGML_METAL_CONCURRENCY_DISABLE": "1", "TOSH_FA_AMD": "1"})
+    env.update({"GGML_METAL_CONCURRENCY_DISABLE": "1", "KESTREL_FA_AMD": "1"})
     for item in args.env:
         key, value = item.split("=", 1)
         env[key] = value

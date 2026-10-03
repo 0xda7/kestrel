@@ -15,7 +15,7 @@ index 7f31804e7..8120d0a51 100644
 +    // the 64-lane twin lives in mul_mm_w64.metal, beside the dense one; it has no src1 rescale
 +    const int simd_width_id = ggml_metal_device_get_props(ggml_metal_library_get_device(lib))->simd_width;
 +    const bool w64 = simd_width_id == 64 && use_mm_manual && !amax &&
-+                     getenv("TOSH_MMID_W64_DISABLE") == nullptr;
++                     getenv("KESTREL_MMID_W64_DISABLE") == nullptr;
 +
 +    snprintf(base, 256, "kernel_mul_mm_id_%s_%s%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), wide ? "_w" : "", w64 ? "_w64" : "");
      snprintf(name, 256, "%s_bci=%d_mm=%d_af=%d_amax=%d", base, bc_inp, use_mm_manual, acc_f32, amax);

@@ -8,8 +8,8 @@ index affa01c93..a6b44005f 100644
          snprintf(tname, sizeof(tname), "%s", ggml_metal_tname(lib, tsrc0));
      }
  
-     // q6_K on 64 lanes uses the wave64-shaped variant; TOSH_EXT_W64_DISABLE falls back to the generic kernel
-     static const bool w64_disable = getenv("TOSH_EXT_W64_DISABLE") != nullptr;
+     // q6_K on 64 lanes uses the wave64-shaped variant; KESTREL_EXT_W64_DISABLE falls back to the generic kernel
+     static const bool w64_disable = getenv("KESTREL_EXT_W64_DISABLE") != nullptr;
      const bool is_w64_q6k = !w64_disable && tsrc0 == GGML_TYPE_Q6_K && simd_width_lds == 64;
 +    // q8_0 reads its quads as halves on 64 lanes only: the same read is slower on 32
 +    const bool is_w64_q8  = !w64_disable && tsrc0 == GGML_TYPE_Q8_0 && simd_width_lds == 64 && nr0 == 1;

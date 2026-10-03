@@ -9,13 +9,13 @@ index 84782433a..e0d2dd508 100644
      }
  
      const bool row4 = (op->src[0]->nb[1] % 2 == 0) && (op->src[0]->nb[2] % 2 == 0) &&
-                       getenv("TOSH_MV_ROW4_DISABLE") == nullptr;
+                       getenv("KESTREL_MV_ROW4_DISABLE") == nullptr;
  
 +    // The expert kernels share the implementations of the dense path, so they can read the
 +    // quant arrays a word at a time under the same conditions.
 +    const bool row8 = row4 && (op->src[0]->nb[1] % 4 == 0) && (op->src[0]->nb[2] % 4 == 0) &&
 +                      (nw == 64 || (nw == 32 && tsrc0 == GGML_TYPE_Q8_0)) &&
-+                      getenv("TOSH_MV_ROW8_DISABLE") == nullptr;
++                      getenv("KESTREL_MV_ROW8_DISABLE") == nullptr;
 +
      snprintf(base, 256, "kernel_mul_mv_id_%s_%s%s", ggml_metal_tname_pair(lib, tsrc0, tsrc1), ggml_type_name(tsrc1), suffix);
 -    snprintf(name, 256, "%s_nsg=%d_nw=%d_a4=%d", base, nsg, nw, row4);

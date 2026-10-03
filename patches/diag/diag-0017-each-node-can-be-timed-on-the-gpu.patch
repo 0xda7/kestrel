@@ -7,28 +7,28 @@ index de8ccb2db..bc6600eb1 100644
  }
  
 +
-+// TOSH_NODE_PROF=1: every node in its own synchronous command buffer, GPU time summed per op
++// KESTREL_NODE_PROF=1: every node in its own synchronous command buffer, GPU time summed per op
 +// kind and weight type, bucketed by graph size and printed at exit. Diagnostic only: it
 +// serializes the graph, so absolute totals include one submission per node.
-+#define TOSH_NP_BUCKETS 16
-+#define TOSH_NP_KEYS    96
++#define KESTREL_NP_BUCKETS 16
++#define KESTREL_NP_KEYS    96
 +struct tosh_np_key { char name[48]; uint64_t n; uint64_t ns; };
-+struct tosh_np_bucket { int n_nodes; int n_tok; uint64_t n_graphs; uint64_t ns; struct tosh_np_key k[TOSH_NP_KEYS]; };
-+static struct tosh_np_bucket g_np[TOSH_NP_BUCKETS];
++struct tosh_np_bucket { int n_nodes; int n_tok; uint64_t n_graphs; uint64_t ns; struct tosh_np_key k[KESTREL_NP_KEYS]; };
++static struct tosh_np_bucket g_np[KESTREL_NP_BUCKETS];
 +
 +static void tosh_np_dump(void) {
-+    for (int b = 0; b < TOSH_NP_BUCKETS; ++b) {
++    for (int b = 0; b < KESTREL_NP_BUCKETS; ++b) {
 +        struct tosh_np_bucket * B = &g_np[b];
 +        if (B->n_nodes == 0 || B->n_graphs == 0) continue;
-+        fprintf(stderr, "TOSH_NP graph nodes=%d tok=%d graphs=%llu gpu_ms/graph=%.3f\n", B->n_nodes, B->n_tok,
++        fprintf(stderr, "KESTREL_NP graph nodes=%d tok=%d graphs=%llu gpu_ms/graph=%.3f\n", B->n_nodes, B->n_tok,
 +            (unsigned long long) B->n_graphs, B->ns/1e6/B->n_graphs);
-+        for (int i = 0; i < TOSH_NP_KEYS; ++i) {
++        for (int i = 0; i < KESTREL_NP_KEYS; ++i) {
 +            int best = -1;
-+            for (int j = 0; j < TOSH_NP_KEYS; ++j) {
++            for (int j = 0; j < KESTREL_NP_KEYS; ++j) {
 +                if (B->k[j].n && (best < 0 || B->k[j].ns > B->k[best].ns)) best = j;
 +            }
 +            if (best < 0) break;
-+            fprintf(stderr, "TOSH_NP   %-40s n/graph=%7.1f us/graph=%9.1f %5.1f%%\n", B->k[best].name,
++            fprintf(stderr, "KESTREL_NP   %-40s n/graph=%7.1f us/graph=%9.1f %5.1f%%\n", B->k[best].name,
 +                (double) B->k[best].n/B->n_graphs, B->k[best].ns/1e3/B->n_graphs, 100.0*B->k[best].ns/B->ns);
 +            B->k[best].n = 0;
 +        }
@@ -37,7 +37,7 @@ index de8ccb2db..bc6600eb1 100644
 +
 +static bool tosh_np_on(void) {
 +    static int v = -1;
-+    if (v < 0) { v = TOSH_ENV("TOSH_NODE_PROF") != NULL; if (v) atexit(tosh_np_dump); }
++    if (v < 0) { v = KESTREL_ENV("KESTREL_NODE_PROF") != NULL; if (v) atexit(tosh_np_dump); }
 +    return v;
 +}
 +
@@ -56,7 +56,7 @@ index de8ccb2db..bc6600eb1 100644
 +static enum ggml_status tosh_np_compute(ggml_metal_t ctx, struct ggml_cgraph * gf) {
 +    if (ctx->cmd_buf_last) { [ctx->cmd_buf_last waitUntilCompleted]; ctx->cmd_buf_last = nil; }
 +    struct tosh_np_bucket * B = NULL;
-+    for (int b = 0; b < TOSH_NP_BUCKETS; ++b) {
++    for (int b = 0; b < KESTREL_NP_BUCKETS; ++b) {
 +        if (g_np[b].n_nodes == gf->n_nodes) { B = &g_np[b]; break; }
 +        if (g_np[b].n_nodes == 0) { B = &g_np[b]; B->n_nodes = gf->n_nodes; break; }
 +    }
@@ -83,7 +83,7 @@ index de8ccb2db..bc6600eb1 100644
 +                tosh_np_key_of(t, res, key, sizeof(key));
 +                const uint64_t d = cb.GPUEndTime > cb.GPUStartTime ? (uint64_t)((cb.GPUEndTime - cb.GPUStartTime)*1e9) : 0;
 +                B->ns += d;
-+                for (int j = 0; j < TOSH_NP_KEYS; ++j) {
++                for (int j = 0; j < KESTREL_NP_KEYS; ++j) {
 +                    if (B->k[j].n == 0 && B->k[j].name[0] == 0) { strncpy(B->k[j].name, key, 47); }
 +                    if (strcmp(B->k[j].name, key) == 0) { B->k[j].n++; B->k[j].ns += d; break; }
 +                }

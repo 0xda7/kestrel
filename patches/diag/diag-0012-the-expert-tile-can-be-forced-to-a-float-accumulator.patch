@@ -11,8 +11,8 @@ index ef5ae84ac..459c9281b 100644
 -    const bool acc_f32 = use_mm_manual && (!ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16) &&
 +    const bool acc_f32 = use_mm_manual &&
 +                         (!ggml_is_contiguous(op->src[0]) || tsrc0 == GGML_TYPE_BF16 ||
-+                          TOSH_ENV("TOSH_MM_ID_FORCE_ACC_F32") != nullptr) &&
-                          TOSH_ENV("TOSH_MM_ACC_F32_DISABLE") == nullptr;
++                          KESTREL_ENV("KESTREL_MM_ID_FORCE_ACC_F32") != nullptr) &&
+                          KESTREL_ENV("KESTREL_MM_ACC_F32_DISABLE") == nullptr;
  
      // one grid per expert already keeps the GPU in threadgroups, so the 8x4 tile does not need
      // the dense token floor. What it needs is an average expert that fills the narrow tile:

@@ -15,14 +15,14 @@ index 017f19dd2..096fde95a 100644
 +        // deeper cache than the wide heads before the 32-way reduce pays for itself, and the
 +        // depth it turns at is not the same on both widths
 +        static const int64_t wg_dk128_env = []() {
-+            const char * s = getenv("TOSH_FA_WG_DK128_MIN_KV");
++            const char * s = getenv("KESTREL_FA_WG_DK128_MIN_KV");
 +            return s ? (int64_t) atoll(s) : (int64_t) -1;
 +        }();
 +        const int64_t wg_dk128_min_kv = wg_dk128_env >= 0 ? wg_dk128_env
 +                                      : (props_dev->simd_width == 64 ? 16384 : 24576);
 +        // head 64 turns at yet another depth and is not enabled by default
 +        static const int64_t wg_dk64_min_kv = []() {
-+            const char * s = getenv("TOSH_FA_WG_DK64");
++            const char * s = getenv("KESTREL_FA_WG_DK64");
 +            return s ? (int64_t) atoll(s) : (int64_t) 0;
 +        }();
 +        const bool wg_width_ok = props_dev->simd_width == 32 || props_dev->simd_width == 64;
@@ -40,7 +40,7 @@ index 017f19dd2..096fde95a 100644
 +            (wg_wide_head || wg_dk128) && ne01 == 1 && !has_sinks &&
 +            (props_dev->simd_width == 32 || props_dev->simd_width == 64) &&
 +            (wg_dk128 || ne11 >= 1024) &&
-             getenv("TOSH_FA_WG_DISABLE") == NULL ? 32 : 1;
+             getenv("KESTREL_FA_WG_DISABLE") == NULL ? 32 : 1;
  
          char fa_amd_wg_pipeline[96];
          if (fa_amd_nwg > 1) {
