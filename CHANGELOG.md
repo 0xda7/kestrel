@@ -12,7 +12,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - **Images/Video: the bundled engines were missing from the package and the fallback lied.** The image and video engines are built and bundled again (the packager skips them silently when the build is absent — the previous bundle shipped without `bin-image/sd-cli`), and the engine resolver no longer falls back to a dev-machine path that never existed on user machines: without the engine, Image and Video now say so plainly instead of failing with a confusing spawn error.
-- **Chat: latch_delegate gets realistic budgets.** The model can no longer ask for a 30-second delegation that can only die mid-work (observed in live use): model-requested timeouts are floored at 60 s and clamped at 900 s, and the tool description now states plainly that a delegate run takes minutes and needs the local engine running.
+- **Chat: latch_delegate gets realistic budgets — and honest routing disclosure.** The model can no longer ask for a 30-second delegation that can only die mid-work (observed in live use): model-requested timeouts are floored at 60 s and clamped at 900 s, and the tool description states real expectations. Correction to an earlier entry: the delegate does NOT necessarily run on the local engine — a live probe with the local engine stopped still completed, and the harness's own run log shows requests to cloud endpoints (api.z.ai, integrate.api.nvidia.com) under its account-based providers. The model and provider latch uses come from latch's own configuration, which Kestrel does not route or constrain; the tool description now says so explicitly so delegation of machine-private work is an informed choice.
 
 ### Fixed
 

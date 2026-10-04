@@ -52,7 +52,7 @@ enum LatchDelegateService {
             "type": "function",
             "function": [
                 "name": toolName,
-                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. The local inference engine must be running for latch to reach its model.",
+                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. IMPORTANT: the model and provider latch uses come from latch's OWN configuration, not from Kestrel — depending on that configuration the delegate may run on the local engine or on REMOTE cloud endpoints, and Kestrel does not route or constrain it. Check latch's provider configuration before delegating anything that must stay on this machine.",,
                 "parameters": [
                     "type": "object",
                     "properties": [

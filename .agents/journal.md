@@ -464,3 +464,29 @@ Empirical findings + fixes (all built; driver 43/43 still green):
    ChatStreamProtocol, setContextUsed wired in finish()). Scratch-engine SSE streaming behaved
    erratically under curl (single-slot queueing) — noted, not an app defect.
 dist repackaged next; operator swaps on their signal.
+
+---
+## 2026-10-03 (night, correction) — LATCH ROUTING: my "points at 127.0.0.1:8080" claim was FALSE
+Operator called it: "where you say my engine points and where it points in the actual code are
+2 different things and one is a lie." Verified empirically, operator right:
+- I had quoted ~/.latch/v2/provider_config.json (latch-gateway → 127.0.0.1:8080/v1,
+  default model qwen2.5-latest.gguf) WITHOUT verifying the harness reads it.
+- Live probe: ran latch-harness -p "Reply with exactly: LATCH-PROBE-OK" with the local engine
+  DOWN → it SUCCEEDED in ~3 s. Impossible via 8080. Its run log
+  (~/.latch/cli/log/zcode-2026-10-03.jsonl) shows model requests to
+  https://api.z.ai/api/coding/paas/v4 and https://integrate.api.nvidia.com/v1 under provider
+  "new-provider/z-ai/glm-5.3" — the account/oauth layer (credentials.json carries zai coding-
+  plan credentials), not the v2 file. The v2 file is also rewritten by latch itself mid-run
+  (my two reads showed different providerOrder).
+- Consequence: latch_delegate from chat has been sending tasks to CLOUD endpoints against the
+  product's local-only promise. My earlier tool-description sentence ("the local inference
+  engine must be running") was also false and is replaced.
+- Code correction: LatchDelegateService tool description now states plainly that model/provider
+  come from latch's OWN configuration — which may be local OR cloud — and that Kestrel neither
+  routes nor constrains it; operators must check latch's provider configuration before
+  delegating machine-private work. Changelog corrected in place.
+- NOT changed by me (operator-owned): latch's provider configuration. If the operator wants
+  latch 100% local, that is an edit to latch's own provider/account configuration (remove or
+  demote the zai/nvidia account providers) — their decision, their file.
+Lesson recorded: never report a sidecar's effective endpoint from one config file; verify from
+the sidecar's own run logs or a controlled probe.
