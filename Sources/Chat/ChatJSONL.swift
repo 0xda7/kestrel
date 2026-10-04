@@ -20,9 +20,13 @@ enum ChatJSONL {
         guard let text = String(data: data, encoding: .utf8) else { throw ChatArchiveError.unsupported }
         var sessions: [(header: [String: Any], messages: [[String: Any]])] = []
         for raw in text.split(whereSeparator: \.isNewline) {
+            // A line that fails to parse is skipped, not fatal: an interrupted
+            // export (killed mid-write, partial copy) leaves a truncated tail
+            // on an otherwise-intact archive, and one malformed line must not
+            // reject the import of every conversation before it.
             guard let lineData = String(raw).data(using: .utf8),
-                  let record = try JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let type = record["type"] as? String else { throw ChatArchiveError.unsupported }
+                  let record = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any],
+                  let type = record["type"] as? String else { continue }
             if type == "session" {
                 sessions.append((record, []))
             } else if type == "message", let message = record["message"] as? [String: Any], !sessions.isEmpty {
@@ -63,6 +67,18 @@ enum ChatJSONL {
         if let value = conversation.systemPrompt { header["kestrelSystemPrompt"] = value }
         if let value = conversation.summary { header["kestrelSummary"] = value }
         if let value = conversation.summarizedCount { header["kestrelSummarizedCount"] = value }
+        // Modernization fields: without these an exported latch/pi-mode chat
+        // re-imports as engine-routed and loses its tool working directory —
+        // a silent behavior change on a lossless "round-trip".
+        if let value = conversation.projectID { header["kestrelProjectID"] = value.uuidString }
+        if let value = conversation.workingDirectory, !value.isEmpty { header["kestrelWorkingDirectory"] = value }
+        if let value = conversation.assistantMode { header["kestrelAssistantMode"] = value }
+        if conversation.piAgentMode == true { header["kestrelPiAgentMode"] = true }
+        if let draft = conversation.draft,
+           let data = try? JSONEncoder().encode(draft),
+           let json = try? JSONSerialization.jsonObject(with: data) {
+            header["kestrelDraft"] = json
+        }
         if let blocks = conversation.archived, !blocks.isEmpty,
            let data = try? JSONEncoder().encode(blocks),
            let json = try? JSONSerialization.jsonObject(with: data) {
@@ -171,6 +187,25 @@ enum ChatJSONL {
            let data = try? JSONSerialization.data(withJSONObject: json),
            let blocks = try? JSONDecoder().decode([ArchivedBlock].self, from: data) {
             conversation.archived = ChatMemoryService.clamped(blocks, toCount: currentMessages.count)
+        }
+        // Modernization fields (see the export side): restore the routing and
+        // workspace the conversation was exported with, plus any unsent draft.
+        if let id = header["kestrelProjectID"] as? String {
+            conversation.projectID = UUID(uuidString: id)
+        }
+        if let value = header["kestrelWorkingDirectory"] as? String {
+            conversation.workingDirectory = value
+        }
+        if let value = header["kestrelAssistantMode"] as? String {
+            conversation.assistantMode = value
+        }
+        if header["kestrelPiAgentMode"] as? Bool == true {
+            conversation.piAgentMode = true
+        }
+        if let json = header["kestrelDraft"],
+           let data = try? JSONSerialization.data(withJSONObject: json),
+           let draft = try? JSONDecoder().decode(ChatDraft.self, from: data) {
+            conversation.draft = draft
         }
         if allPaths.count > 1 {
             let branches = allPaths.enumerated().map { ChatBranch(name: "Branch \($0.offset + 1)", messages: $0.element) }

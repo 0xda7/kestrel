@@ -328,6 +328,57 @@ let localWire = RouteWire.wire(body: body, port: 8080, route: nil, localAPIKey: 
 check(localWire.body["min_p"] != nil && localWire.body["cache_prompt"] != nil,
       "local passthrough body stays unstripped")
 
+// ---- 9. SSE stream accumulator regressions ------------------------------------
+
+var accumulator = ChatStreamAccumulator()
+
+// A malformed/hostile chunk with a NEGATIVE tool_calls index must be skipped,
+// not crash the app (the grow-loop never runs for it and the old code
+// subscripted out of bounds).
+let hostile = "data: " + #"{"choices":[{"delta":{"tool_calls":[{"index":-1,"id":"x","function":{"name":"evil","arguments":"{}"}}]}}]}"#
+var hostileSurvived = true
+do {
+    _ = try accumulator.consume(hostile)
+    hostileSurvived = accumulator.toolCalls.allSatisfy { $0.name != "evil" }
+} catch {
+    hostileSurvived = false
+}
+check(hostileSurvived, "negative tool_calls index is skipped without a crash")
+
+// Fragmented tool calls across chunks merge by index (names/arguments split).
+_ = try accumulator.consume("data: " + #"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"li","arguments":"{\"a\":"}}]}}]}"#)
+_ = try accumulator.consume("data: " + #"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"st","arguments":"1}"}}]}}]}"#)
+_ = try accumulator.consume("data: " + #"{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_b","function":{"name":"other","arguments":"{}"}}]}}]}"#)
+check(accumulator.toolCalls.count == 2
+      && accumulator.toolCalls[0].name == "list"
+      && accumulator.toolCalls[0].arguments == #"{"a":1}"#
+      && accumulator.toolCalls[0].serverID == "call_a"
+      && accumulator.toolCalls[1].name == "other",
+      "tool call fragments merge by index across chunks")
+
+// A non-JSON data line and [DONE] behave: nil event for junk, completed for DONE.
+check((try accumulator.consume("data: not-json-at-all") ?? nil) == nil,
+      "malformed data lines are ignored")
+let doneEvent = try accumulator.consume("data: [DONE]")
+check(doneEvent?.completed == true, "[DONE] completes the stream")
+
+// Zero-total prompt progress must not produce a value (divide-by-zero guard).
+var progressAcc = ChatStreamAccumulator()
+let zeroProgress = try progressAcc.consume("data: " + #"{"prompt_progress":{"total":0,"processed":5}}"#)
+check(zeroProgress?.progress == nil, "prompt_progress with total 0 yields no progress")
+let realProgress = try progressAcc.consume("data: " + #"{"prompt_progress":{"total":100,"processed":50}}"#)
+check(realProgress?.progress == 0.5, "prompt_progress parses the fraction")
+
+// ---- 10. Skills discovery: BOM-prefixed SKILL.md -------------------------------
+
+let bomSkillDir = NSHomeDirectory() + "/.pi/agent/skills/driver-bom-skill"
+try? FileManager.default.createDirectory(atPath: bomSkillDir, withIntermediateDirectories: true)
+fixturePaths.append(bomSkillDir)
+try? ("\u{FEFF}---\nname: driver-bom-skill\ndescription: Saved with a byte order mark\n---\nbody\n")
+    .write(toFile: bomSkillDir + "/SKILL.md", atomically: true, encoding: .utf8)
+check(SkillsDiscovery.scan().contains { $0.name == "driver-bom-skill" },
+      "a BOM-prefixed SKILL.md is still discovered")
+
 // ---- summary ---------------------------------------------------------------------------
 // exit() skips defer blocks: clean the fixtures explicitly, then exit.
 for path in fixturePaths { try? FileManager.default.removeItem(atPath: path) }

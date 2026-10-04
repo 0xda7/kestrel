@@ -96,6 +96,10 @@ struct ChatStreamAccumulator {
     private mutating func mergeToolCalls(_ fragments: [[String: Any]]) {
         for fragment in fragments {
             let index = (fragment["index"] as? NSNumber)?.intValue ?? toolCalls.count
+            // A malformed or hostile chunk can carry a negative index: the
+            // grow-loop below never runs for it and the subscript would trap,
+            // killing the app mid-generation. Skip the fragment instead.
+            guard index >= 0 else { continue }
             while toolCalls.count <= index {
                 toolCalls.append(ChatToolCall(name: "", arguments: ""))
             }

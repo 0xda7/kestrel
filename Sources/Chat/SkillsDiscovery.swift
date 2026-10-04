@@ -99,6 +99,11 @@ enum SkillsDiscovery {
     /// folder name at the call site.
     private static func parseFrontmatter(_ text: String)
         -> (name: String?, description: String?)? {
+        // Editors saving UTF-8 with a BOM leave U+FEFF on the first line,
+        // where whitespace-trimming does not remove it and the fence check
+        // would fail — the whole skill would be silently skipped.
+        var text = text
+        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
         let lines = text.split(omittingEmptySubsequences: false,
                                whereSeparator: \.isNewline)
         var index = 0

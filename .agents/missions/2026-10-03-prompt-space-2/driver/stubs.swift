@@ -64,6 +64,84 @@ struct ToolExecutionResult {
     var isError: Bool
 }
 
+/// Stub of the chat store's stream-error extraction (the real one lives in
+/// ChatNative; the SSE protocol calls only this static).
+enum ChatStore {
+    nonisolated static func streamedError(from object: [String: Any]) -> String? { nil }
+}
+
+/// Verbatim shape of the shipped StreamError (ChatNative.swift:232).
+struct StreamError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
+/// Stub of ChatAttachment (ChatNative.swift:16) with the members the compiled
+/// sources touch (ChatDraft's Codable synthesis needs the full stored shape:
+/// id/name/content plus the optional payload fields).
+struct ChatAttachment: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var content: String
+    var mimeType: String? = nil
+    var dataURI: String? = nil
+    var byteCount: Int? = nil
+    var durationSeconds: Double? = nil
+    var videoFrameArea: Int? = nil
+    var estimatedTokens: Int { max(1, content.count / 4) }
+    var fenceHint: String { (name as NSString).pathExtension.lowercased() }
+    var mediaKind: String? { nil }
+}
+
+/// Stubs of the parity-model types ChatStreamProtocol needs. Shapes copied
+/// verbatim from ChatParityModels.swift (ChatToolCall:91, ChatTimings:36) so
+/// the SSE accumulator tests exercise the real fields.
+enum ChatToolCallState: String, Codable {
+    case pending, awaitingPermission, running, completed, failed, denied
+}
+
+struct ChatToolCall: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var serverID: String?
+    var name: String
+    var arguments: String
+    var result: String?
+    var state: ChatToolCallState = .pending
+    var startedAt: Date?
+    var finishedAt: Date?
+}
+
+struct ChatTimings: Codable, Equatable {
+    var cachedTokens: Int?
+    var promptTokens: Int?
+    var promptMilliseconds: Double?
+    var generatedTokens: Int?
+    var generationMilliseconds: Double?
+    var timeToFirstTokenMilliseconds: Double?
+
+    init(cachedTokens: Int? = nil, promptTokens: Int? = nil,
+         promptMilliseconds: Double? = nil, generatedTokens: Int? = nil,
+         generationMilliseconds: Double? = nil) {
+        self.cachedTokens = cachedTokens
+        self.promptTokens = promptTokens
+        self.promptMilliseconds = promptMilliseconds
+        self.generatedTokens = generatedTokens
+        self.generationMilliseconds = generationMilliseconds
+    }
+
+    init?(json: [String: Any]) {
+        // Verbatim from the shipped ChatTimings (ChatParityModels.swift:70).
+        func int(_ key: String) -> Int? { (json[key] as? NSNumber)?.intValue }
+        func double(_ key: String) -> Double? { (json[key] as? NSNumber)?.doubleValue }
+        cachedTokens = int("cache_n")
+        promptTokens = int("prompt_n")
+        promptMilliseconds = double("prompt_ms")
+        generatedTokens = int("predicted_n")
+        generationMilliseconds = double("predicted_ms")
+        if cachedTokens == nil, promptTokens == nil, generatedTokens == nil { return nil }
+    }
+}
+
 /// Minimal snapshot-replace stream buffer (the ChatNative original's
 /// contract: write() replaces the whole snapshot, finish() marks done,
 /// take() returns and clears the latest snapshot).

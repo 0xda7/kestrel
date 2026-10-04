@@ -698,6 +698,11 @@ private struct CreateWithPiSheet: View {
     @State private var isRunning = false
     @State private var failure: String?
     @State private var result: String?
+    /// The in-flight authoring run. Kept so dismissing the sheet mid-run
+    /// CANCELS it — otherwise pi keeps generating for up to its 600 s budget
+    /// for a sheet nobody is watching, and the late completion then mutates
+    /// state after the view is gone.
+    @State private var runTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -773,6 +778,15 @@ private struct CreateWithPiSheet: View {
         }
         .padding()
         .frame(minWidth: 460, idealWidth: 520, minHeight: 460, idealHeight: 520)
+        .onDisappear {
+            // Cancel the authoring run when the sheet leaves the hierarchy.
+            // Cancellation propagates into runStreaming's task group, where
+            // the interrupted budget sleep falls through to terminate() — so
+            // the pi process is stopped instead of generating for up to 600 s
+            // for a sheet nobody is watching.
+            runTask?.cancel()
+            runTask = nil
+        }
     }
 
     private func run() {
@@ -782,7 +796,7 @@ private struct CreateWithPiSheet: View {
         isRunning = true
         failure = nil
         result = nil
-        Task {
+        runTask = Task {
             // llm-space feeds the skills list into the authoring run the same
             // way typed `skills` variables resolve at apply time.
             let skills = SkillsDiscovery.markdownList(
@@ -791,6 +805,9 @@ private struct CreateWithPiSheet: View {
                 taskDescription: taskText,
                 existingPrompt: existingText.isEmpty ? nil : existingText,
                 skillsList: skills)
+            // The sheet was dismissed mid-run: the cancellation already
+            // terminated pi; publish nothing to a view that is gone.
+            if Task.isCancelled { return }
             isRunning = false
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
             // Pure-failure results (empty task guard, empty reply): surface
