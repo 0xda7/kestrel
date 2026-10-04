@@ -437,3 +437,30 @@ again (documented; a stable self-signed signing identity is the future eliminato
 operator consent to create a cert).
 Dist NOT repackaged (operator mid-test) — the fix lands on their next
 KESTREL_NO_BUMP=1 KESTREL_ARCH=x86_64 ./make-app.sh + relaunch.
+
+---
+## 2026-10-03 (night) — Operator-reported defects: missing image/video engines, latch_delegate, context meter
+Empirical findings + fixes (all built; driver 43/43 still green):
+1. IMAGE/VIDEO ENGINES MISSING (operator: "the engines for image and video are missing") — TRUE
+   for the bundle: make-app.sh skips sd-cli/whisper silently when the build is absent, and the
+   current dist was packaged BEFORE this wave's engine rebuild, so Resources had no bin-image/.
+   The rebuilt engines now exist → next package bundles them. ALSO ImageGen.binary fell back to
+   the original author's dev path (~/dev/repositorios/kestrel/...) — a lie on any user machine;
+   removed (bundled-only, "" when absent) with honest bilingual failed-states at all three
+   launch sites (ImageGen main + upscale, VideoGen).
+2. LATCH_DELEGATE "never worked / lied": wiring IS intact (mounted when enabled+installed,
+   permission flow, execute at ChatNative:1761; conversations.json shows real runs that died on
+   budget). Root failure: a model requested timeout_seconds=30 — impossible for a multi-minute
+   agent loop. Fixes: 60 s floor on requested budgets (clamped ≤900), tool + parameter
+   descriptions now state real expectations (minutes, engine must be running). stderr
+   diagnostics + bounded outputs already landed in the earlier wave.
+3. CONTEXT CONSUMPTION PROGRESS NEVER SHOWS: split diagnosis — (a) prompt_progress DOES stream
+   from the engine (live SSE on the rebuilt engine: total=4014, processed 0→3498, ~sparse events
+   every ~10 s) and the app parses + renders it (PrefillStatusLabel); (b) the context-usage
+   METER genuinely did not exist: contextUsed was persisted and drove auto-compact only, with no
+   UI. Added the meter to the composer: linear progress of used/configured-limit with token
+   counts + %, amber >70%, red >90% with an archive hint; appears on the first usage report
+   (engine's final usage chunk via stream_options.include_usage — parse verified in
+   ChatStreamProtocol, setContextUsed wired in finish()). Scratch-engine SSE streaming behaved
+   erratically under curl (single-slot queueing) — noted, not an app defect.
+dist repackaged next; operator swaps on their signal.

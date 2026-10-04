@@ -398,6 +398,11 @@ final class VideoGenerator: ObservableObject {
             env["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
         }
 
+        guard !Self.binary.isEmpty else {
+            state = .failed(ImageGenerator.missingEngineMessage())
+            onFinish?()
+            return
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: Self.binary)
         p.arguments = args

@@ -648,17 +648,25 @@ final class ImageGenerator: ObservableObject {
         return max(0, Int(remainingSampling + spent * 0.2))   // ~20% tail for the decode
     }
 
-    /// The bundled engine, with a dev fallback to the reproducible vendor build.
+    /// The bundled engine, or an empty string when the bundle does not carry
+    /// one (Image/Video then report the engine as not installed instead of
+    /// pretending a path exists — the previous dev-machine fallback pointed at
+    /// a directory that only ever existed on the original author's machine).
     static var binary: String {
         if let bundled = Bundle.main.resourceURL?.appendingPathComponent("bin-image/sd-cli").path,
            FileManager.default.fileExists(atPath: bundled) {
             return bundled
         }
-        return NSString(string: "~/dev/repositorios/kestrel/vendor/stable-diffusion.cpp/build-static/bin/sd-cli")
-            .expandingTildeInPath
+        return ""
     }
 
-    static var engineInstalled: Bool { FileManager.default.fileExists(atPath: binary) }
+    static var engineInstalled: Bool { !binary.isEmpty }
+
+    /// Honest failure for a launch attempt without an engine, instead of a
+    /// confusing spawn error naming a path that does not exist.
+    static func missingEngineMessage() -> String {
+        "El motor de imagen no está en esta instalación de Kestrel (Resources/bin-image/sd-cli). Reinstala Kestrel con los motores incluidos. / The image engine is not in this Kestrel installation (Resources/bin-image/sd-cli). Reinstall Kestrel with the bundled engines."
+    }
 
     /// True when every component file for `model` is present (and named).
     static func installed(_ model: ImageGenModel, in models: ModelStore) -> Bool {
@@ -833,6 +841,10 @@ final class ImageGenerator: ObservableObject {
             env["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
         }
 
+        guard !Self.binary.isEmpty else {
+            state = .failed(Self.missingEngineMessage())
+            return
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: Self.binary)
         p.arguments = args
@@ -1463,6 +1475,10 @@ final class ImageUpscaler: ObservableObject {
             env["GGML_METAL_DEVICE_INDEX"] = String(gpuIndex)
         }
 
+        guard !ImageGenerator.binary.isEmpty else {
+            state = .failed(ImageGenerator.missingEngineMessage())
+            return
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ImageGenerator.binary)
         p.arguments = args

@@ -3606,6 +3606,9 @@ struct NativeChatView: View {
 
     private var composerRow: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let used = chat.contextUsed, contextLimit > 0 {
+                contextMeter(used: used, limit: contextLimit)
+            }
             messageField
             HStack(alignment: .center, spacing: 10) {
                 paramsButton
@@ -3619,6 +3622,49 @@ struct NativeChatView: View {
         .padding(14)
         .frame(minHeight: 104)
     }
+
+    /// Context-consumption meter for the open conversation: the persisted
+    /// `contextUsed` (last exchange's prompt+completion tokens from the
+    /// engine's usage chunk) against the configured context window. Hidden
+    /// until the first usage report arrives — it reflects the engine's real
+    /// accounting, not an estimate.
+    private func contextMeter(used: Int, limit: Int) -> some View {
+        let fraction = min(1, Double(used) / Double(limit))
+        let tint: Color = fraction > 0.9 ? .red : fraction > 0.7 ? .orange : .secondary
+        return VStack(alignment: .leading, spacing: 4) {
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .tint(fraction > 0.9 ? Color.red : fraction > 0.7 ? Color.orange : Color.accentColor)
+            HStack(spacing: 6) {
+                Image(systemName: "gauge.medium")
+                    .font(.caption2)
+                    .foregroundStyle(tint)
+                Text(loc.t("Contexto: %@ de %@ tokens (%@%%)",
+                           "Context: %@ of %@ tokens (%@%%)",
+                           Self.tokenCountFormatter.string(from: NSNumber(value: used)) ?? "\(used)",
+                           Self.tokenCountFormatter.string(from: NSNumber(value: limit)) ?? "\(limit)",
+                           String(Int((fraction * 100).rounded()))))
+                    .font(.caption2)
+                    .foregroundStyle(tint)
+                Spacer(minLength: 0)
+                if fraction > 0.7 {
+                    Text(loc.t("El modelo empieza a olvidar el principio; archiva o abre un chat nuevo.",
+                               "The model starts forgetting the beginning; archive or open a new chat."))
+                        .font(.caption2)
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+        }
+    }
+
+    nonisolated static let tokenCountFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 1
+        return f
+    }()
 
     private var messageField: some View {
         ZStack(alignment: .topLeading) {

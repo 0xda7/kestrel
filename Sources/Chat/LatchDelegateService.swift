@@ -13,6 +13,9 @@ import Foundation
 enum LatchDelegateService {
     static let toolName = "latch_delegate"
     static let defaultTimeoutSeconds = 300
+    /// Floor for model-requested budgets: below this a multi-step agent run
+    /// can only die mid-work (live-fire 2026-10-02: a model asked for 30 s).
+    static let minimumTimeoutSeconds = 60
     static let maximumTimeoutSeconds = 900
     static let maximumOutputCharacters = 12_000
     /// Hard cap on a successful primary-assistant reply. Far above any real
@@ -49,7 +52,7 @@ enum LatchDelegateService {
             "type": "function",
             "function": [
                 "name": toolName,
-                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions.",
+                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. The local inference engine must be running for latch to reach its model.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -64,7 +67,7 @@ enum LatchDelegateService {
                         ],
                         "timeout_seconds": [
                             "type": "number",
-                            "description": "How long to wait for the delegate before giving up. Default 300, max 900."
+                            "description": "How long to wait for the delegate before giving up. Default 300; requests are floored at 60 and clamped at 900. Give multi-step work at least 120."
                         ]
                     ],
                     "required": ["task"]
@@ -93,12 +96,20 @@ enum LatchDelegateService {
                 isError: true)
         }
         let attach = (arguments["attach"] as? [Any])?.compactMap { $0 as? String } ?? []
+        // Floor at 60 s: latch is a multi-step agent loop (it plans, reads,
+        // writes) and models routinely underestimate it — live-fire showed a
+        // model requesting 30 s, which can only end in a budget kill. The
+        // request is honored above the floor and clamped at the maximum.
         let timeout = {
-            if let requested = arguments["timeout_seconds"] as? NSNumber,
-               requested.intValue > 0 {
-                return min(requested.intValue, maximumTimeoutSeconds)
+            let requested: Int?
+            if let value = arguments["timeout_seconds"] as? NSNumber, value.intValue > 0 {
+                requested = value.intValue
+            } else if let value = arguments["timeout_seconds"] as? Int, value > 0 {
+                requested = value
+            } else {
+                requested = nil
             }
-            return timeoutSeconds
+            return min(max(requested ?? timeoutSeconds, minimumTimeoutSeconds), maximumTimeoutSeconds)
         }()
 
         var argv = [binaryPath, "-p", task]

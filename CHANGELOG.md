@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Chat: a context-consumption meter.** The composer now shows how much of the configured context window the conversation actually occupies (the engine's per-turn usage accounting, not an estimate): a linear meter with the token counts and percentage, amber past 70% and red past 90% with a hint to archive or open a new chat. It appears once the first usage report arrives. Prompt-processing progress was verified end-to-end against the engine (it streams sparse `prompt_progress` events during long prefills).
+
+### Fixed
+
+- **Images/Video: the bundled engines were missing from the package and the fallback lied.** The image and video engines are built and bundled again (the packager skips them silently when the build is absent — the previous bundle shipped without `bin-image/sd-cli`), and the engine resolver no longer falls back to a dev-machine path that never existed on user machines: without the engine, Image and Video now say so plainly instead of failing with a confusing spawn error.
+- **Chat: latch_delegate gets realistic budgets.** The model can no longer ask for a 30-second delegation that can only die mid-work (observed in live use): model-requested timeouts are floored at 60 s and clamped at 900 s, and the tool description now states plainly that a delegate run takes minutes and needs the local engine running.
+
 ### Fixed
 
 - **Settings/Chat: no more repeated keychain password prompts.** The app is ad-hoc signed locally, so every rebuild produces a new signing identity and macOS re-evaluates the access list of each keychain item on every secret read — which the Inference section did per route on every appearance and a chat send did on every message. Provider credentials are now cached in-process after the first successful read (at most one prompt per item per launch; "Always Allow" in the dialog pins it for the installed build), the "does a key exist?" checks use metadata-only probes that never decrypt and therefore never prompt, and the locally-generated engine API key moved out of the keychain entirely into a 0600 file in Application Support (migrated on first use; nothing the user owns is stored outside the keychain).
