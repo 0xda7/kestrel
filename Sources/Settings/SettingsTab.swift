@@ -67,6 +67,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.autoStart) private var autoStart = false
     @AppStorage(SettingsKeys.apiKeyEnabled) private var apiKeyEnabled = false
     @AppStorage(SettingsKeys.localNetworkDiscovery) private var localNetworkDiscovery = false
+    /// Read once when the key row appears — never on every view-body render.
+    @State private var engineAPIKey = ""
     @State private var showResetConfirm = false
     @State private var settingsTransferMessage: String?
     @State private var settingsDestination: SettingsDestination = .general
@@ -620,12 +622,12 @@ struct SettingsView: View {
                 if apiKeyEnabled {
                     HStack {
                         Text(loc.t("Clave", "Key")).foregroundStyle(.secondary)
-                        Text(Keychain.apiKey())
+                        Text(engineAPIKey)
                             .font(.system(size: 11, design: .monospaced))
                             .textSelection(.enabled)
                         Button {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(Keychain.apiKey(), forType: .string)
+                            NSPasteboard.general.setString(engineAPIKey, forType: .string)
                         } label: { Image(systemName: "doc.on.doc") }
                             .buttonStyle(.borderless)
                             .accessibilityLabel(loc.t("Copiar la clave", "Copy the key"))
@@ -633,6 +635,7 @@ struct SettingsView: View {
                                         "Copy to use from other clients (Authorization: Bearer …)."))
                     }
                     .font(.caption)
+                    .onAppear { engineAPIKey = Keychain.apiKey() }
                 }
             }
             .padding(.horizontal, 16)

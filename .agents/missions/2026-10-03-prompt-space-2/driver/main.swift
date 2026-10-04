@@ -241,8 +241,21 @@ var route = InferenceRoute(name: "p1", dialect: .openAI, baseURL: "https://api.e
                            modelID: "model-x", maxTokensCap: nil)
 Keychain.setThisDeviceOnly("LEGACY", account: "remote-api-key")
 check(InferenceRoutes.apiKey(for: route) == "LEGACY", "legacy shared key falls back")
+let legacyGetCount = Keychain.getCalls
+_ = InferenceRoutes.apiKey(for: route)
+_ = InferenceRoutes.apiKey(for: route)
+check(Keychain.getCalls == legacyGetCount,
+      "repeated route-key resolutions are served from the session cache (no re-read)")
+check(InferenceRoutes.hasAPIKey(for: route), "hasAPIKey finds a legacy key")
+let existsCount = Keychain.existsCalls
+let getBefore = Keychain.getCalls
+_ = InferenceRoutes.hasAPIKey(for: route)
+_ = InferenceRoutes.hasAPIKey(for: route)
+check(Keychain.getCalls == getBefore, "hasAPIKey never decrypts secrets (no Keychain reads)")
+check(Keychain.existsCalls >= existsCount, "hasAPIKey probes via metadata-only exists()")
 InferenceRoutes.setAPIKey("ROUTE-KEY", for: route)
 check(InferenceRoutes.apiKey(for: route) == "ROUTE-KEY", "per-route key stored and read")
+check(Keychain.getCalls == legacyGetCount, "setAPIKey serves subsequent reads from the cache")
 
 // ---- 8. Anthropic dialect tool mapping -----------------------------------------
 

@@ -87,20 +87,56 @@ enum InferenceRoutes {
 
     // MARK: Per-provider credentials (Keychain, one item per route)
 
+    private static let keyCacheLock = NSLock()
+    /// Session cache of resolved credentials. Every uncached Keychain READ
+    /// decrypts the secret and evaluates the item's ACL — on ad-hoc local
+    /// builds that raises the password dialog once per item per launch. The
+    /// chat send path resolves the active route's key on EVERY message, so
+    /// this cache is what turns a per-message prompt into at most one per
+    /// launch. setAPIKey/delete keep it coherent.
+    private static var keyCache: [String: String] = [:]
+
     private static func keychainAccount(for routeID: UUID) -> String {
         "remote-api-key-\(routeID.uuidString)"
     }
 
     /// The credential for one route: its own Keychain item when set, else the
     /// legacy shared item (migration happens when the user saves a new key).
+    /// Cached in-process after the first successful read.
     static func apiKey(for route: InferenceRoute) -> String {
-        let scoped = Keychain.get(keychainAccount(for: route.id)) ?? ""
-        if !scoped.isEmpty { return scoped }
-        return Keychain.get(legacyKeychainAccount) ?? ""
+        let account = keychainAccount(for: route.id)
+        keyCacheLock.lock()
+        if let cached = keyCache[account] {
+            keyCacheLock.unlock()
+            return cached
+        }
+        keyCacheLock.unlock()
+        let scoped = Keychain.get(account) ?? ""
+        if !scoped.isEmpty {
+            keyCacheLock.lock()
+            keyCache[account] = scoped
+            keyCacheLock.unlock()
+            return scoped
+        }
+        let legacy = Keychain.get(legacyKeychainAccount) ?? ""
+        if !legacy.isEmpty {
+            keyCacheLock.lock()
+            keyCache[account] = legacy
+            keyCacheLock.unlock()
+        }
+        return legacy
     }
 
+    /// Existence check WITHOUT decrypting: settings UI and migration logic
+    /// only need to know whether a key is present, and a metadata probe never
+    /// evaluates the item's ACL, so this never raises the access dialog.
     static func hasAPIKey(for route: InferenceRoute) -> Bool {
-        !apiKey(for: route).isEmpty
+        let account = keychainAccount(for: route.id)
+        keyCacheLock.lock()
+        let cached = keyCache[account] != nil
+        keyCacheLock.unlock()
+        if cached { return true }
+        return Keychain.exists(account) || Keychain.exists(legacyKeychainAccount)
     }
 
     /// Stores (or clears with an empty string) the route's credential. Saving
@@ -114,8 +150,12 @@ enum InferenceRoutes {
         } else {
             Keychain.setThisDeviceOnly(trimmed, account: account)
         }
+        keyCacheLock.lock()
+        if trimmed.isEmpty { keyCache.removeValue(forKey: account) }
+        else { keyCache[account] = trimmed }
+        keyCacheLock.unlock()
         let unscoped = load().filter { $0.isConfigured }.allSatisfy {
-            !(Keychain.get(keychainAccount(for: $0.id)) ?? "").isEmpty
+            hasAPIKey(for: $0)
         }
         if unscoped { Keychain.delete(legacyKeychainAccount) }
     }
@@ -123,7 +163,7 @@ enum InferenceRoutes {
     /// True when the legacy shared item still exists (shown in settings so the
     /// user can see which providers are on migrated vs inherited credentials).
     static var legacySharedKeyPresent: Bool {
-        !(Keychain.get(legacyKeychainAccount) ?? "").isEmpty
+        Keychain.exists(legacyKeychainAccount)
     }
 }
 

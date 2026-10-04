@@ -32,7 +32,19 @@ enum SettingsKeys {
 
 enum Keychain {
     private static var store: [String: String] = [:]
-    static func get(_ account: String) -> String? { store[account] }
+    /// Call counters the driver uses to prove the route-key session cache
+    /// (a second resolution must not touch the Keychain again) and that
+    /// existence probes never read secret data.
+    nonisolated(unsafe) static var getCalls = 0
+    nonisolated(unsafe) static var existsCalls = 0
+    static func get(_ account: String) -> String? {
+        getCalls += 1
+        return store[account]
+    }
+    static func exists(_ account: String) -> Bool {
+        existsCalls += 1
+        return store[account] != nil
+    }
     static func set(_ value: String, account: String) { store[account] = value }
     static func setThisDeviceOnly(_ value: String, account: String) { store[account] = value }
     static func delete(_ account: String) { store.removeValue(forKey: account) }

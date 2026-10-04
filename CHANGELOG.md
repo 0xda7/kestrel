@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Settings/Chat: no more repeated keychain password prompts.** The app is ad-hoc signed locally, so every rebuild produces a new signing identity and macOS re-evaluates the access list of each keychain item on every secret read — which the Inference section did per route on every appearance and a chat send did on every message. Provider credentials are now cached in-process after the first successful read (at most one prompt per item per launch; "Always Allow" in the dialog pins it for the installed build), the "does a key exist?" checks use metadata-only probes that never decrypt and therefore never prompt, and the locally-generated engine API key moved out of the keychain entirely into a 0600 file in Application Support (migrated on first use; nothing the user owns is stored outside the keychain).
+
 ### Security
 
 - **Servers: the local network needs a key when agent tools are on.** Starting a server bound to the local network with agent tools enabled but no API key is now refused with a bilingual message instead of serving exec/write tools unauthenticated to every LAN host.

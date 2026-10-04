@@ -406,3 +406,34 @@ were briefly created in the REAL ~/.pi tree and the real prompt-library.json was
 by an early driver run; both cleaned (fixtures removed, library file deleted → app reseeds on
 next open), driver rewritten with /tmp scratch + in-memory round-trip + explicit pre-exit
 cleanup. dist/ NOT repackaged, nothing relaunched (operator mid-test); swap on their signal.
+
+---
+## 2026-10-03 (late) — Keychain prompt storm: root cause + fix
+Operator report: password dialog ("Kestrel wants to use your keys") on every Inference-section
+visit and every chat send; feature never requested. Root-caused to three stacked causes:
+(1) ad-hoc signed app — every rebuild changes the signing identity, so macOS re-evaluates each
+keychain item's ACL on every secret read and prompts; (2) RemoteProvidersSection.onAppear ran
+InferenceRoutes.hasAPIKey per route on EVERY appearance (a value read = ACL evaluation), and
+the settings key row rendered Keychain.apiKey() on every view-body update; (3) the operator has
+an ACTIVE remote route, so every chat send resolved its key via two uncached reads.
+(Note: an earlier quick parse misread the routes blob as 326 entries — actual: 2 real routes,
+Xlaunch Gateway + Z.ai-Coding-Plan, one active.)
+
+Fix (three layers, all verified by the behavioral driver 43/43 + swift build exit 0):
+- Keychain enum: in-process session cache (get caches one successful read; set/delete refresh)
+  → at most ONE prompt per item per launch instead of per navigation/message.
+- Keychain.exists(_:) metadata-only probe (kSecReturnData=false): matching existence never
+  decrypts → never evaluates the ACL → never prompts. InferenceRoutes.hasAPIKey +
+  legacySharedKeyPresent now probe instead of reading; setAPIKey's migration sweep too.
+- Engine api-key moved out of the Keychain entirely: LocalSecretStore (0600 file under
+  AppSupport/Kestrel/secrets/) — machine-generated, machine-local secret; one-time migration
+  from a legacy "api-key" item if present, then the item is deleted. Remote provider keys stay
+  in the Keychain (user secrets belong there). SettingsTab reads the key once into @State on
+  appear instead of per render.
+Driver additions: counting stub proves repeated resolutions serve from cache, hasAPIKey never
+calls get, setAPIKey coherent. Residual after fix: one prompt per item per launch on FIRST
+read; clicking "Always Allow" pins it for the installed build; a rebuild changes the identity
+again (documented; a stable self-signed signing identity is the future eliminator, needs
+operator consent to create a cert).
+Dist NOT repackaged (operator mid-test) — the fix lands on their next
+KESTREL_NO_BUMP=1 KESTREL_ARCH=x86_64 ./make-app.sh + relaunch.
