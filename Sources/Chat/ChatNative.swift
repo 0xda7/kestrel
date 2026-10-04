@@ -1062,7 +1062,10 @@ final class ChatStore: ObservableObject {
                     }
                     if snap.done { break }   // finish() publishes the final transcript
                     self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: snap.speed)
-                    try? await Task.sleep(for: .milliseconds(40))
+                    // Length-adaptive cadence (see the pi pump note).
+                    let n = snap.visible.count
+                    let ms = n > 12_000 ? 600 : n > 6_000 ? 350 : n > 2_500 ? 180 : 80
+                    try? await Task.sleep(for: .milliseconds(ms))
                 }
             }
             let store = self

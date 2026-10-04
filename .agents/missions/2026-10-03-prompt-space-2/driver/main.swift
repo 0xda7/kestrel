@@ -68,8 +68,23 @@ let c1 = Process(); c1.executableURL = URL(fileURLWithPath: "/bin/chmod"); c1.ar
 try? c1.run(); c1.waitUntilExit()
 
 let stubLatch = workDir + "/stub-latch"
-try? "#!/bin/bash\ncase \"${DRIVER_MODE:-ok}\" in\nok) echo \"LATCH-OK\" ;;\nabnormal) echo partial; echo \"latch auth failed\" >&2; exit 5 ;;\nesac\n"
-    .write(toFile: stubLatch, atomically: true, encoding: .utf8)
+let stubLatchSource = """
+#!/bin/bash
+case \"${DRIVER_MODE:-ok}\" in
+ok) echo \"LATCH-OK\" ;;
+utf8split)
+  # Emit multi-byte characters split across separate writes: the incremental
+  # decoder must complete 中 (E4 B8 AD) and é (C3 A9) across chunk boundaries
+  # with no U+FFFD replacement and no lost bytes.
+  printf 'A\\344\\270'
+  printf '\\255B\\303'
+  printf '\\251D'
+  echo
+  ;;
+abnormal) echo partial; echo \"latch auth failed\" >&2; exit 5 ;;
+esac
+"""
+try? stubLatchSource.write(toFile: stubLatch, atomically: true, encoding: .utf8)
 let c2 = Process(); c2.executableURL = URL(fileURLWithPath: "/bin/chmod"); c2.arguments = ["+x", stubLatch]
 try? c2.run(); c2.waitUntilExit()
 
@@ -235,6 +250,26 @@ if case .exited(let status, let output) = latchOutcome {
 } else {
     check(false, "latch abnormal maps to .exited")
 }
+
+// Incremental-decode correctness: multi-byte characters split across pipe
+// chunks must decode intact (no U+FFFD, nothing dropped) — the O(n²) fix's
+// regression test.
+setenv("DRIVER_MODE", "utf8split", 1)
+var splitSnapshots: [String] = []
+let utf8Outcome = await LatchDelegateService.runStreaming(
+    argv: [stubLatch, "-p", "task"], workingDirectory: nil, timeout: 30,
+    onLaunch: nil, onOutput: { _, fullSoFar in splitSnapshots.append(fullSoFar) })
+if case .completed(let output) = utf8Outcome {
+    check(output.contains("中") && output.contains("é") && !output.contains("\u{FFFD}"),
+          "split multi-byte characters decode intact (no U+FFFD)")
+    check(splitSnapshots.allSatisfy { !$0.contains("\u{FFFD}") },
+          "no intermediate snapshot ever shows a replacement character")
+    check(splitSnapshots.last.map { $0.contains("中") && $0.contains("é") } == true,
+          "final snapshot carries the complete decoded text")
+} else {
+    check(false, "utf8split run completes (got \(utf8Outcome))")
+}
+setenv("DRIVER_MODE", "ok", 1)
 
 Keychain.delete("remote-api-key")
 var route = InferenceRoute(name: "p1", dialect: .openAI, baseURL: "https://api.example.com/v1",

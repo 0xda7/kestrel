@@ -673,9 +673,12 @@ enum Keychain {
         SecItemDelete(base as CFDictionary)
         var add = base
         add[kSecValueData as String] = Data(value.utf8)
-        SecItemAdd(add as CFDictionary, nil)
+        let ok = SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        // Cache only what the keychain actually accepted: get()/exists()
+        // read the cache first, so caching a failed write would assert a
+        // credential that is not stored (a caller-visible lie).
         cacheLock.lock()
-        cache[account] = value
+        if ok { cache[account] = value } else { cache.removeValue(forKey: account) }
         cacheLock.unlock()
     }
 
@@ -746,6 +749,13 @@ enum Keychain {
 /// for free. Secrets the USER brings (remote provider keys) stay in the
 /// Keychain, where OS-level protection belongs.
 enum LocalSecretStore {
+    /// In-process cache, same pattern as Keychain's: reads happen on hot paths
+    /// (every chat send resolves the engine key via ServerSettings.activeAPIKey)
+    /// and the file is only re-read after this process last saw it change —
+    /// store() is the only writer, so the cache cannot go stale in-process.
+    private static let cacheLock = NSLock()
+    private static var cache: [String: String] = [:]
+
     static func url(_ name: String) -> URL {
         let base = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory,
                                                        .userDomainMask, true).first
@@ -754,11 +764,20 @@ enum LocalSecretStore {
     }
 
     static func value(_ name: String) -> String? {
+        cacheLock.lock()
+        if let cached = cache[name] { cacheLock.unlock(); return cached }
+        cacheLock.unlock()
         let path = url(name).path
         guard FileManager.default.fileExists(atPath: path),
               var contents = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
         while contents.hasSuffix("\n") { contents.removeLast() }
-        return contents.isEmpty ? nil : contents
+        let value = contents.isEmpty ? nil : contents
+        if let value {
+            cacheLock.lock()
+            cache[name] = value
+            cacheLock.unlock()
+        }
+        return value
     }
 
     @discardableResult
@@ -770,6 +789,9 @@ enum LocalSecretStore {
             try value.write(to: fileURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o600],
                                                   ofItemAtPath: fileURL.path)
+            cacheLock.lock()
+            cache[name] = value
+            cacheLock.unlock()
             return true
         } catch {
             return false

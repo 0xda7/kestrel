@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Improved
+
+- **Performance: sidecar streams are linear and calm.** The latch delegate re-decoded its entire accumulated output on every stdout chunk (quadratic: a 512 KB reply with line-sized chunks re-decoded ~1.3 GB of UTF-8); it now decodes incrementally on UTF-8 sequence boundaries — split multi-byte characters are completed on the next chunk and never replaced (driver-verified with bytes split across writes). The pi and latch live-view pumps switch from a fixed 40 ms tick to the engine path's length-adaptive cadence (80–600 ms), so a long reply no longer re-lays-out its full text 25× per second.
+- **Security/correctness: a failed keychain write no longer pretends to succeed.** `Keychain.set` cached values even when the item was not stored; the cache now updates only on a successful write (get/exists read the cache first, so a failed write previously surfaced as a credential that did not exist on disk).
+- **Performance: the local engine key is cached in-process** instead of re-reading its 0600 file on every chat send and every server start.
+
 ### Added
 
 - **Chat: a context-consumption meter.** The composer now shows how much of the configured context window the conversation actually occupies (the engine's per-turn usage accounting, not an estimate): a linear meter with the token counts and percentage, amber past 70% and red past 90% with a hint to archive or open a new chat. It appears once the first usage report arrives. Prompt-processing progress was verified end-to-end against the engine (it streams sparse `prompt_progress` events during long prefills).

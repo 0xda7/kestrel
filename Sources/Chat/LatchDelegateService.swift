@@ -52,7 +52,7 @@ enum LatchDelegateService {
             "type": "function",
             "function": [
                 "name": toolName,
-                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. IMPORTANT: the model and provider latch uses come from latch's OWN configuration, not from Kestrel — depending on that configuration the delegate may run on the local engine or on REMOTE cloud endpoints, and Kestrel does not route or constrain it. Check latch's provider configuration before delegating anything that must stay on this machine.",,
+                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. IMPORTANT: the model and provider latch uses come from latch's OWN configuration, not from Kestrel — depending on that configuration the delegate may run on the local engine or on REMOTE cloud endpoints, and Kestrel does not route or constrain it. Check latch's provider configuration before delegating anything that must stay on this machine.",
                 "parameters": [
                     "type": "object",
                     "properties": [
@@ -178,6 +178,31 @@ enum LatchDelegateService {
         let lock = NSLock()
         var outData = Data()
         var stderrTail = ""
+        // Incremental decode state: `decoded` grows by only the NEW bytes each
+        // chunk, instead of re-decoding the whole accumulation per chunk
+        // (which is O(n²) — a 512 KB reply with line-sized chunks re-decoded
+        // ~1.3 GB of UTF-8). `decodeOffset` always sits on a UTF-8 sequence
+        // boundary, so multi-byte characters split across pipe chunks are
+        // completed on the next chunk rather than corrupted.
+        var decoded = ""
+        var decodeOffset = 0
+
+        /// Last offset in `data` that ends on a complete UTF-8 sequence: scan
+        /// back at most 3 bytes (the longest continuation run) for an ASCII or
+        /// leading byte; a truncated sequence tail stays undecoded until its
+        /// remainder arrives.
+        func utf8SafeEnd(_ data: Data) -> Int {
+            let count = data.count
+            var back = 0
+            while back < 3, count - back > decodeOffset {
+                let byte = data[data.startIndex + count - back - 1]
+                if byte & 0x80 == 0 { return count - back }
+                if byte & 0xC0 != 0x80 { return count - back - 1 }
+                back += 1
+            }
+            return count - back
+        }
+
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
@@ -185,16 +210,19 @@ enum LatchDelegateService {
             // Stop accumulating past the reply cap: a runaway harness must
             // not grow memory without bound during the run (the cap was
             // previously applied only after exit), and bounded accumulation
-            // also bounds the per-chunk full-snapshot decode.
+            // also bounds the decode.
             if outData.count < LatchDelegateService.maximumReplyCharacters {
                 outData.append(chunk)
+                let safeEnd = utf8SafeEnd(outData)
+                if safeEnd > decodeOffset {
+                    decoded += String(decoding: outData[decodeOffset..<safeEnd], as: UTF8.self)
+                    decodeOffset = safeEnd
+                }
             }
+            let snapshot = decoded
             lock.unlock()
             if let onOutput {
-                lock.lock()
-                let full = String(decoding: outData, as: UTF8.self)
-                lock.unlock()
-                onOutput(String(decoding: chunk, as: UTF8.self), full)
+                onOutput(String(decoding: chunk, as: UTF8.self), snapshot)
             }
         }
         stderr.fileHandleForReading.readabilityHandler = { handle in

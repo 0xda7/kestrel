@@ -490,3 +490,53 @@ Operator called it: "where you say my engine points and where it points in the a
   demote the zai/nvidia account providers) — their decision, their file.
 Lesson recorded: never report a sidecar's effective endpoint from one config file; verify from
 the sidecar's own run logs or a controlled probe.
+
+---
+## 2026-10-04 — Dual review (performance + design) executed; fix batch; latch onboarding verdict
+Reviews (two GLM-5.3-Flash reviewers, evidence-quoted) over the hardening-wave modules.
+
+FIXED this batch (driver 46/46, build green, incl. 3 new split-character checks):
+- P-HIGH latch O(n²): full-accumulation re-decode per chunk → incremental decode on UTF-8
+  boundaries (utf8SafeEnd scan ≤3 bytes back); correctness proven with a stub emitting
+  中/é split across pipe writes (no U+FFFD in any snapshot or final).
+- P-HIGH pump cadence: pi/latch pumps now length-adaptive (80/180/350/600 ms at
+  2.5k/6k/12k+ chars), matching the engine path's flush() thresholds.
+- D-BUG Keychain.set cached on failed writes → cache-on-success only.
+- P-MED LocalSecretStore uncached file read per send/start → in-process cache (store() sole
+  writer, invalidates on write).
+- Self-inflicted compile break caught+fixed: double comma from the earlier tool-description
+  edit (LatchDelegateService dictionary literal).
+
+DEFERRED with rationale (design review; each one-line-sketch recorded for a future wave):
+- SidecarProcessBox choreography → belongs inside the delegates as a run handle (stop() calls
+  PiDelegateService.terminateActive()); medium refactor of the run-lifecycle seam.
+- runStreaming deriving budget from agentMode + returning the composed reply (deletes the
+  budget pick + empty-success switch duplicated in ChatNative and MetaPromptService;
+  RunOutcome.isEmptySuccess is currently dead surface).
+- LatchDelegate unified run(task:) for tool + assistant seams (assistant path rebuilds argv
+  inline and hardcodes maximumTimeoutSeconds, bypassing the 60 s floor).
+- RouteWire effects descriptor (isLocal/canResume/modelLabel) — `remote` derived at 5 sites.
+- ServerSettings.launchPlan() -> (argv, LaunchSummary) — startDflashMemoryCheck string-matches
+  "draft-dflash" and re-parses "-ngld" out of the argv it just built.
+- P-MED save() coalescing (stall chains enqueue 2-3 identical 10 MB encodes) — needs a
+  willTerminate-flush design to be safe; not rushed.
+- P-LOW: stamps ring buffer, stopImmediately quit budget, watchHealth background hop,
+  live.update version-based publish.
+
+LATCH ONBOARDING — final verdict (operator asked: "create and set the exact provider
+onboarding … my own openAI or Anthropic compatible"): NOT ACHIEVABLE via external config in
+latch-harness 1.0.0-alpha.1. Levers tried, all verified by engine-request counting (0 local
+generations every time) + latch's own run logs (always integrate.api.nvidia.com /
+new-provider/z-ai/glm-5.3): provider_config.json rewrite (shadowed and rewritten by the
+harness), latch logout + manual removal of the coding-plan credential + provider-cache purge
+(auth resurfaces — the harness reads ~/.zcode state incl. db.sqlite and shares the operator's
+ZCode/zai identity, likely via the cn.zhipuai keychain item; NOT touched, not ours),
+setting.json providerFamilyDomain (enum: zai|bigmodel only; "none" ignored), OPENAI_BASE_URL/
+ANTHROPIC_BASE_URL env (present in binary strings, not honored as overrides), isolated HOME
+(still cloud). The v2 provider file is not the effective source in this alpha. Paths forward
+(operator choice): (a) interactive onboarding in the latch TUI (/login → Xlaunch Gateway or
+custom key pointing at the loopback engine) which writes the account-bound provider the
+supported way; (b) a latch build with custom-provider support; (c) keep latch cloud-bound and
+rely on Kestrel's local engine for chat (current default). Kestrel side already honest: tool
+description discloses remote routing. Backups of everything touched:
+.agents/backups/latch-pre-onboarding/.
