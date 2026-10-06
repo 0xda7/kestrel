@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Verified
+
+- **Remote inference routes work end-to-end** (field report, 2026-10-04): the active route (Z.ai Coding Plan / GLM-5.3-Flash) answers both streaming SSE and non-streaming requests with HTTP 200 using the credential in the legacy shared keychain item (`remote-api-key`) that unscoped routes still inherit. Note: reasoning models (GLM-5.3-Flash among them) can return an empty `content` with all tokens spent on `reasoning_content` when `max_tokens` is small — the reply is not missing, the budget was consumed by thinking. The local engine, image (`sd-cli`), and whisper binaries were all verified present and cold-startable; `swift build` is green with Command Line Tools.
+
 ### Improved
 
 - **Performance: sidecar streams are linear and calm.** The latch delegate re-decoded its entire accumulated output on every stdout chunk (quadratic: a 512 KB reply with line-sized chunks re-decoded ~1.3 GB of UTF-8); it now decodes incrementally on UTF-8 sequence boundaries — split multi-byte characters are completed on the next chunk and never replaced (driver-verified with bytes split across writes). The pi and latch live-view pumps switch from a fixed 40 ms tick to the engine path's length-adaptive cadence (80–600 ms), so a long reply no longer re-lays-out its full text 25× per second.
