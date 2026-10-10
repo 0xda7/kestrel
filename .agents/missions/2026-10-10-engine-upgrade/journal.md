@@ -76,3 +76,27 @@
   ("recent account payments have failed or your spending limit needs to be increased"),
   not code. With billing fixed the PR's Build job both arbitrates the crash and assembles
   the app.
+- 2026-10-10 14:xx Provider-routing bug (user-reported live: "routing not working, chat's
+  only provider is z.ai"). Root cause: `activeInferenceRoute` absent from defaults — deleting
+  and re-creating a route gives a new id and saveRoutes silently dropped the dangling active
+  selection, so active() returned nil and every chat send fell back to the local engine while
+  Settings kept showing providers configured and the per-route Test green (it proves the
+  route's URL+key, not that the chat uses it — the exact "reports working but isn't" class).
+  Fixed: re-bind the active selection by name on route re-create; Settings warns while no
+  route is active. Live remedy: z.ai route 7C669FA7 written as active. Distinct issue: pi's
+  OpenRouter 401 "User not found" is pi's OWN config, not Kestrel routing.
+- 2026-10-10 15:00 pi live-fire (real path, real binary 1.0.0, real sources compiled
+  unmodified): provider openrouter/moonshotai-kimi-k2.6 → 401 → AMENDMENT 4 guard surfaced
+  it honestly. Trace evidence in pi-sessions/2026-10-10T20-56-00-*.jsonl. User took over
+  manual driving to refresh pi's OpenRouter credential and exercise the app; supervision
+  watcher (/tmp/kestrel-supervise.sh → /tmp/kestrel-supervision.log) observes traces,
+  connections and server state.
+- 2026-10-10 15:05 README: Spanish mirror removed, Spark-X2.5 benchmark rows added
+  (1.7B Q8_0 1013.9/54.9; 4B Q4_K_M 395.9/33.0 — 5500M, cdc06426e), Agentic capabilities
+  section added. v6 language-mode flip pushed to main; CI's Xcode 26 arbitrates the local
+  IRGen crash question.
+- 2026-10-10 16:00 v6 arbitration: CI (macos-26, Xcode 26) REPRODUCED the IRGen SmallVector
+  2^32+1 crash under v6 mode — run 38093069969, IRGen for DashboardTab.swift, in `swift test`.
+  Two independent environments now confirm a toolchain bug (local CLT 6.3.3.1 hit
+  SettingsTab.swift). Reverted Package.swift to the staged v5 + StrictConcurrency form with
+  both reproductions recorded; v6 flip blocked until a fixed toolchain ships.

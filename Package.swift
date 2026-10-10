@@ -1,15 +1,18 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Swift 6 language mode: the whole codebase is clean under full v6 checking.
-// History: CLT Swift 6.3.3.1 crashed in IRGen (SmallVector 2^32+1,
-// module-cumulative — evidence in
-// .agents/missions/2026-10-10-engine-upgrade/journal.md), so the mode was
-// staged to v5 + StrictConcurrency. CI's Xcode 26 toolchain built the package
-// cleanly, so the mode is flipped to v6 here; if a CI run reproduces the
-// IRGen crash, revert this file to the staged form.
+// Swift 6 language mode is staged, not abandoned: the whole codebase is clean
+// under full v6 checking, but the Swift 6.3.x toolchain crashes in IRGen
+// (SmallVector 2^32+1, module-cumulative) before it can emit this package.
+// Reproduced in BOTH environments on 2026-10-10 under v6 mode:
+//   - local Command Line Tools 6.3.3.1 (IRGen for SettingsTab.swift)
+//   - CI Xcode 26 on macos-26 (IRGen for DashboardTab.swift, run 38093069969)
+// so it is a toolchain bug, not local. Evidence and the all-stubs bisect live
+// in .agents/missions/2026-10-10-engine-upgrade/journal.md. Flip both targets
+// to .swiftLanguageMode(.v6) once a fixed toolchain builds this package.
 let concurrencySettings: [SwiftSetting] = [
-    .swiftLanguageMode(.v6),
+    .swiftLanguageMode(.v5),
+    .enableUpcomingFeature("StrictConcurrency"),
 ]
 
 let package = Package(
