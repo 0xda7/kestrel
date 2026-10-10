@@ -36,6 +36,18 @@ check below verifies.
 The seven replaced the old per-area folders (`llama/metal/`, `llama/core/`, `llama/model/`,
 `llama/server/`) at the port; the running numbering they used did not go away.
 
+### Upstream frontier
+
+A pin only moves while the whole series still applies with the plain `git apply` of
+`build-engines.sh` (the lenient mode of `check-patch-series.sh` is for judging, not building).
+As of 2026-10-10 the series applies cleanly through `cdc06426e` (sparse FA, 2026-09-24), which
+is the pin. The next commit, `84e76d8a2` (graph capture), already breaks `0002`; past that,
+`5a75f14c0` (FA kernels split into per-dtype libraries), the `llama_batch_ext` migration and
+upstream's own MoE-cache-over-multi-GPU work need real re-authoring, not context repair.
+whisper v1.9.5 and stable-diffusion.cpp master cross the same `kernels/` layout split that
+`shared-metal/` predates, so those pins hold until the shared backend is ported once and the
+duplicate series collapses into the llama one.
+
 ## `shared-metal/`
 
 Whisper and stable-diffusion.cpp are pinned to commits from before upstream split

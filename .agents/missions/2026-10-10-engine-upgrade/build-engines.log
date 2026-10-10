@@ -1,0 +1,1809 @@
+Metal compiler unavailable — embedded source only (slower first load)
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/patches/llama/0001-metal-kernels.patch:675: new blank line at EOF.
++
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/patches/llama/0001-metal-kernels.patch:3131: new blank line at EOF.
++
+warning: 2 lines add whitespace errors.
+applied llama/0001-metal-kernels.patch
+applied llama/0002-metal-backend-host.patch
+applied llama/0003-moe-cache.patch
+applied llama/0004-ggml-core.patch
+applied llama/0005-llama-core.patch
+applied llama/0006-common-and-spec.patch
+applied llama/0007-tools-and-build.patch
+applied llama/0008-metal-comm-allreduce-fail-loud.patch
+applied llama/0009-metal-sync-flush-pending-waits.patch
+applied llama/0010-pipeline-parallel-ignore-accel.patch
+applied llama/0011-mgpu-tensor-parallel-groups.patch
+applied llama/0012-mgpu-group-events-and-pipeline.patch
+applied llama/0013-meta-direct-copies-and-read-batch.patch
+applied llama/0014-tensor-split-per-group.patch
+applied llama/0015-pipeline-events-always.patch
+applied llama/0016-meta-gqa-attention-splits.patch
+applied llama/0017-mgpu-parallel-subgraph-encode.patch
+applied llama/0018-moe-cache-maps-thread-safe.patch
+applied llama/0019-mgpu-fused-exchange-reduce.patch
+applied llama/0020-moe-id-map-size.patch
+applied llama/0021-moe-slot-stats.patch
+applied llama/0022-moe-ring-bound-batch.patch
+applied llama/0023-moe-compact-assemble.patch
+applied llama/0024-moe-slot-stats-classify.patch
+applied llama/0025-moe-skip-cache-when-slots-cover-experts.patch
+applied llama/0026-metal-release-the-host-wrap.patch
+applied llama/0027-metal-fa-split-narrow-heads.patch
+applied llama/0028-metal-fa-split-depth-per-head.patch
+applied llama/0029-metal-stage-large-uploads-through-the-ring.patch
+applied llama/0030-metal-release-the-read-wrap.patch
+applied llama/0031-llms-log-the-tensor-group-layout.patch
+applied llama/0032-metal-read-the-quant-arrays-a-word-at-a-time.patch
+applied llama/0033-metal-a-separate-file-for-the-64-lane-kernels.patch
+applied llama/0034-metal-keep-mxfp4-at-four-rows-per-simdgroup.patch
+applied llama/0035-metal-let-the-expert-matvec-read-words-too.patch
+applied llama/0036-metal-read-the-iq1-grid-entry-as-one-word.patch
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/patches/llama/0037-metal-a-64-lane-matvec-for-every-quant-type.patch:2323: trailing whitespace.
+        
+warning: 1 line adds whitespace errors.
+applied llama/0037-metal-a-64-lane-matvec-for-every-quant-type.patch
+applied llama/0038-metal-a-64-lane-gemm-of-its-own.patch
+applied llama/0039-metal-keep-the-measuring-switches.patch
+applied llama/0040-metal-a-64-lane-gemm-for-the-experts.patch
+applied llama/0041-metal-64-lanes-for-the-expert-and-fused-matvec.patch
+applied llama/0042-metal-a-64-lane-prefill-attention.patch
+applied llama/0043-metal-a-tile-floor-for-each-quant.patch
+applied llama/0044-metal-instrument-the-32-lane-matvec-for-a-lanes.patch
+applied llama/0045-metal-a-64-lane-prefill-attention-for-the-asymm.patch
+applied llama/0046-metal-a-tile-floor-per-quant-for-each-lane-widt.patch
+applied llama/0047-port-adapt-the-series-to-upstream-465e49b9c.patch
+applied llama/0048-metal-sparse-attention-for-the-AMD-kernels.patch
+applied llama/0050-metal-ext-mv-wave64-tuning.patch
+applied llama/0051-metal-ext-mv-wave64-single-pass.patch
+applied llama/0054-metal-moe-off-active-stub.patch
+applied llama/0055-metal-fa-dk384-640-guard.patch
+applied llama/0056-metal-aligned-mat-vec-reads-before-vega.patch
+applied llama/0057-llms-keep-the-output-head-on-every-card-for-dflash.patch
+applied llama/0058-metal-a-64-lane-index-kernel-for-sparse-attention.patch
+applied llama/0059-metal-its-own-events-for-the-fused-exchange.patch
+applied llama/0060-mgpu-collective-tracing.patch
+applied llama/0061-metal-tp2-peer-direct-allreduce.patch
+applied llama/0062-metal-tp2-peer-fused-reduce.patch
+applied llama/0063-mgpu-merge-the-collective-into-the-next-subgraph.patch
+applied llama/0064-mgpu-hold-the-collective-buffer-for-decode-batches.patch
+applied llama/0065-mgpu-tp2-fused-boundary.patch
+applied llama/0066-mgpu-tp2-wg32-sixteen-local-heads.patch
+applied llama/0067-mgpu-tp2-wg32-measured-head-shapes.patch
+applied llama/0068-mgpu-tp2-wg32-dk64-measured-head-shapes.patch
+applied llama/0069-llms-qwen4exp-mtp-draft-head.patch
+applied llama/0070-mgpu-dual-shape-graph-cache.patch
+applied llama/0072-metal-zero-filled-collectives-and-one-shot-allreduce.patch
+applied llama/0073-metal-f16-allreduce-transport.patch
+applied llama/0074-mgpu-tp4-topology-aware-allreduce.patch
+applied llama/0075-metal-fa-prefill-falls-back-when-the-driver-refuses-the-kernel.patch
+applied llama/0076-mgpu-subgraphs-survive-the-context-reset.patch
+applied llama/0077-metal-kernels-compile-for-macos-12.patch
+applied llama/0078-metal-the-wide-q4k-q5k-tile-takes-the-scale-branch-per-wave.patch
+applied llama/0079-llms-prism-ternary-types-and-hadamard-runtime.patch
+applied llama/0080-metal-prism-ternary-kernels-and-fused-hadamard.patch
+applied llama/0081-metal-the-expert-tile-skips-its-empty-column-half.patch
+applied llama/0082-metal-the-expert-tile-grid-keeps-an-odd-tile-count.patch
+applied llama/0083-metal-q8_0-quads-load-as-two-halves.patch
+applied llama/0084-engine-a-state-save-reads-its-tensors-in-one-batch.patch
+applied llama/0085-metal-the-encode-path-reads-each-environment-variable-once.patch
+applied llama/0086-llms-the-two-expert-projections-load-as-one-matrix-on-64-lane-cards.patch
+applied llama/0087-llms-the-moe-router-runs-as-one-kernel.patch
+applied llama/0088-metal-a-q4_k-matvec-of-four-or-more-columns-takes-four-rows-on-64-lane-cards.patch
+applied llama/0089-metal-iq4_xs-mat-vec-shares-each-block-across-columns.patch
+applied llama/0090-metal-the-expert-grid-skips-slow-tile-counts-on-32-lanes.patch
+applied llama/0091-metal-a-same-shape-copy-skips-its-index-divisions.patch
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/patches/llama/0092-metal-a-few-columns-share-one-read-of-each-weight-block.patch:1294: new blank line at EOF.
++
+warning: 1 line adds whitespace errors.
+applied llama/0092-metal-a-few-columns-share-one-read-of-each-weight-block.patch
+applied llama/0093-metal-the-attention-block-pre-pass-stays-inside-the-mask.patch
+applied llama/0094-common-the-mtp-backoff-follows-the-last-dozen-drafts.patch
+applied llama/0096-metal-64-lane-cards-read-two-columns-per-block-on-legacy-quants.patch
+applied llama/0097-metal-a-rescaled-expert-matmul-accumulates-in-float.patch
+-- llama.cpp version: 0.5.0-dev
+CMAKE_BUILD_TYPE=Release
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Could NOT find OpenMP_C (missing: OpenMP_C_FLAGS OpenMP_C_LIB_NAMES) 
+-- Could NOT find OpenMP_CXX (missing: OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES) 
+-- Could NOT find OpenMP (missing: OpenMP_C_FOUND OpenMP_CXX_FOUND) 
+CMake Warning at ggml/src/CMakeLists.txt:358 (message):
+  OpenMP not found
+
+
+-- Including CPU backend
+-- Accelerate framework found
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -msse4.2;-mf16c;-mfma;-mbmi2;-mavx;-mavx2 GGML_SSE42;GGML_F16C;GGML_FMA;GGML_BMI2;GGML_AVX;GGML_AVX2
+-- BLAS found, Libraries: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework
+-- BLAS found, Includes: 
+-- Including BLAS backend
+-- Metal framework found
+-- Including METAL backend
+-- ggml version: 0.25.3
+-- ggml commit:  cdc06426e-dirty
+-- Generating embedded license file for target: llama-app
+-- Configuring done (2.6s)
+-- Generating done (1.8s)
+-- Build files have been written to: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static
+[  0%] Provisioning UI assets
+-- UI: downloading from b11172: https://huggingface.co/buckets/ggml-org/llama-ui/resolve/b11172/dist.tar.gz
+[  0%] Building CXX object common/CMakeFiles/llama-common-base.dir/build-info.cpp.o
+[  0%] Built target cpp-httplib
+[  3%] Built target vendor-hash
+[  3%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml.c.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml.cpp.o
+[  3%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-alloc.c.o
+[  3%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend.cpp.o
+[  5%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.o
+[  5%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-opt.cpp.o
+[  5%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-threading.cpp.o
+[  5%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-quants.c.o
+[  5%] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-turbo-quant.c.o
+[  7%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/__/__/kestrel-moe/kestrel-moe-cache.cpp.o
+[  7%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/__/__/kestrel-moe/kestrel-moe-fill.cpp.o
+[  7%] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/gguf.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-turbo-quant.c:28:14: warning: 'extern' variable has an initializer [-Wextern-initializer]
+   28 | GGML_API int turbo3_cpu_wht_group_size = 0;
+      |              ^
+[  8%] Linking CXX static library libllama-common-base.a
+1 warning generated.
+[  8%] Built target llama-common-base
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/kestrel-moe/kestrel-moe-fill.cpp:65:40: warning: cast from 'const void *' to 'ggml_tensor *' drops const qualifier [-Wcast-qual]
+   65 |         auto * slots = (ggml_tensor *) sv;
+      |                                        ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/kestrel-moe/kestrel-moe-fill.cpp:66:40: warning: cast from 'const void *' to 'ggml_tensor *' drops const qualifier [-Wcast-qual]
+   66 |         auto * host  = (ggml_tensor *) hv;
+      |                                        ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/kestrel-moe/kestrel-moe-fill.cpp:67:40: warning: cast from 'const void *' to 'ggml_tensor *' drops const qualifier [-Wcast-qual]
+   67 |         auto * state = (ggml_tensor *) kestrel_moe_state_of(sv);
+      |                                        ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-backend-meta.cpp:2271:36: warning: no previous prototype for function 'ggml_backend_meta_pass_counter' [-Wmissing-prototypes]
+ 2271 | extern "C" std::atomic<uint64_t> * ggml_backend_meta_pass_counter(void) {
+      |                                    ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-backend-meta.cpp:2271:12: note: declare 'static' if the function is not intended to be used outside of this translation unit
+ 2271 | extern "C" std::atomic<uint64_t> * ggml_backend_meta_pass_counter(void) {
+      |            ^
+      |            static 
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-backend-meta.cpp:2811:40: warning: type nullability specifier '_Nonnull' is a Clang extension [-Wnullability-extension]
+ 2811 |             dispatch_apply(n_backends, DISPATCH_APPLY_AUTO, ^(size_t j) {
+      |                                        ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/dispatch/queue.h:477:48: note: expanded from macro 'DISPATCH_APPLY_AUTO'
+  477 | #define DISPATCH_APPLY_AUTO ((dispatch_queue_t _Nonnull)0)
+      |                                                ^
+3 warnings generated.
+2 warnings generated.
+[  8%] Linking CXX static library libggml-base.a
+[  8%] Built target ggml-base
+[  8%] Generate embedded Metal library for wkv
+[  8%] Generate embedded Metal library for argsort
+[  8%] Generate embedded Metal library for conv
+[  8%] Generate embedded Metal library for fa
+[  8%] Generate embedded Metal library for binbcast
+[  8%] Generate embedded Metal library for gated_delta_net
+[  8%] Generate embedded Metal library for misc
+[  8%] Generate embedded Metal library for fa_w64
+[  8%] Generate embedded Metal library for mul_mm
+[  8%] Generate embedded Metal library for kestrel_moe
+[  8%] Generate embedded Metal library for mul_mm_w64
+[  8%] Generate embedded Metal library for mul_mv_w64
+[ 10%] Generate embedded Metal library for mul_mv
+[ 12%] Generate embedded Metal library for norm
+[ 12%] Generate embedded Metal library for pool
+[ 12%] Generate embedded Metal library for quantize
+[ 12%] Generate embedded Metal library for reduce
+[ 12%] Generate embedded Metal library for rope
+[ 14%] Generate embedded Metal library for softmax
+[ 14%] Generate embedded Metal library for ssm
+[ 14%] Generate embedded Metal library for solve_tri
+[ 15%] Generate embedded Metal library for tri
+[ 17%] Generate embedded Metal library for turbo
+[ 17%] Building CXX object ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.o
+[ 17%] Generate embedded Metal library for unary
+[ 17%] Generate embedded Metal library for upscale
+[ 17%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.c.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/repack.cpp.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.cpp.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/iqp.cpp.o
+[ 17%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/quants.c.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/traits.cpp.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/amx.cpp.o
+[ 17%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/mmq.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/binary-ops.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/unary-ops.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/vec.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ops.cpp.o
+[ 19%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/llamafile/sgemm.cpp.o
+[ 19%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal.cpp:1532:46: warning: type nullability specifier '_Nonnull' is a Clang extension [-Wnullability-extension]
+ 1532 |                 dispatch_apply(2*offset_max, DISPATCH_APPLY_AUTO, ^(size_t jj) {
+      |                                              ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/dispatch/queue.h:477:48: note: expanded from macro 'DISPATCH_APPLY_AUTO'
+  477 | #define DISPATCH_APPLY_AUTO ((dispatch_queue_t _Nonnull)0)
+      |                                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-cpu/ggml-cpu.cpp:212:1: warning: missing field 'read_batch_begin' initializer [-Wmissing-field-initializers]
+  212 | };
+      | ^
+[ 21%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.m.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:11:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/kestrel-moe/kestrel-moe.h:113:28: warning: cast from 'const void *' to 'void *' drops const qualifier [-Wcast-qual]
+  113 |     return host ? (void *) host : slots;
+      |                            ^
+[ 22%] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/quants.c.o
+[ 22%] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/repack.cpp.o
+1 warning generated.
+[ 22%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.cpp.o
+[ 22%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-common.cpp.o
+1 warning generated.
+[ 22%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-context.m.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:12:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/kestrel-moe/kestrel-moe.h:113:28: warning: cast from 'const void *' to 'void *' drops const qualifier [-Wcast-qual]
+  113 |     return host ? (void *) host : slots;
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1049:54: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1049 |     const char * GGML_METAL_RESIDENCY_KEEP_ALIVE_S = KESTREL_ENV("GGML_METAL_RESIDENCY_KEEP_ALIVE_S");
+      |                                                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1040:62: warning: unused parameter 'dev' [-Wunused-parameter]
+ 1040 | ggml_metal_rsets_t ggml_metal_rsets_init(ggml_metal_device_t dev) {
+      |                                                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1184:22: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1184 |     const char * s = KESTREL_ENV("KESTREL_MTL_QUEUE_DEPTH");
+      |                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1235:37: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1235 |             const char * env_idx  = KESTREL_ENV("GGML_METAL_DEVICE_INDEX");
+      |                                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1236:37: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1236 |             const char * env_num  = KESTREL_ENV("GGML_METAL_DEVICES");
+      |                                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1237:37: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1237 |             const char * env_list = KESTREL_ENV("GGML_METAL_DEVICE_LIST");
+      |                                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1337:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1337 |                 if (KESTREL_ENV("GGML_METAL_SIMDGROUP_REDUCTION_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1348:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1348 |                     KESTREL_ENV("GGML_METAL_WAVE64_UNSAFE") == NULL;
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1394:42: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1394 |                     const char * force = KESTREL_ENV("KESTREL_MV_ALIGN");
+      |                                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1409:57: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1409 |                 dev->props.wave64_decode = is_wave64 && KESTREL_ENV("GGML_METAL_WAVE64_DECODE_DISABLE") == NULL
+      |                                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1410:57: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1410 |                                                      && KESTREL_ENV("GGML_METAL_WAVE64_SAFEMODE") == NULL;
+      |                                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1424:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1424 |                 if (KESTREL_ENV("GGML_METAL_MM_MANUAL_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1432:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1432 |                 if (KESTREL_ENV("GGML_METAL_BF16_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1437:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1437 |                 if (KESTREL_ENV("GGML_METAL_TENSOR_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1446:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1446 |                 if (KESTREL_ENV("GGML_METAL_TENSOR_ENABLE") == NULL &&
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1565:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1565 |                 if (KESTREL_ENV("GGML_METAL_SHARED_BUFFERS_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1568:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1568 |                 if (KESTREL_ENV("GGML_METAL_SHARED_BUFFERS_ENABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1580:57: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1580 |                 dev->props.op_offload_min_batch_size  = KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
+      |                                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1580:105: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1580 |                 dev->props.op_offload_min_batch_size  = KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH") ? atoi(KESTREL_ENV("GGML_OP_OFFLOAD_MIN_BATCH")) : 32;
+      |                                                                                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1589:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1589 |                 if (KESTREL_ENV("KESTREL_METAL_MAX_BUFFER_MB")) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1590:55: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1590 |                     const size_t cap = (size_t) atoll(KESTREL_ENV("KESTREL_METAL_MAX_BUFFER_MB")) * 1024 * 1024;
+      |                                                       ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:1809:29: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1809 |     const char * limit_mb = KESTREL_ENV("GGML_METAL_HOST_WRAP_LIMIT_MB");
+      |                             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:2248:17: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2248 |             if (KESTREL_ENV("KESTREL_FA_AMD") != NULL &&
+      |                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+[ 22%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-fusion.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3031:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3031 |         const char * v = KESTREL_ENV("KESTREL_MOE_PROFILE");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3192:36: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3192 |         if (wc_off < 0) { wc_off = KESTREL_ENV("KESTREL_STAGE_WC_OFF") != NULL; }
+      |                                    ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3406:14: warning: extension used [-Wlanguage-extension-token]
+ 3406 |             (typeof(dev->stage_batch_items[0])) { data, dev->stage_batch_used, size };
+      |              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3533:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3533 |                 if (KESTREL_ENV("KESTREL_STAGE_LOAD_DISABLE") != NULL) {
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3535:28: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3535 |                 } else if (KESTREL_ENV("KESTREL_STAGE_LOAD") != NULL) {
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3538:38: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3538 |                     const char * n = KESTREL_ENV("GGML_METAL_DEVICES");
+      |                                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3539:65: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3539 |                     stage_load = (n == NULL || atoi(n) <= 1) && KESTREL_ENV("GGML_METAL_DEVICE_LIST") == NULL;
+      |                                                                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3547:42: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3547 |                         const char * v = KESTREL_ENV("KESTREL_STAGE_SLICE_MB");
+      |                                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3576:38: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3576 |         if (no_wrap < 0) { no_wrap = KESTREL_ENV("KESTREL_NO_HOST_WRAP") != NULL; }
+      |                                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-device.m:3680:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3680 |         const char * e = KESTREL_ENV("KESTREL_CB_PROFILE");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+-- UI: archive verified and extracted
+-- UI: HF download succeeded, stamp updated (ggml-org/llama-ui|b11172, resolved: b11172)
+[ 24%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-tuning.cpp.o
+[ 24%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-ops.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:63:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+   63 |         const char * e = KESTREL_ENV("KESTREL_CB_PROFILE");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:154:54: warning: unused parameter 'dev' [-Wunused-parameter]
+  154 | static void kestrel_cbp_dump_dev(ggml_metal_device_t dev) {
+      |                                                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:380:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  380 |         const char * v = KESTREL_ENV("KESTREL_MGPU_DEFER_WAITS");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:412:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  412 |         const char * v = KESTREL_ENV("KESTREL_MGPU_TRACE");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:623:35: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  623 |     if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_CTIME"); v = (s && s[0] == '1') ? 1 : 0; }
+      |                                   ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:629:35: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  629 |     if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_CTIME_BARRIER"); v = (s && s[0] == '1') ? 1 : 0; }
+      |                                   ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:710:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  710 |         const char * s = KESTREL_ENV("KESTREL_MGPU_BP_SATISFIED");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:725:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  725 |         const char * s = KESTREL_ENV("KESTREL_MGPU_TP2_FUSED_BOUNDARY");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:737:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  737 |         const char * s = KESTREL_ENV("KESTREL_MGPU_WAIT_SATISFIED");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:749:31: warning: receiver type 'void *' is not 'id' or interface pointer, consider casting it to 'id' [-Wreceiver-expr]
+  749 |         ctx->ev_wait_dummy = [ggml_metal_device_get_obj(ctx->dev) newSharedEvent];
+      |                               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:991:32: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+  991 |             const char * val = KESTREL_ENV("GGML_METAL_PREFETCH_STAGE_COUNT");
+      |                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1024:15: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1024 |             ? KESTREL_ENV("GGML_METAL_CONCURRENCY_DISABLE") == nil
+      |               ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1025:15: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1025 |             : KESTREL_ENV("GGML_METAL_CONCURRENCY_ENABLE")  != nil;
+      |               ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1028:32: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1028 |             const char * val = KESTREL_ENV("GGML_METAL_GRAPH_DEBUG");
+      |                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1034:13: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1034 |         if (KESTREL_ENV("GGML_METAL_GRAPH_OPTIMIZE_DISABLE") != NULL) {
+      |             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1053:32: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1053 |             const char * val = KESTREL_ENV("GGML_METAL_CAPTURE_COMPUTE");
+      |                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_34 warnings generated.
+i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1646:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1646 |         const char * s = KESTREL_ENV("KESTREL_MGPU_NOWAIT");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1662:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1662 |         const char * v = KESTREL_ENV("KESTREL_MGPU_PEER_SELF");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1878:13: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1878 |         if (KESTREL_ENV("GGML_METAL_CROSS_STAGING_DISABLE") != NULL) {
+      |             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1885:30: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1885 |             const char * v = KESTREL_ENV("KESTREL_MGPU_EVENTS");
+      |                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1892:30: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1892 |             const char * v = KESTREL_ENV("KESTREL_MGPU_PEER");
+      |                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:1901:21: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 1901 |             count = KESTREL_ENV("KESTREL_MGPU_XDEV_COUNT") != NULL;
+      |                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2113:35: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2113 |     if (v < 0) { const char * s = KESTREL_ENV("KESTREL_MGPU_FB_ADD_RB"); v = (s && s[0] == '0') ? 0 : 1; }
+      |                                   ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2388:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2388 |         const char * s = KESTREL_ENV("KESTREL_MGPU_PEER_MIN_BATCH");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2404:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2404 |         const char * s = KESTREL_ENV("KESTREL_MGPU_HOLD");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2424:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2424 |         const char * v = KESTREL_ENV("KESTREL_MGPU_PEER");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2430:21: warning: @available does not guard availability here; use if (@available) instead [-Wunsupported-availability-guard]
+ 2430 |     if (use_peer && @available(macOS 10.15, *)) {
+      |                     ^
+[ 24%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-fa.s.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:2917:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 2917 |         const char * s = KESTREL_ENV("KESTREL_MGPU_ONESHOT");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3197:17: warning: declaration shadows a local variable [-Wshadow]
+ 3197 |     for (size_t i = 0; i < n; i++) {
+      |                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3084:17: note: previous declaration is here
+ 3084 |     for (size_t i = 0; i < n; i++) {
+      |                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3260:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3260 |         const char * v = KESTREL_ENV("KESTREL_MGPU_PEER_FUSED");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3476:37: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3476 |     const char * copy_workers_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_COPY_WORKERS");
+      |                                     ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3505:29: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3505 |     const bool slot_stats = KESTREL_ENV("KESTREL_MOE_SLOT_STATS") != NULL;
+      |                             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3655:13: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3655 |         if (KESTREL_ENV("KESTREL_MOE_WIDE_DEBUG") != NULL) {
+      |             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3677:64: warning: cast from 'const struct ggml_tensor *' to 'struct ggml_tensor *' drops const qualifier [-Wcast-qual]
+ 3677 |                 ggml_backend_tensor_get((struct ggml_tensor *) st, sv, 0, (size_t) n_ints*sizeof(int32_t));
+      |                                                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3707:40: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3707 |             const bool transient_map = KESTREL_ENV("KESTREL_MOE_TRANSIENT_MAP") != NULL;
+      |                                        ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3708:41: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3708 |             const bool persistent_map = KESTREL_ENV("KESTREL_MOE_PERSISTENT_MAP") != NULL;
+      |                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:3709:40: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 3709 |             const bool double_buffer = KESTREL_ENV("KESTREL_MOE_DOUBLE_BUFFER") != NULL &&
+      |                                        ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4079:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4079 |         const char * s = KESTREL_ENV("KESTREL_MGPU_MERGE");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4101:32: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4101 |     const char * bounded_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE");
+      |                                ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4103:30: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4103 |     const char * force_env = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE_FORCE");
+      |                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4121:41: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4121 |             const char * threshold_mb = KESTREL_ENV("KESTREL_MOE_BOUNDED_STAGE_THRESHOLD_MB");
+      |                                         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4165:26: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4165 |         const char * v = KESTREL_ENV("KESTREL_N_MAIN");
+      |                          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-context.m:4437:30: warning: use of GNU statement expression extension from macro expansion [-Wgnu-statement-expression-from-macro-expansion]
+ 4437 |             const char * s = KESTREL_ENV("GGML_METAL_GRAPH_OPTIMIZE_MIN_BATCH");
+      |                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-impl.h:1510:28: note: expanded from macro 'KESTREL_ENV'
+ 1510 | #define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
+      |                            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-blas/ggml-blas.cpp:279:1: warning: missing field 'read_batch_begin' initializer [-Wmissing-field-initializers]
+  279 | };
+      | ^
+[ 24%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-fa_w64.s.o
+-- UI: gzip compression applied (/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/tools/ui/ui-gzip/_gzip)
+[ 24%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-mul_mv.s.o
+[ 26%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-mul_mv_w64.s.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-cpu/ops.cpp:5921:13: warning: 5 enumeration values not handled in switch: 'GGML_TYPE_TURBO2_0', 'GGML_TYPE_TURBO3_0', 'GGML_TYPE_TURBO4_0'... [-Wswitch]
+ 5921 |     switch (src0->type) {
+      |             ^~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-cpu/ops.cpp:5921:13: note: add missing switch cases
+ 5921 |     switch (src0->type) {
+      |             ^
+[ 26%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-mul_mm.s.o
+[ 26%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-mul_mm_w64.s.o
+1 warning generated.
+[ 26%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-quantize.s.o
+[ 26%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-softmax.s.o
+[ 28%] Linking CXX static library libggml-blas.a
+[ 29%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-norm.s.o
+[ 29%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-unary.s.o
+[ 29%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-binbcast.s.o
+[ 29%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-reduce.s.o
+[ 29%] Built target ggml-blas
+[ 29%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-tri.s.o
+[ 31%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-ssm.s.o
+[ 31%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-wkv.s.o
+[ 31%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-gated_delta_net.s.o
+[ 31%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-solve_tri.s.o
+[ 31%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-turbo.s.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-ops.cpp:2291:16: warning: unused variable 'use_fusion' [-Wunused-variable]
+ 2291 |     const bool use_fusion = ctx->use_fusion();
+      |                ^~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-ops.cpp:2292:16: warning: unused variable 'debug_fusion' [-Wunused-variable]
+ 2292 |     const int  debug_fusion = ggml_metal_fusion_info_debug(ctx->finfo);
+      |                ^~~~~~~~~~~~
+[ 33%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-rope.s.o
+[ 33%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-conv.s.o
+[ 33%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-upscale.s.o
+[ 33%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-argsort.s.o
+[ 33%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-pool.s.o
+[ 35%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-misc.s.o
+[ 35%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed-kestrel_moe.s.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/ggml/src/ggml-metal/ggml-metal-ops.cpp:5572:9: warning: missing field 'has_sinks' initializer [-Wmissing-field-initializers]
+ 5572 |         };
+      |         ^
+44 warnings generated.
+3 warnings generated.
+[ 35%] Linking CXX static library libggml-metal.a
+[ 35%] Built target ggml-metal
+-- UI: embedded 70 assets
+1 warning generated.
+[ 35%] Linking CXX static library libggml-cpu.a
+[ 35%] Built target llama-ui-assets
+[ 35%] Building CXX object tools/ui/CMakeFiles/llama-ui.dir/ui.cpp.o
+[ 36%] Built target ggml-cpu
+[ 36%] Building CXX object ggml/src/CMakeFiles/ggml.dir/ggml-backend-reg.cpp.o
+[ 38%] Linking CXX static library libggml.a
+[ 38%] Built target ggml
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_9_cxx.cxx.o
+[ 38%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_8_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_7_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_6_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_5_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_4_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_3_cxx.cxx.o
+[ 40%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_2_cxx.cxx.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_1_cxx.cxx.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/Unity/unity_0_cxx.cxx.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/llama.cpp.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/llama-adapter.cpp.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/llama-arch.cpp.o
+[ 42%] Building CXX object src/CMakeFiles/llama.dir/llama-chat.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/llama.dir/llama-batch.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/llama.dir/llama-context.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/llama.dir/llama-cparams.cpp.o
+[ 43%] Building CXX object src/CMakeFiles/llama.dir/llama-grammar.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-graph.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-hparams.cpp.o
+[ 45%] Building CXX object src/CMakeFiles/llama.dir/llama-impl.cpp.o
+[ 47%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache.cpp.o
+[ 47%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.o
+[ 47%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsa.cpp.o
+[ 49%] Linking CXX static library libllama-ui.a
+[ 49%] Built target llama-ui
+[ 49%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsa-iswa.cpp.o
+[ 49%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-msa.cpp.o
+[ 50%] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsv4.cpp.o
+[ 50%] Building CXX object src/CMakeFiles/llama.dir/llama-memory.cpp.o
+[ 50%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.o
+[ 50%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid-iswa.cpp.o
+[ 50%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid-idx.cpp.o
+[ 52%] Building CXX object src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.o
+[ 52%] Building CXX object src/CMakeFiles/llama.dir/llama-mmap.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/src/llama-graph.cpp:2210:46: warning: cast from 'const void *' to 'ggml_tensor *' drops const qualifier [-Wcast-qual]
+ 2210 |         ggml_tensor * bank = (ggml_tensor *) kestrel_moe_ram_of(moe_first);
+      |                                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/src/llama-graph.cpp:2217:46: warning: cast from 'const void *' to 'ggml_tensor *' drops const qualifier [-Wcast-qual]
+ 2217 |         ggml_tensor * bank = (ggml_tensor *) kestrel_moe_ram_of(moe_first);
+      |                                              ^
+[ 52%] Building CXX object src/CMakeFiles/llama.dir/llama-model-loader.cpp.o
+[ 52%] Building CXX object src/CMakeFiles/llama.dir/llama-model-saver.cpp.o
+[ 52%] Building CXX object src/CMakeFiles/llama.dir/llama-model.cpp.o
+[ 54%] Building CXX object src/CMakeFiles/llama.dir/llama-quant.cpp.o
+[ 54%] Building CXX object src/CMakeFiles/llama.dir/llama-sampler.cpp.o
+[ 54%] Building CXX object src/CMakeFiles/llama.dir/llama-vocab.cpp.o
+2 warnings generated.
+[ 56%] Linking CXX static library libllama.a
+[ 56%] Built target llama
+[ 56%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o
+[ 57%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o
+[ 57%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o
+[ 57%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-image.cpp.o
+[ 57%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper-gen.cpp.o
+[ 57%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o
+[ 59%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/cogvlm.cpp.o
+[ 59%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/conformer.cpp.o
+[ 59%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/deepseek4v.cpp.o
+[ 59%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/dots3note.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/exaone4_5.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/dotsocr.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4a.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4v.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4ua.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/parsers.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/cohere2moe.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/deepseek.cpp.o
+[ 61%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4uv.cpp.o
+[ 61%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/functionary-v3-2.cpp.o
+[ 63%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/glm4v.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gemma4.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gigachat-v3.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/gpt-oss.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/kimi-k2.cpp.o
+[ 64%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/granite-speech.cpp.o
+[ 64%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/kimi-k3.cpp.o
+[ 66%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/ling3.cpp.o
+[ 66%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/lfm2.cpp.o
+[ 66%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/minicpm5.cpp.o
+[ 66%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/minimax-m3.cpp.o
+[ 66%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/ministral3.cpp.o
+[ 68%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/muse-glimmer.cpp.o
+[ 68%] Building CXX object common/CMakeFiles/llama-common.dir/parsers/qwen3-coder.cpp.o
+[ 68%] Building CXX object common/CMakeFiles/llama-common.dir/arg.cpp.o
+[ 68%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/granite4-vision.cpp.o
+[ 68%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/hunyuanvl.cpp.o
+[ 68%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/internvl.cpp.o
+[ 70%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/kimivl.cpp.o
+[ 70%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/kimik25.cpp.o
+[ 70%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/nemotron-v2-vl.cpp.o
+[ 70%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/muse-glimmer.cpp.o
+[ 70%] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-generator.cpp.o
+[ 70%] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-helpers.cpp.o
+[ 70%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/llama4.cpp.o
+[ 71%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/llava.cpp.o
+[ 73%] Building CXX object common/CMakeFiles/llama-common.dir/chat-diff-analyzer.cpp.o
+[ 73%] Building CXX object common/CMakeFiles/llama-common.dir/chat-peg-parser.cpp.o
+[ 73%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/minicpmv.cpp.o
+[ 73%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/paddleocr.cpp.o
+[ 73%] Building CXX object common/CMakeFiles/llama-common.dir/chat.cpp.o
+[ 73%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/pixtral.cpp.o
+[ 73%] Building CXX object common/CMakeFiles/llama-common.dir/common.cpp.o
+[ 75%] Building CXX object common/CMakeFiles/llama-common.dir/console.cpp.o
+[ 75%] Building CXX object common/CMakeFiles/llama-common.dir/debug.cpp.o
+[ 75%] Building CXX object common/CMakeFiles/llama-common.dir/download.cpp.o
+[ 75%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen2vl.cpp.o
+[ 75%] Building CXX object common/CMakeFiles/llama-common.dir/fit.cpp.o
+[ 75%] Building CXX object common/CMakeFiles/llama-common.dir/hf-cache.cpp.o
+[ 77%] Building CXX object common/CMakeFiles/llama-common.dir/imatrix-loader.cpp.o
+[ 78%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/minimax-m3.cpp.o
+[ 78%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema-to-grammar.cpp.o
+[ 78%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3vl.cpp.o
+[ 78%] Building CXX object common/CMakeFiles/llama-common.dir/json-schema.cpp.o
+[ 78%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/ling3vl.cpp.o
+[ 78%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mimovl.cpp.o
+[ 78%] Building CXX object common/CMakeFiles/llama-common.dir/json.cpp.o
+[ 78%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3a.cpp.o
+[ 78%] Building CXX object common/CMakeFiles/llama-common.dir/llguidance.cpp.o
+[ 80%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mimo-audio.cpp.o
+[ 82%] Building CXX object common/CMakeFiles/llama-common.dir/log.cpp.o
+[ 82%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3tts-spkenc.cpp.o
+[ 82%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-cache.cpp.o
+[ 82%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3tts-gen.cpp.o
+[ 82%] Building CXX object common/CMakeFiles/llama-common.dir/ngram-map.cpp.o
+[ 82%] Building CXX object common/CMakeFiles/llama-common.dir/peg-parser.cpp.o
+[ 84%] Building CXX object common/CMakeFiles/llama-common.dir/preset.cpp.o
+[ 84%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/pockettts-seanet.cpp.o
+[ 84%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/pockettts-spkenc.cpp.o
+[ 84%] Building CXX object common/CMakeFiles/llama-common.dir/reasoning-budget.cpp.o
+[ 84%] Building CXX object common/CMakeFiles/llama-common.dir/sampling.cpp.o
+[ 84%] Building CXX object common/CMakeFiles/llama-common.dir/speculative.cpp.o
+[ 85%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/pockettts-gen.cpp.o
+[ 85%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/step3vl.cpp.o
+[ 85%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/siglip.cpp.o
+[ 85%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/whisper-enc.cpp.o
+[ 85%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/deepseekocr.cpp.o
+[ 87%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/deepseekocr2.cpp.o
+[ 87%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mobilenetv5.cpp.o
+[ 87%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/youtuvl.cpp.o
+[ 87%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/yasa2.cpp.o
+[ 89%] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/parakeet.cpp.o
+[ 89%] Linking CXX static library libmtmd.a
+[ 89%] Built target mtmd
+[ 89%] Linking CXX static library libllama-common.a
+[ 92%] Built target llama-common
+[ 92%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-task.cpp.o
+[ 92%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-chat.cpp.o
+[ 92%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-queue.cpp.o
+[ 94%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-common.cpp.o
+[ 94%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-context.cpp.o
+[ 94%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-stream.cpp.o
+[ 94%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-tools.cpp.o
+[ 96%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-schema.cpp.o
+[ 96%] Building CXX object tools/server/CMakeFiles/server-context.dir/server-mcp.cpp.o
+[ 96%] Linking CXX static library libserver-context.a
+[ 96%] Built target server-context
+[ 96%] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server.cpp.o
+[ 96%] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server-http.cpp.o
+[ 96%] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server-models.cpp.o
+[ 98%] Linking CXX static library libllama-server-impl.a
+[ 98%] Built target llama-server-impl
+[ 98%] Linking CXX executable ../../bin/llama-server
+[100%] Built target llama-server
+[  0%] Built target cpp-httplib
+[  2%] Built target llama-common-base
+[  7%] Built target ggml-base
+[ 10%] Built target ggml-blas
+[ 41%] Built target ggml-metal
+[ 48%] Built target ggml-cpu
+[ 51%] Built target ggml
+[ 74%] Built target llama
+[100%] Built target llama-common
+[100%] Building CXX object tools/llama-bench/CMakeFiles/llama-bench-impl.dir/llama-bench.cpp.o
+[100%] Linking CXX static library libllama-bench-impl.a
+[100%] Built target llama-bench-impl
+[100%] Linking CXX executable ../../bin/llama-bench
+[100%] Built target llama-bench
+[  2%] Built target llama-common-base
+[  2%] Built target cpp-httplib
+[  7%] Built target ggml-base
+[ 10%] Built target ggml-blas
+[ 40%] Built target ggml-metal
+[ 47%] Built target ggml-cpu
+[ 50%] Built target ggml
+[ 72%] Built target llama
+[ 97%] Built target llama-common
+[ 97%] Building CXX object tools/perplexity/CMakeFiles/llama-perplexity-impl.dir/perplexity.cpp.o
+[ 97%] Linking CXX static library libllama-perplexity-impl.a
+[ 97%] Built target llama-perplexity-impl
+[100%] Linking CXX executable ../../bin/llama-perplexity
+[100%] Built target llama-perplexity
+[  2%] Built target llama-common-base
+[  2%] Built target cpp-httplib
+[  7%] Built target ggml-base
+[ 10%] Built target ggml-blas
+[ 41%] Built target ggml-metal
+[ 48%] Built target ggml-cpu
+[ 51%] Built target ggml
+[ 74%] Built target llama
+[100%] Built target llama-common
+[100%] Building CXX object tests/CMakeFiles/test-backend-ops.dir/test-backend-ops.cpp.o
+[100%] Linking CXX executable ../bin/test-backend-ops
+ld: warning: ignoring duplicate libraries: '../src/libllama.a'
+[100%] Built target test-backend-ops
+engine ready at /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin (arch: x86_64)
+applied shared-metal/0001-1-metal-dequant-helpers.patch
+applied shared-metal/0001-2-metal-reductions-wave64.patch
+applied shared-metal/0001-3-metal-matvec-wave64.patch
+applied shared-metal/0001-4-metal-matvec-batched.patch
+applied shared-metal/0001-5-metal-kestrelgemm.patch
+applied shared-metal/0001-6-metal-flash-attn-amd.patch
+applied shared-metal/0001-7-metal-backend-host.patch
+applied whisper/0002-metal-deterministic-private-buffers.patch
+applied whisper/0028-metal-cpy-contiguous.patch
+CMake Warning (deprecated) at CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+-- whisper.cpp version: 1.9.3
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Could NOT find OpenMP_C (missing: OpenMP_C_FLAGS OpenMP_C_LIB_NAMES) 
+-- Could NOT find OpenMP_CXX (missing: OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES) 
+-- Could NOT find OpenMP (missing: OpenMP_C_FOUND OpenMP_CXX_FOUND) 
+CMake Warning at ggml/src/CMakeLists.txt:231 (message):
+  OpenMP not found
+
+
+-- Including CPU backend
+-- Accelerate framework found
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -msse4.2;-mf16c;-mfma;-mbmi2;-mavx;-mavx2 GGML_SSE42;GGML_F16C;GGML_FMA;GGML_BMI2;GGML_AVX;GGML_AVX2
+-- BLAS found, Libraries: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework
+-- BLAS found, Includes: 
+-- Including BLAS backend
+-- Metal framework found
+-- Including METAL backend
+-- ggml version: 0.20.2
+-- ggml commit:  371b5a75-dirty
+-- Configuring done (1.4s)
+-- Generating done (0.3s)
+-- Build files have been written to: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/whisper.cpp/build-static
+[ 20%] Built target ggml-base
+[ 22%] Generate assembly for embedded Metal library
+Embedding Metal library
+[ 27%] Built target ggml-blas
+[ 58%] Built target ggml-cpu
+[ 60%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal.cpp.o
+[ 64%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.m.o
+[ 64%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.cpp.o
+[ 66%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-context.m.o
+[ 70%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed.s.o
+[ 70%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-ops.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/whisper.cpp/ggml/src/ggml-metal/ggml-metal-device.m:634:62: warning: unused parameter 'dev' [-Wunused-parameter]
+  634 | ggml_metal_rsets_t ggml_metal_rsets_init(ggml_metal_device_t dev) {
+      |                                                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/whisper.cpp/ggml/src/ggml-metal/ggml-metal-device.m:2569:14: warning: extension used [-Wlanguage-extension-token]
+ 2569 |             (typeof(dev->stage_batch_items[0])) { data, dev->stage_batch_used, size };
+      |              ^
+2 warnings generated.
+[ 72%] Linking CXX static library libggml-metal.a
+[ 75%] Built target ggml-metal
+[ 81%] Built target ggml
+[ 85%] Built target whisper
+[ 95%] Built target common
+[ 97%] Linking CXX executable ../../bin/whisper-cli
+[100%] Built target whisper-cli
+[ 20%] Built target ggml-base
+[ 25%] Built target ggml-blas
+[ 56%] Built target ggml-cpu
+[ 75%] Built target ggml-metal
+[ 81%] Built target ggml
+[ 85%] Built target whisper
+[ 95%] Built target common
+[ 97%] Linking CXX executable ../../bin/whisper-server
+[100%] Built target whisper-server
+speech-to-text engine ready at /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/whisper.cpp/build-static/bin (arch: x86_64)
+From https://github.com/leejet/stable-diffusion.cpp
+ * [new tag]         master-946-a4a9669 -> master-946-a4a9669
+ * [new tag]         master-947-e16d26a -> master-947-e16d26a
+ * [new tag]         master-948-228c707 -> master-948-228c707
+ * [new tag]         master-949-7867f6d -> master-949-7867f6d
+ * [new tag]         master-950-f2f168f -> master-950-f2f168f
+ * [new tag]         master-951-f89d9b1 -> master-951-f89d9b1
+Synchronizing submodule url for 'examples/server/frontend'
+Synchronizing submodule url for 'ggml'
+Synchronizing submodule url for 'thirdparty/libwebm'
+Synchronizing submodule url for 'thirdparty/libwebp'
+applied ggml-metal hunks of 0001 + 0003 + core fallback 0004 + ext wave64 0008 to stable-diffusion.cpp
+-- Use Metal as backend stable-diffusion
+-- stable-diffusion.cpp version master-901-241518b+
+-- stable-diffusion.cpp commit 241518b
+-- Build static library
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Could NOT find OpenMP_C (missing: OpenMP_C_FLAGS OpenMP_C_LIB_NAMES) 
+-- Could NOT find OpenMP_CXX (missing: OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES) 
+-- Could NOT find OpenMP (missing: OpenMP_C_FOUND OpenMP_CXX_FOUND) 
+CMake Warning at ggml/src/CMakeLists.txt:231 (message):
+  OpenMP not found
+
+
+-- Including CPU backend
+-- Accelerate framework found
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -msse4.2;-mf16c;-mfma;-mbmi2;-mavx;-mavx2 GGML_SSE42;GGML_F16C;GGML_FMA;GGML_BMI2;GGML_AVX;GGML_AVX2
+-- BLAS found, Libraries: /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework
+-- BLAS found, Includes: 
+-- Including BLAS backend
+-- Metal framework found
+-- Including METAL backend
+-- ggml version: 0.19.0
+-- ggml commit:  4bf5f600-dirty
+-- Performing Test WEBP_HAVE_FLAG_AVX2
+-- Performing Test WEBP_HAVE_FLAG_AVX2 - Failed
+-- Performing Test WEBP_HAVE_FLAG_AVX2
+-- Performing Test WEBP_HAVE_FLAG_AVX2 - Success
+-- Performing Test WEBP_HAVE_FLAG_SSE41
+-- Performing Test WEBP_HAVE_FLAG_SSE41 - Success
+-- Performing Test WEBP_HAVE_FLAG_SSE2
+-- Performing Test WEBP_HAVE_FLAG_SSE2 - Success
+-- Performing Test WEBP_HAVE_FLAG_MIPS32
+-- Performing Test WEBP_HAVE_FLAG_MIPS32 - Failed
+-- Performing Test WEBP_HAVE_FLAG_MIPS32
+-- Performing Test WEBP_HAVE_FLAG_MIPS32 - Failed
+-- Performing Test WEBP_HAVE_FLAG_MIPS_DSP_R2
+-- Performing Test WEBP_HAVE_FLAG_MIPS_DSP_R2 - Failed
+-- Performing Test WEBP_HAVE_FLAG_MIPS_DSP_R2
+-- Performing Test WEBP_HAVE_FLAG_MIPS_DSP_R2 - Failed
+-- Performing Test HAS_COMPILE_FLAG
+-- Performing Test HAS_COMPILE_FLAG - Failed
+-- Performing Test WEBP_HAVE_FLAG_NEON
+-- Performing Test WEBP_HAVE_FLAG_NEON - Failed
+-- Performing Test WEBP_HAVE_FLAG_NEON
+-- Performing Test WEBP_HAVE_FLAG_NEON - Failed
+-- Performing Test WEBP_HAVE_FLAG_MSA
+-- Performing Test WEBP_HAVE_FLAG_MSA - Failed
+-- Performing Test WEBP_HAVE_FLAG_MSA
+-- Performing Test WEBP_HAVE_FLAG_MSA - Failed
+-- Performing Test HAS_COMPILE_FLAG
+-- Performing Test HAS_COMPILE_FLAG - Failed
+Checking CXX compiler flag support for: -std=c++11
+-- Performing Test LIBWEBM_HAVE_CXX_FLAG
+-- Performing Test LIBWEBM_HAVE_CXX_FLAG - Success
+Checking CXX compiler flag support for: -Wall
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wc++14-compat
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wc++17-compat
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wc++20-compat
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wextra
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wnarrowing
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wno-deprecated
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+Checking CXX compiler flag support for: -Wshorten-64-to-32
+-- Performing Test CXX_FLAG_SUPPORTED
+-- Performing Test CXX_FLAG_SUPPORTED - Success
+-- Frontend dir found: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/examples/server/frontend
+-- pnpm found: /usr/local/bin/pnpm
+-- HAVE_INDEX_HTML enabled
+-- Configuring done (14.2s)
+-- Generating done (0.9s)
+-- Build files have been written to: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/build-static
+[  0%] Built target sd-utf8proc
+[  1%] Built target zip
+[  3%] Built target sharpyuv
+[  4%] Built target mkvparser
+[  8%] Built target webputils
+[ 13%] Built target onig
+[ 14%] Built target mkvmuxer
+[ 23%] Built target webpencode
+[ 37%] Built target webpdspdecode
+[ 40%] Built target ggml-base
+[ 51%] Generate assembly for embedded Metal library
+[ 62%] Built target webpdsp
+Embedding Metal library
+[ 63%] Built target webm
+[ 68%] Built target webpdecode
+[ 69%] Built target ggml-blas
+[ 69%] Built target webp
+[ 71%] Built target libwebpmux
+[ 76%] Built target ggml-cpu
+[ 76%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal.cpp.o
+[ 78%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.m.o
+[ 79%] Building C object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-context.m.o
+[ 79%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-ops.cpp.o
+[ 79%] Building CXX object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/ggml-metal-device.cpp.o
+[ 79%] Building ASM object ggml/src/ggml-metal/CMakeFiles/ggml-metal.dir/autogenerated/ggml-metal-embed.s.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/ggml/src/ggml-metal/ggml-metal-device.m:637:62: warning: unused parameter 'dev' [-Wunused-parameter]
+  637 | ggml_metal_rsets_t ggml_metal_rsets_init(ggml_metal_device_t dev) {
+      |                                                              ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/ggml/src/ggml-metal/ggml-metal-device.m:2604:14: warning: extension used [-Wlanguage-extension-token]
+ 2604 |             (typeof(dev->stage_batch_items[0])) { data, dev->stage_batch_used, size };
+      |              ^
+2 warnings generated.
+[ 79%] Linking CXX static library libggml-metal.a
+[ 79%] Built target ggml-metal
+[ 79%] Built target ggml
+[ 80%] Building CXX object CMakeFiles/stable-diffusion.dir/src/conditioning/wan_audio.cpp.o
+[ 80%] Building CXX object CMakeFiles/stable-diffusion.dir/src/convert.cpp.o
+[ 80%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/backend_fit.cpp.o
+[ 81%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/compute_workspace.cpp.o
+[ 81%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/ggml_extend.cpp.o
+[ 81%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/ggml_extend_backend.cpp.o
+[ 82%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/ggml_graph_cut.cpp.o
+[ 82%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/ggml_tensor_utils.cpp.o
+[ 82%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/ggml_runner.cpp.o
+[ 82%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/layer_split_partition.cpp.o
+[ 82%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/regex.cpp.o
+[ 83%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/parallel.cpp.o
+[ 83%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/segment_weight_pipeline.cpp.o
+[ 83%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/util.cpp.o
+[ 83%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/runner_cache.cpp.o
+[ 84%] Building CXX object CMakeFiles/stable-diffusion.dir/src/core/segment_graph_bindings.cpp.o
+[ 85%] Building CXX object CMakeFiles/stable-diffusion.dir/src/detailer.cpp.o
+[ 85%] Building CXX object CMakeFiles/stable-diffusion.dir/src/extensions/photomaker_extension.cpp.o
+[ 85%] Building CXX object CMakeFiles/stable-diffusion.dir/src/extensions/pulid_extension.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/ggml_tensor_utils.cpp:20:88: warning: format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'int64_t' (aka 'long long') [-Wformat]
+   20 |     printf("%s (%s): shape(%zu, %zu, %zu, %zu)\n", mark, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+      |                            ~~~                                                         ^~~~~~~~~~~~~
+      |                            %lld
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/ggml_tensor_utils.cpp:20:103: warning: format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'int64_t' (aka 'long long') [-Wformat]
+   20 |     printf("%s (%s): shape(%zu, %zu, %zu, %zu)\n", mark, ggml_typ[ 86%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model/adapter/lora_ops.cpp.o
+e_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+      |                                 ~~~                                                                   ^~~~~~~~~~~~~
+      |                                 %lld
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/ggml_tensor_utils.cpp:20:118: warning: format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'int64_t' (aka 'long long') [-Wformat]
+   20 |     printf("%s (%s): shape(%zu, %zu, %zu, %zu)\n", mark, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+      |                                      ~~~                                                                             ^~~~~~~~~~~~~
+      |                                      %lld
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/ggml_tensor_utils.cpp:20:133: warning: format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'int64_t' (aka 'long long') [-Wformat]
+   20 |     printf("%s (%s): shape(%zu, %zu, %zu, %zu)\n", mark, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+      |                                           ~~~                                                                                       ^~~~~~~~~~~~~
+      |                                           %lld
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:374:31: warning: 'codecvt_utf8<char32_t>' is deprecated [-Wdeprecated-declarations]
+  374 |     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+      |                               ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/codecvt:199:7: note: 'codecvt_utf8<char32_t>' has been explicitly marked deprecated here
+  199 | class _LIBCPP_DEPRECATED_IN_CXX17 codecvt_utf8 : public __codecvt_utf8<_Elem> {
+      |       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:581:41: note: expanded from macro '_LIBCPP_DEPRECATED_IN_CXX17'
+  581 | #    define _LIBCPP_DEPRECATED_IN_CXX17 _LIBCPP_DEPRECATED
+      |                                         ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:554:49: note: expanded from macro '_LIBCPP_DEPRECATED'
+  554 | #      define _LIBCPP_DEPRECATED __attribute__((__deprecated__))
+      |                                                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:374:10: warning: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' is deprecated [-Wdeprecated-declarations]
+  374 |     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+      |          ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__locale_dir/wstring_convert.h:34:7: note: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' has been explicitly marked deprecated here
+   34 | class _LIBCPP_DEPRECATED_IN_CXX17 wstring_convert {
+      |       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:581:41: note: expanded from macro '_LIBCPP_DEPRECATED_IN_CXX17'
+  581 | #    define _LIBCPP_DEPRECATED_IN_CXX17 _LIBCPP_DEPRECATED
+      |                                         ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:554:49: note: expanded from macro '_LIBCPP_DEPRECATED'
+  554 | #      define _LIBCPP_DEPRECATED __attribute__((__deprecated__))
+      |                                                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:379:31: warning: 'codecvt_utf8<char32_t>' is deprecated [-Wdeprecated-declarations]
+  379 |     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+      |                               ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/codecvt:199:7: note: 'codecvt_utf8<char32_t>' has been explicitly marked deprecated here
+  199 | class _LIBCPP_DEPRECATED_IN_CXX17 codecvt_utf8 : public __codecvt_utf8<_Elem> {
+      |       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:581:41: note: expanded from macro '_LIBCPP_DEPRECATED_IN_CXX17'
+  581 | #    define _LIBCPP_DEPRECATED_IN_CXX17 _LIBCPP_DEPRECATED
+      |                                         ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:554:49: note: expanded from macro '_LIBCPP_DEPRECATED'
+  554 | #      define _LIBCPP_DEPRECATED __attribute__((__deprecated__))
+      |                                                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:379:10: warning: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' is deprecated [-Wdeprecated-declarations]
+  379 |     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+      |          ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__locale_dir/wstring_convert.h:34:7: note: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' has been explicitly marked deprecated here
+   34 | class _LIBCPP_DEPRECATED_IN_CXX17 wstring_convert {
+      |       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:581:41: note: expanded from macro '_LIBCPP_DEPRECATED_IN_CXX17'
+  581 | #    define _LIBCPP_DEPRECATED_IN_CXX17 _LIBCPP_DEPRECATED
+      |                                         ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:554:49: note: expanded from macro '_LIBCPP_DEPRECATED'
+  554 | #      define _LIBCPP_DEPRECATED __attribute__((__deprecated__))
+      |                                                 ^
+[ 86%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_io/gguf_io.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:1:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.h:8:
+In file included from /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/vector:363:
+In file included from /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/locale:203:
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__locale_dir/wstring_convert.h:179:1: warning: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' is deprecated [-Wdeprecated-declarations]
+  179 | wstring_convert<_Codecvt, _Elem, _WideAlloc, _ByteAlloc>::to_bytes(const _Elem* __frm, const _Elem* __frm_end) {
+      | ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__locale_dir/wstring_convert.h:83:12: note: in instantiation of member function 'std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>::to_bytes' requested here
+   83 |     return to_bytes(__wstr.data(), __wstr.data() + __wstr.size());
+      |            ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/core/util.cpp:380:22: note: in instantiation of member function 'std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>::to_bytes' requested here
+  380 |     return converter.to_bytes(utf32_str);
+      |                      ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__locale_dir/wstring_convert.h:34:7: note: 'wstring_convert<std::codecvt_utf8<char32_t>, char32_t>' has been explicitly marked deprecated here
+   34 | class _LIBCPP_DEPRECATED_IN_CXX17 wstring_convert {
+      |       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:581:41: note: expanded from macro '_LIBCPP_DEPRECATED_IN_CXX17'
+  581 | #    define _LIBCPP_DEPRECATED_IN_CXX17 _LIBCPP_DEPRECATED
+      |                                         ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__config:554:49: note: expanded from macro '_LIBCPP_DEPRECATED'
+  554 | #      define _LIBCPP_DEPRECATED __attribute__((__deprecated__))
+      |                                                 ^
+[ 86%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_io/pickle_io.cpp.o
+4 warnings generated.
+[ 86%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_io/safetensors_io.cpp.o
+[ 87%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_io/torch_legacy_io.cpp.o
+[ 87%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_io/torch_zip_io.cpp.o
+[ 87%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_loader.cpp.o
+[ 89%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_loader_files.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/detailer.cpp:13:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 89%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_manager.cpp.o
+[ 89%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_manager_files.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/extensions/photomaker_extension.cpp:2:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/extensions/generation_extension.h:11:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/extensions/pulid_extension.cpp:1:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/extensions/generation_extension.h:11:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 90%] Building CXX object CMakeFiles/stable-diffusion.dir/src/model_manager_prefetch.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model_io/safetensors_io.cpp:16:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 90%] Building CXX object CMakeFiles/stable-diffusion.dir/src/name_conversion.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model_loader.cpp:34:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+[ 90%] Building CXX object CMakeFiles/stable-diffusion.dir/src/pipeline/diffusion_engine.cpp.o
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 91%] Building CXX object CMakeFiles/stable-diffusion.dir/src/pipeline/image.cpp.o
+[ 91%] Building CXX object CMakeFiles/stable-diffusion.dir/src/pipeline/model_builders.cpp.o
+[ 91%] Building CXX object CMakeFiles/stable-diffusion.dir/src/pipeline/request.cpp.o
+[ 91%] Building CXX object CMakeFiles/stable-diffusion.dir/src/pipeline/video.cpp.o
+[ 92%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/audio_processing.cpp.o
+[ 92%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/guidance.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/image.cpp:1:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/generation.h:4:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/diffusion_engine.cpp:31:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:6:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+5 warnings generated.
+4 warnings generated.
+[ 92%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/image_preprocess.cpp.o
+[ 93%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/imatrix.cpp.o
+[ 93%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/sample-cache.cpp.o
+[ 93%] Building CXX object CMakeFiles/stable-diffusion.dir/src/runtime/tiling.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/video.cpp:1:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/generation.h:4:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/image.cpp:10:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:336:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  336 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/diffusion_engine.cpp:41:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/ltx_vae.hpp:15:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:336:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  336 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/diffusion_engine.cpp:41:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/ltx_vae.hpp:16:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/wan_vae.hpp:1403:13: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+ 1403 |         int get_encoder_output_channels(int input_channels) {
+      |             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:22:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/diffusion/lingbot_video.hpp:373:22: warning: 'forward' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  373 |         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) {
+      |                      ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/common/ggml_block.hpp:131:26: note: overridden virtual function is here
+  131 |     virtual ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) = 0;
+      |                          ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/video.cpp:15:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:336:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  336 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+[ 94%] Building CXX object CMakeFiles/stable-diffusion.dir/src/stable-diffusion.cpp.o
+[ 94%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/bpe_tokenizer.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:37:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/auto_encoder_kl.hpp:6:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:336:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  336 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:37:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/auto_encoder_kl.hpp:70:10: warning: 'init_params' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+   70 |     void init_params(ggml_context* ctx, const String2TensorStorage& tensor_storage_map = {}, const std::string prefix = "") {
+      |          ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/common/ggml_block.hpp:46:18: note: overridden virtual function is here
+   46 |     virtual void init_params(ggml_context* ctx, const String2TensorStorage& tensor_storage_map = {}, const std::string prefix = "") {}
+      |                  ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:37:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/auto_encoder_kl.hpp:839:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  839 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+[ 94%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/clip_tokenizer.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:38:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/hunyuan_vae.hpp:13:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/wan_vae.hpp:1403:13: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+ 1403 |         int get_encoder_output_channels(int input_channels) {
+      |             ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+[ 95%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/gemma_tokenizer.cpp.o
+4 warnings generated.
+[ 95%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/hf_tokenizer.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:44:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/tae.hpp:774:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  774 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/model_builders.cpp:44:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/tae.hpp:858:9: warning: 'get_encoder_output_channels' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+  858 |     int get_encoder_output_channels(int input_channels) {
+      |         ^
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/vae/vae.hpp:175:17: note: overridden virtual function is here
+  175 |     virtual int get_encoder_output_channels(int input_channels) = 0;
+      |                 ^
+[ 95%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/mistral_tokenizer.cpp.o
+4 warnings generated.
+[ 95%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/qwen2_tokenizer.cpp.o
+4 warnings generated.
+[ 96%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/sensenova_u1_tokenizer.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/tokenizers/gemma_tokenizer.cpp:5:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 96%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/t5_unigram_tokenizer.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/tokenizers/hf_tokenizer.cpp:16:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+4 warnings generated.
+[ 96%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/tokenize_util.cpp.o
+[ 97%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/tokenizer.cpp.o
+[ 97%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/tokenizer_config.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/stable-diffusion.cpp:11:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/pipeline/generation.h:4:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/conditioning/conditioner.hpp:18:
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/model/te/llm.hpp:28:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/tokenizers/mistral_tokenizer.cpp:5:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+[ 97%] Building CXX object CMakeFiles/stable-diffusion.dir/src/tokenizers/vocab/vocab.cpp.o
+[ 98%] Building CXX object CMakeFiles/stable-diffusion.dir/src/upscaler.cpp.o
+[ 98%] Building CXX object CMakeFiles/stable-diffusion.dir/src/version.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/src/tokenizers/t5_unigram_tokenizer.cpp:10:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+4 warnings generated.
+5 warnings generated.
+4 warnings generated.
+4 warnings generated.
+4 warnings generated.
+4 warnings generated.
+5 warnings generated.
+6 warnings generated.
+11 warnings generated.
+[ 98%] Linking CXX static library libstable-diffusion.a
+[ 98%] Built target stable-diffusion
+[ 98%] Building CXX object examples/cli/CMakeFiles/sd-cli.dir/__/common/log.cpp.o
+[ 98%] Building CXX object examples/cli/CMakeFiles/sd-cli.dir/__/common/common.cpp.o
+[ 98%] Building CXX object examples/cli/CMakeFiles/sd-cli.dir/__/common/media_io.cpp.o
+[ 98%] Building CXX object examples/cli/CMakeFiles/sd-cli.dir/main.cpp.o
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/examples/common/media_io.cpp:22:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_write.h:780:13: warning: 'sprintf' is deprecated: This function is provided for compatibility reasons only.  Due to security concerns inherent in the design of sprintf(3), it is highly recommended that you use snprintf(3) instead. [-Wdeprecated-declarations]
+  780 |       len = sprintf(buffer, "EXPOSURE=          1.0000000000000\n\n-Y %d +X %d\n", y, x);
+      |             ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_stdio.h:278:1: note: 'sprintf' has been explicitly marked deprecated here
+  278 | __deprecated_msg("This function is provided for compatibility reasons only.  Due to security concerns inherent in the design of sprintf(3), it is highly recommended that you use snprintf(3) instead.")
+      | ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/cdefs.h:227:48: note: expanded from macro '__deprecated_msg'
+  227 |         #define __deprecated_msg(_msg) __attribute__((__deprecated__(_msg)))
+      |                                                       ^
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/examples/common/media_io.cpp:26:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:760:31: warning: expression result unused [-Wunused-value]
+  760 |     STBIR__DEBUG_ASSERT(scale <= 1);
+      |                         ~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:778:31: warning: expression result unused [-Wunused-value]
+  778 |     STBIR__DEBUG_ASSERT(scale <= 1);
+      |                         ~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1041:56: warning: expression result unused [-Wunused-value]
+ 1041 |     STBIR__DEBUG_ASSERT(in_last_pixel - in_first_pixel <= (int)ceil(stbir__filter_info_table[filter].support(1/scale) * 2)); // Taken directly from stbir__get_coefficient_width() which we can't call because we don't know if we're horizontal or vertical.
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1046:41: warning: expression result unused [-Wunused-value]
+ 1046 |     STBIR__DEBUG_ASSERT(contributor->n1 >= contributor->n0);
+      |                         ~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1064:128: warning: expression result unused [-Wunused-value]
+ 1064 |     STBIR__DEBUG_ASSERT(stbir__filter_info_table[filter].kernel((float)(in_last_pixel + 1) + 0.5f - in_center_of_out, 1/scale) == 0);
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1066:38: warning: expression result unused [-Wunused-value]
+ 1066 |     STBIR__DEBUG_ASSERT(total_filter > 0.9);
+      |                         ~~~~~~~~~~~~ ^ ~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1067:38: warning: expression result unused [-Wunused-value]
+ 1067 |     STBIR__DEBUG_ASSERT(total_filter < 1.1f); // Make sure it's not way off.
+      |                         ~~~~~~~~~~~~ ^ ~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1089:59: warning: expression result unused [-Wunused-value]
+ 1089 |      STBIR__DEBUG_ASSERT(out_last_pixel - out_first_pixel <= (int)ceil(stbir__filter_info_table[filter].support(scale_ratio) * 2)); // Taken directly from stbir__get_coefficient_width() which we can't call because we don't know if we're horizontal or vertical.
+      |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1094:41: warning: expression result unused [-Wunused-value]
+ 1094 |     STBIR__DEBUG_ASSERT(contributor->n1 >= contributor->n0);
+      |                         ~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1103:133: warning: expression result unused [-Wunused-value]
+ 1103 |     STBIR__DEBUG_ASSERT(stbir__filter_info_table[filter].kernel((float)(out_last_pixel + 1) + 0.5f - out_center_of_in, scale_ratio) == 0);
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1138:35: warning: expression result unused [-Wunused-value]
+ 1138 |         STBIR__DEBUG_ASSERT(total > 0.9f);
+      |                             ~~~~~ ^ ~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1139:35: warning: expression result unused [-Wunused-value]
+ 1139 |         STBIR__DEBUG_ASSERT(total < 1.1f);
+      |                             ~~~~~ ^ ~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1427:47: warning: expression result unused [-Wunused-value]
+ 1427 |         STBIR__DEBUG_ASSERT(ring_buffer_index != stbir_info->ring_buffer_begin_index);
+      |                             ~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1459:32: warning: expression result unused [-Wunused-value]
+ 1459 |         STBIR__DEBUG_ASSERT(n1 >= n0);
+      |                             ~~ ^  ~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1460:32: warning: expression result unused [-Wunused-value]
+ 1460 |         STBIR__DEBUG_ASSERT(n0 >= -stbir_info->horizontal_filter_pixel_margin);
+      |                             ~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1461:32: warning: expression result unused [-Wunused-value]
+ 1461 |         STBIR__DEBUG_ASSERT(n1 >= -stbir_info->horizontal_filter_pixel_margin);
+      |                             ~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1462:32: warning: expression result unused [-Wunused-value]
+ 1462 |         STBIR__DEBUG_ASSERT(n0 < stbir_info->input_w + stbir_info->horizontal_filter_pixel_margin);
+      |                             ~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1463:32: warning: expression result unused [-Wunused-value]
+ 1463 |         STBIR__DEBUG_ASSERT(n1 < stbir_info->input_w + stbir_info->horizontal_filter_pixel_margin);
+      |                             ~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1471:53: warning: expression result unused [-Wunused-value]
+ 1471 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1480:53: warning: expression result unused [-Wunused-value]
+ 1480 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1490:53: warning: expression result unused [-Wunused-value]
+ 1490 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1501:53: warning: expression result unused [-Wunused-value]
+ 1501 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1514:53: warning: expression result unused [-Wunused-value]
+ 1514 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1537:25: warning: expression result unused [-Wunused-value]
+ 1537 |     STBIR__DEBUG_ASSERT(!stbir__use_width_upsampling(stbir_info));
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1555:53: warning: expression result unused [-Wunused-value]
+ 1555 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1576:53: warning: expression result unused [-Wunused-value]
+ 1576 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1598:53: warning: expression result unused [-Wunused-value]
+ 1598 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1621:53: warning: expression result unused [-Wunused-value]
+ 1621 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:1646:53: warning: expression result unused [-Wunused-value]
+ 1646 |                     STBIR__DEBUG_ASSERT(coefficient != 0);
+      |                                         ~~~~~~~~~~~ ^  ~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2005:25: warning: expression result unused [-Wunused-value]
+ 2005 |     STBIR__DEBUG_ASSERT(!stbir__use_height_upsampling(stbir_info));
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2079:66: warning: expression result unused [-Wunused-value]
+ 2079 |         STBIR__DEBUG_ASSERT(in_last_scanline - in_first_scanline <= stbir_info->vertical_filter_pixel_width);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2171:25: warning: expression result unused [-Wunused-value]
+ 2171 |     STBIR__DEBUG_ASSERT(!stbir__use_height_upsampling(stbir_info));
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2180:68: warning: expression result unused [-Wunused-value]
+ 2180 |         STBIR__DEBUG_ASSERT(out_last_scanline - out_first_scanline <= stbir_info->vertical_filter_pixel_width);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2382:92: warning: expression result unused [-Wunused-value]
+ 2382 |         STBIR__DEBUG_ASSERT((size_t)STBIR__NEXT_MEMPTR(info->encode_buffer, unsigned char) == (size_t)tempmem + tempmem_size_in_bytes);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/stb_image_resize.h:2390:90: warning: expression result unused [-Wunused-value]
+ 2390 |         STBIR__DEBUG_ASSERT((size_t)STBIR__NEXT_MEMPTR(info->ring_buffer, unsigned char) == (size_t)tempmem + tempmem_size_in_bytes);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/examples/common/common.cpp:17:
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24314:35: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24314 | inline nlohmann::json operator "" _json(const char* s, std::size_t n)
+       |                       ~~~~~~~~~~~~^~~~~
+       |                       operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24322:49: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24322 | inline nlohmann::json::json_pointer operator "" _json_pointer(const char* s, std::size_t n)
+       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                     operator""_json_pointer
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24386:58: warning: identifier '_json' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24386 |     using nlohmann::literals::json_literals::operator "" _json; // NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~
+       |                                              operator""_json
+/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/thirdparty/json.hpp:24387:58: warning: identifier '_json_pointer' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 24387 |     using nlohmann::literals::json_literals::operator "" _json_pointer; //NOLINT(misc-unused-using-decls,google-global-names-in-headers)
+       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+       |                                              operator""_json_pointer
+36 warnings generated.
+4 warnings generated.
+[ 98%] Linking CXX executable ../../bin/sd-cli
+ld: warning: ignoring duplicate libraries: '../../thirdparty/libwebp/libwebp.a'
+[100%] Built target sd-cli
+image engine ready at /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/stable-diffusion.cpp/build-static/bin (arch: x86_64)

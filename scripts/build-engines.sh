@@ -11,9 +11,9 @@ set -e
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
-LLAMA_COMMIT="${LLAMA_COMMIT:-9575389609d6f8437de0b205561a4824d217c409}"   # llama.cpp commit validated against the patches
-WHISPER_COMMIT="${WHISPER_COMMIT:-371b5a7561823ab2bb32142d2751e35e7534727b}" # whisper.cpp v1.9.3
-SD_COMMIT="${SD_COMMIT:-6dcb5bb}"         # stable-diffusion.cpp commit validated for image gen
+LLAMA_COMMIT="${LLAMA_COMMIT:-cdc06426e70c23a1ac2bce40c85b252fec344702}"   # llama.cpp commit validated against the patches; newest upstream the whole series applies on (84e76d8a2 breaks 0002; 5a75f14c0's FA per-dtype split + batch_ext migration block the full bump)
+WHISPER_COMMIT="${WHISPER_COMMIT:-371b5a7561823ab2bb32142d2751e35e7534727b}" # whisper.cpp v1.9.3 (v1.9.5 moved ggml-metal to the kernels/ layout the shared-metal series predates)
+SD_COMMIT="${SD_COMMIT:-241518b35decc6e7042037c1e224142f7c42aee3}"         # stable-diffusion.cpp commit validated for image gen; newest master still pinning the old-layout ggml submodule 4bf5f600 (e6281b6's conditioning cache breaks 0049)
 ARCH="${ARCH:-$(uname -m)}"
 DEPLOYMENT_TARGET="14.0"        # same floor as the app (Package.swift)
 if [ "$ARCH" = "universal" ]; then

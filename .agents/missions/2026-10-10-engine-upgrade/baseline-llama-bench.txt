@@ -1,0 +1,3 @@
+llama-bench Spark-X2.5-1.7B-Q8_0, 5500M, build 957538960 (b11141), Kestrel engine 0.88.0
+pp512 1013.30 t/s | tg128 55.15 t/s
+smoke(temp=0): "The capital of France is Paris." + coherent continuation
