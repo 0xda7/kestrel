@@ -16,7 +16,7 @@ index 45289079e..3622fe6cb 100644
  static _Atomic uint64_t g_ct_hw[8], g_ct_hp[8], g_ct_hr[8];
  static double g_ct_ns_per_tick = 0.0;
  
- static int tosh_ct_bucket(double us) {
+ static int kestrel_ct_bucket(double us) {
      return us < 1 ? 0 : us < 5 ? 1 : us < 10 ? 2 : us < 20 ? 3 :
             us < 50 ? 4 : us < 100 ? 5 : us < 200 ? 6 : 7;
  }
@@ -51,7 +51,7 @@ index 45289079e..3622fe6cb 100644
          if (v) {
              fprintf(stderr, "ggml_metal: WARNING KESTREL_MGPU_WAIT_SATISFIED=1, the collective never "
                              "waits for the peer and the output is meaningless. Benchmark only.\n");
-@@ -810,16 +825,17 @@ static void tosh_mgpu_trace_report(void) {
+@@ -810,16 +825,17 @@ static void kestrel_mgpu_trace_report(void) {
              _Atomic uint64_t * hh[3] = {g_ct_hp, g_ct_hw, g_ct_hr};
              for (int k = 0; k < 3; k++) {
                  fprintf(stderr, "    %s us ", rn[k]);
@@ -154,7 +154,7 @@ index 45289079e..3622fe6cb 100644
          return false;
      }
  
-     const uint64_t t_enter = tosh_mgpu_trace() ? tosh_now_ns() : 0;
+     const uint64_t t_enter = kestrel_mgpu_trace() ? kestrel_now_ns() : 0;
  
 +    // The add reads the shared block in place of a temporary: same element type, same shape,
 +    // contiguous, and the block is a page-aligned host allocation at least this long.
@@ -175,7 +175,7 @@ index 45289079e..3622fe6cb 100644
      link_out->seq_x = seq;
 @@ -2770,41 +2831,76 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
  
-         id<MTLCounterSampleBuffer> cts = tosh_ct_buffer(ctx_self);
+         id<MTLCounterSampleBuffer> cts = kestrel_ct_buffer(ctx_self);
          uint64_t cbase = 0;
          const bool cbar = ggml_metal_ctime_barrier();
          if (cts != nil) {
@@ -211,7 +211,7 @@ index 45289079e..3622fe6cb 100644
 +            ggml_metal_encoder_dispatch_threadgroups(ec, (n + nth - 1)/nth, 1, 1, nth, 1, 1);
 +            ggml_metal_encoder_end_encoding(ec);
 +            ggml_metal_encoder_free(ec);
-+            if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_fused_bnd, 1);
++            if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_fused_bnd, 1);
 +        } else {
 +            id<MTLBlitCommandEncoder> enc_out = [cmd_buf blitCommandEncoder];
 +            if (cts != nil) { [enc_out sampleCountersInBuffer:cts atSampleIndex:cbase + 0 withBarrier:cbar]; }
@@ -220,12 +220,12 @@ index 45289079e..3622fe6cb 100644
 +            if (cts != nil) { [enc_out sampleCountersInBuffer:cts atSampleIndex:cbase + 1 withBarrier:cbar]; }
 +            [enc_out endEncoding];
 +        }
-         if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
+         if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
          [cmd_buf encodeSignalEvent:link_out->ev_x_ready value:seq_out];
  
-         if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
+         if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
          if (ggml_metal_wait_satisfied()) {
-             [cmd_buf encodeWaitForEvent:tosh_wait_dummy(ctx_self) value:1];
+             [cmd_buf encodeWaitForEvent:kestrel_wait_dummy(ctx_self) value:1];
          } else {
              [cmd_buf encodeWaitForEvent:link_in->ev_x_ready value:seq_in];
          }
@@ -235,14 +235,14 @@ index 45289079e..3622fe6cb 100644
 -                      toBuffer:bid_tmp.metal destinationOffset:bid_tmp.offs size:size];
 -        if (cts != nil) { [enc_in sampleCountersInBuffer:cts atSampleIndex:cbase + 3 withBarrier:cbar]; }
 -        [enc_in endEncoding];
--        if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
+-        if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
 -        [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq_in];
 +        if (fused_bnd) {
 +            // the partner may reuse the block the moment done is signalled, so it goes after
 +            // the add that reads the block
 +            const bool added = ggml_metal_add_inplace_buffer(ctx_self, cmd_buf, t_self, link_in->wrap_dst, 0);
 +            GGML_ASSERT(added);
-+            if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
++            if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
 +            [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq_in];
 +        } else {
 +            id<MTLBlitCommandEncoder> enc_in = [cmd_buf blitCommandEncoder];
@@ -251,7 +251,7 @@ index 45289079e..3622fe6cb 100644
 +                          toBuffer:bid_tmp.metal destinationOffset:bid_tmp.offs size:size];
 +            if (cts != nil) { [enc_in sampleCountersInBuffer:cts atSampleIndex:cbase + 3 withBarrier:cbar]; }
 +            [enc_in endEncoding];
-+            if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
++            if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
 +            [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq_in];
  
 -        ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
@@ -261,7 +261,7 @@ index 45289079e..3622fe6cb 100644
          if (cts != nil) {
              id<MTLCounterSampleBuffer> csr = cts;
              const uint64_t cb2 = cbase;
-             [cmd_buf addCompletedHandler:^(id<MTLCommandBuffer> cb) { (void) cb; tosh_ct_record(csr, cb2); }];
+             [cmd_buf addCompletedHandler:^(id<MTLCommandBuffer> cb) { (void) cb; kestrel_ct_record(csr, cb2); }];
          }
  
-         tosh_trace_cmd_buf(cmd_buf);
+         kestrel_trace_cmd_buf(cmd_buf);

@@ -17,11 +17,11 @@ index 4ce8d600b..21af6a645 100644
 +// KESTREL_AMAX=1: for every matrix product wide enough to take the tiled path, the largest
 +// activation and the largest sum of |x| over a 32-deep slice, times the largest weight.
 +// That product bounds the half partial the AMD tile keeps; 65504 is where it breaks.
-+struct tosh_amax_row { double x_max = 0, s32 = 0, w_max = 0, bound = 0; int n = 0; long long ne11 = 0; };
-+static std::map<std::string, tosh_amax_row> g_amax;
++struct kestrel_amax_row { double x_max = 0, s32 = 0, w_max = 0, bound = 0; int n = 0; long long ne11 = 0; };
++static std::map<std::string, kestrel_amax_row> g_amax;
 +static std::map<const ggml_tensor *, double> g_wmax;
 +
-+static double tosh_weight_max(const ggml_tensor * w) {
++static double kestrel_weight_max(const ggml_tensor * w) {
 +    auto it = g_wmax.find(w);
 +    if (it != g_wmax.end()) return it->second;
 +    const auto * tr = ggml_get_type_traits(w->type);
@@ -42,7 +42,7 @@ index 4ce8d600b..21af6a645 100644
 +    return m;
 +}
 +
-+static bool tosh_amax_cb(struct ggml_tensor * t, bool ask, void * ud) {
++static bool kestrel_amax_cb(struct ggml_tensor * t, bool ask, void * ud) {
 +    (void) ud;
 +    const bool mm = t->op == GGML_OP_MUL_MAT || t->op == GGML_OP_MUL_MAT_ID;
 +    if (ask) return mm && t->src[1] && t->src[1]->type == GGML_TYPE_F32 && t->src[1]->ne[t->op == GGML_OP_MUL_MAT_ID ? 2 : 1] > 8;
@@ -60,7 +60,7 @@ index 4ce8d600b..21af6a645 100644
 +            s32 = std::max(s32, s);
 +        }
 +    }
-+    const double wm = tosh_weight_max(t->src[0]);
++    const double wm = kestrel_weight_max(t->src[0]);
 +    std::string key = std::string(ggml_op_desc(t)) + " " + t->src[0]->name;
 +    // fold layer numbers so one line covers the same tensor in every block
 +    std::string fk; for (size_t i = 0; i < key.size(); ++i) { if (isdigit(key[i]) && i && key[i-1] == '.') { while (i < key.size() && isdigit(key[i])) ++i; fk += "N"; --i; } else fk += key[i]; }
@@ -71,7 +71,7 @@ index 4ce8d600b..21af6a645 100644
 +    return true;
 +}
 +
-+static void tosh_amax_dump() {
++static void kestrel_amax_dump() {
 +    double worst = 0;
 +    for (auto & [k, r] : g_amax) {
 +        fprintf(stderr, "KESTREL_AMAX %-44s n=%-4d tok=%-5lld x_max=%-10.3g s32=%-10.3g w_max=%-8.3g bound=%-10.3g headroom=%.1fx\n",
@@ -90,7 +90,7 @@ index 4ce8d600b..21af6a645 100644
      params.cb_eval_user_data = &cb_data;
 +    const bool amax = getenv("KESTREL_AMAX") != nullptr;
 +    if (amax) {
-+        params.cb_eval = tosh_amax_cb;
++        params.cb_eval = kestrel_amax_cb;
 +        params.cb_eval_user_data = nullptr;
 +    }
      params.warmup = false;
@@ -101,7 +101,7 @@ index 4ce8d600b..21af6a645 100644
      }
  
 +    if (amax) {
-+        tosh_amax_dump();
++        kestrel_amax_dump();
 +    }
 +
      LOG("\n");

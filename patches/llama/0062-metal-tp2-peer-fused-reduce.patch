@@ -212,7 +212,7 @@ index 182caa063..a2728d31d 100644
 +                                               id<MTLDevice> dev_self, bool same_dev) {
 +#if TARGET_OS_OSX
 +    if (link->peer_x_view2[slot] != nil) {
-+        if (tosh_mgpu_trace()) {
++        if (kestrel_mgpu_trace()) {
 +            atomic_fetch_add(&g_tr_rv_hit, 1);
 +        }
 +        return link->peer_x_view2[slot];
@@ -220,7 +220,7 @@ index 182caa063..a2728d31d 100644
 +
 +    link->peer_x_view2[slot] = same_dev ? [link->shadow[slot] retain]
 +                                        : [link->shadow[slot] newRemoteBufferViewForDevice:dev_self];
-+    if (link->peer_x_view2[slot] != nil && tosh_mgpu_trace()) {
++    if (link->peer_x_view2[slot] != nil && kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_rv_new, 1);
 +    }
 +
@@ -317,18 +317,18 @@ index 182caa063..a2728d31d 100644
 +        if (!ok) {
 +            // the buffer already carries the publish and the signal, so it has to go out
 +            [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
-+            tosh_trace_cmd_buf(cmd_buf);
++            kestrel_trace_cmd_buf(cmd_buf);
 +            ggml_metal_cmd_buf_end(ctx_self, cmd_buf, false);
 +            return false;
 +        }
 +
 +        [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
 +
-+        tosh_trace_cmd_buf(cmd_buf);
++        kestrel_trace_cmd_buf(cmd_buf);
 +        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
 +    }
 +
-+    if (tosh_mgpu_trace()) {
++    if (kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_reduce, 1);
 +        atomic_fetch_add(&g_tr_bytes_peer, size);
 +    }
@@ -461,11 +461,11 @@ index 182caa063..a2728d31d 100644
 +        ggml_metal_add_inplace_buffer(ctx_self, cmd_buf, t_self, link_in->shadow[slot], 0);
 +
 +        [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
-+        tosh_trace_cmd_buf(cmd_buf);
++        kestrel_trace_cmd_buf(cmd_buf);
 +        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
 +    }
 +
-+    if (tosh_mgpu_trace()) {
++    if (kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_reduce, 1);
 +        atomic_fetch_add(&g_tr_bytes_peer, size);
 +    }
@@ -494,12 +494,12 @@ index 182caa063..a2728d31d 100644
  
          ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
  
-         tosh_trace_cmd_buf(cmd_buf);
+         kestrel_trace_cmd_buf(cmd_buf);
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, false);
 +        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
@@ -566,16 +566,16 @@ index 182caa063..a2728d31d 100644
  
          ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
  
-         tosh_trace_cmd_buf(cmd_buf);
+         kestrel_trace_cmd_buf(cmd_buf);
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, false);
 +        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          // out through the shared block and back in: this card touches it twice
          atomic_fetch_add(&g_tr_bytes_host, 2*size);
-         atomic_fetch_add(&g_tr_encode_ns, tosh_now_ns() - t_enter);
+         atomic_fetch_add(&g_tr_encode_ns, kestrel_now_ns() - t_enter);
      }
 diff --git a/ggml/src/ggml-metal/ggml-metal.cpp b/ggml/src/ggml-metal/ggml-metal.cpp
 index b4f32af98..ddad25afd 100644

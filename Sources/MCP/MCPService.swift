@@ -231,10 +231,10 @@ actor KestrelMCPService {
         switch session.server.transport {
         case .stdio:
             guard let stdio = session.stdio else { throw MCPError.invalidResponse }
-            let result = try await stdio.send(payload, id: id, timeout: session.server.timeoutSeconds)
-            return result
+            let result = try await stdio.send(MCPRequest(fields: payload), id: id, timeout: session.server.timeoutSeconds)
+            return result.fields
         case .webSocket: response = try await sendWebSocket(serverID: serverID, payload: payload, id: id)
-        case .serverSentEvents: response = try await sendLegacy(serverID: serverID, payload: payload, id: id)
+        case .serverSentEvents: response = try await sendLegacy(serverID: serverID, payload: MCPRequest(fields: payload), id: id)
         case .automatic, .streamableHTTP:
             response = try await sendHTTP(server: session.server, sessionID: session.sessionID,
                                           payload: payload)
@@ -250,7 +250,9 @@ actor KestrelMCPService {
         return result
     }
 
-    private struct WireResponse {
+    /// `@unchecked Sendable`: wraps a parsed JSON-RPC value tree that is
+    /// never mutated after parsing.
+    private struct WireResponse: @unchecked Sendable {
         var object: [String: Any]?
         var sessionID: String?
     }
@@ -260,12 +262,12 @@ actor KestrelMCPService {
         let payload: [String: Any] = ["jsonrpc": "2.0", "method": method, "params": params]
         switch session.server.transport {
         case .stdio:
-            _ = try await session.stdio?.send(payload, id: nil, timeout: session.server.timeoutSeconds)
+            _ = try await session.stdio?.send(MCPRequest(fields: payload), id: nil, timeout: session.server.timeoutSeconds)
         case .webSocket:
             let data = try JSONSerialization.data(withJSONObject: payload)
             try await session.webSocket?.send(.data(data))
         case .serverSentEvents:
-            try await postLegacy(serverID: serverID, payload: payload)
+            try await postLegacy(serverID: serverID, payload: MCPRequest(fields: payload))
         case .automatic, .streamableHTTP:
             _ = try await sendHTTP(server: session.server, sessionID: session.sessionID, payload: payload)
         }
@@ -397,7 +399,7 @@ actor KestrelMCPService {
         }
     }
 
-    private func sendLegacy(serverID: UUID, payload: [String: Any], id: Int) async throws -> WireResponse {
+    private func sendLegacy(serverID: UUID, payload: MCPRequest, id: Int) async throws -> WireResponse {
         try await withCheckedThrowingContinuation { continuation in
             legacyResponses[serverID, default: [:]][id] = continuation
             Task { [weak self] in
@@ -407,7 +409,7 @@ actor KestrelMCPService {
         }
     }
 
-    private func postLegacy(serverID: UUID, payload: [String: Any]) async throws {
+    private func postLegacy(serverID: UUID, payload: MCPRequest) async throws {
         guard let session = sessions[serverID], let endpoint = session.legacyEndpoint else {
             throw MCPError.invalidResponse
         }

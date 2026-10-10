@@ -4,6 +4,7 @@
 
 import Darwin
 import Foundation
+import os
 
 /// Delegates a self-contained task to the latch harness as an app-side tool.
 /// The model never talks to latch's model directly; it hands off a task string
@@ -120,10 +121,12 @@ enum LatchDelegateService {
 
     private static func run(argv: [String], workingDirectory: String?,
                             timeout: Int) async -> ToolExecutionResult {
-        var report = ""
+        // Boxed: onOutput is @Sendable, so the pump thread may only touch the
+        // accumulator through a lock.
+        let report = OSAllocatedUnfairLock<String>(initialState: "")
         let outcome = await runStreaming(argv: argv, workingDirectory: workingDirectory,
                                          timeout: timeout, onLaunch: nil,
-                                         onOutput: { _, fullSoFar in report = fullSoFar })
+                                         onOutput: { _, fullSoFar in report.withLock { $0 = fullSoFar } })
         switch outcome {
         case .failed(let reason): return ToolExecutionResult(content: reason, isError: true)
         case .exited(let status, let output):
@@ -132,7 +135,7 @@ enum LatchDelegateService {
             return ToolExecutionResult(
                 content: "latch harness exited with status \(status).\(detail)", isError: true)
         case .completed(let output):
-            var trimmed = (output.isEmpty ? report : output)
+            var trimmed = (output.isEmpty ? report.withLock { $0 } : output)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
                 trimmed = "The delegate finished without producing output."
@@ -175,52 +178,58 @@ enum LatchDelegateService {
         process.standardError = stderr
         // Harnesses can be chatty; drain both pipes continuously or a full
         // 64 KiB pipe buffer deadlocks the child mid-run.
-        let lock = NSLock()
-        var outData = Data()
-        var stderrTail = ""
-        // Incremental decode state: `decoded` grows by only the NEW bytes each
-        // chunk, instead of re-decoding the whole accumulation per chunk
-        // (which is O(n²) — a 512 KB reply with line-sized chunks re-decoded
-        // ~1.3 GB of UTF-8). `decodeOffset` always sits on a UTF-8 sequence
-        // boundary, so multi-byte characters split across pipe chunks are
-        // completed on the next chunk rather than corrupted.
-        var decoded = ""
-        var decodeOffset = 0
+        /// All mutable pump state behind one lock. `@unchecked Sendable`:
+        /// every field is only touched with `lock` held, which is what makes
+        /// the readability handlers safe to run on the pipe's own threads.
+        final class PumpState: @unchecked Sendable {
+            let lock = NSLock()
+            var outData = Data()
+            var stderrTail = ""
+            // Incremental decode state: `decoded` grows by only the NEW bytes each
+            // chunk, instead of re-decoding the whole accumulation per chunk
+            // (which is O(n²) — a 512 KB reply with line-sized chunks re-decoded
+            // ~1.3 GB of UTF-8). `decodeOffset` always sits on a UTF-8 sequence
+            // boundary, so multi-byte characters split across pipe chunks are
+            // completed on the next chunk rather than corrupted.
+            var decoded = ""
+            var decodeOffset = 0
 
-        /// Last offset in `data` that ends on a complete UTF-8 sequence: scan
-        /// back at most 3 bytes (the longest continuation run) for an ASCII or
-        /// leading byte; a truncated sequence tail stays undecoded until its
-        /// remainder arrives.
-        func utf8SafeEnd(_ data: Data) -> Int {
-            let count = data.count
-            var back = 0
-            while back < 3, count - back > decodeOffset {
-                let byte = data[data.startIndex + count - back - 1]
-                if byte & 0x80 == 0 { return count - back }
-                if byte & 0xC0 != 0x80 { return count - back - 1 }
-                back += 1
+            /// Last offset in `data` that ends on a complete UTF-8 sequence: scan
+            /// back at most 3 bytes (the longest continuation run) for an ASCII or
+            /// leading byte; a truncated sequence tail stays undecoded until its
+            /// remainder arrives.
+            func utf8SafeEnd(_ data: Data) -> Int {
+                let count = data.count
+                var back = 0
+                while back < 3, count - back > decodeOffset {
+                    let byte = data[data.startIndex + count - back - 1]
+                    if byte & 0x80 == 0 { return count - back }
+                    if byte & 0xC0 != 0x80 { return count - back - 1 }
+                    back += 1
+                }
+                return count - back
             }
-            return count - back
         }
+        let state = PumpState()
 
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock()
+            state.lock.lock()
             // Stop accumulating past the reply cap: a runaway harness must
             // not grow memory without bound during the run (the cap was
             // previously applied only after exit), and bounded accumulation
             // also bounds the decode.
-            if outData.count < LatchDelegateService.maximumReplyCharacters {
-                outData.append(chunk)
-                let safeEnd = utf8SafeEnd(outData)
-                if safeEnd > decodeOffset {
-                    decoded += String(decoding: outData[decodeOffset..<safeEnd], as: UTF8.self)
-                    decodeOffset = safeEnd
+            if state.outData.count < LatchDelegateService.maximumReplyCharacters {
+                state.outData.append(chunk)
+                let safeEnd = state.utf8SafeEnd(state.outData)
+                if safeEnd > state.decodeOffset {
+                    state.decoded += String(decoding: state.outData[state.decodeOffset..<safeEnd], as: UTF8.self)
+                    state.decodeOffset = safeEnd
                 }
             }
-            let snapshot = decoded
-            lock.unlock()
+            let snapshot = state.decoded
+            state.lock.unlock()
             if let onOutput {
                 onOutput(String(decoding: chunk, as: UTF8.self), snapshot)
             }
@@ -228,12 +237,12 @@ enum LatchDelegateService {
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock()
-            stderrTail += String(decoding: chunk, as: UTF8.self)
-            if stderrTail.count > 4000 {
-                stderrTail = String(stderrTail.suffix(2000))
+            state.lock.lock()
+            state.stderrTail += String(decoding: chunk, as: UTF8.self)
+            if state.stderrTail.count > 4000 {
+                state.stderrTail = String(state.stderrTail.suffix(2000))
             }
-            lock.unlock()
+            state.lock.unlock()
         }
 
         do { try process.run() } catch {
@@ -273,20 +282,20 @@ enum LatchDelegateService {
         // bounds the wait), so stderr written just before exit is captured
         // instead of being lost to the async handler's lag.
         func collectResults() -> (output: String, stderr: String) {
-            lock.lock()
-            var tail = stderrTail
-            stderrTail = ""
-            lock.unlock()
+            state.lock.lock()
+            var tail = state.stderrTail
+            state.stderrTail = ""
+            state.lock.unlock()
             stdout.fileHandleForReading.readabilityHandler = nil
             stderr.fileHandleForReading.readabilityHandler = nil
             let stdoutLeftover = stdout.fileHandleForReading.readDataToEndOfFile()
             let stderrLeftover = stderr.fileHandleForReading.readDataToEndOfFile()
-            lock.lock()
-            let output = String(decoding: outData + stdoutLeftover, as: UTF8.self)
-            outData.removeAll()
+            state.lock.lock()
+            let output = String(decoding: state.outData + stdoutLeftover, as: UTF8.self)
+            state.outData.removeAll()
             tail += String(decoding: stderrLeftover, as: UTF8.self)
             if tail.count > 4000 { tail = String(tail.suffix(2000)) }
-            lock.unlock()
+            state.lock.unlock()
             return (output, tail)
         }
         let results = collectResults()

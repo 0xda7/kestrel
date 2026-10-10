@@ -21,7 +21,8 @@ private enum MDBlock: Equatable {
 /// Formatted text outlives the row that shows it: a LazyVStack drops a row on
 /// the way out and rebuilds it on the way back, so formatting again there costs
 /// frames.
-final class FormattedTextCache {
+/// `@unchecked Sendable`: every mutable field is only touched under `lock`.
+final class FormattedTextCache: @unchecked Sendable {
     static let inline = FormattedTextCache(limit: 800)
 
     private let lock = NSLock()
@@ -323,7 +324,7 @@ private struct PlainGrowingText: View {
 private struct FrozenChunk: View, Equatable {
     let text: String
     let font: Font
-    static func == (a: FrozenChunk, b: FrozenChunk) -> Bool { a.text == b.text }
+    nonisolated static func == (a: FrozenChunk, b: FrozenChunk) -> Bool { a.text == b.text }
     var body: some View { Text(verbatim: text).font(font).textSelection(.enabled) }
 }
 
@@ -332,7 +333,7 @@ private struct FrozenChunk: View, Equatable {
 private struct MDBlockView: View, Equatable {
     let block: MDBlock
 
-    static func == (lhs: MDBlockView, rhs: MDBlockView) -> Bool { lhs.block == rhs.block }
+    nonisolated static func == (lhs: MDBlockView, rhs: MDBlockView) -> Bool { lhs.block == rhs.block }
 
     var body: some View {
         switch block {

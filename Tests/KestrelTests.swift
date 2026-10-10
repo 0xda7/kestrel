@@ -8,7 +8,7 @@ import XCTest
 final class WhisperTranscriptTests: XCTestCase {
     func testWhisperRuntimeForcesAMDFlashAttentionAndSafeMetalPolicy() {
         let environment = SpeechDictationController.runtimeEnvironment(base: [:])
-        XCTAssertEqual(environment["TOSH_FA_AMD"], "1")
+        XCTAssertEqual(environment["KESTREL_FA_AMD"], "1")
         XCTAssertEqual(environment["GGML_METAL_CONCURRENCY_DISABLE"], "1")
         XCTAssertEqual(environment["GGML_METAL_SHARED_BUFFERS_DISABLE"], "1")
     }
@@ -1002,16 +1002,16 @@ final class ServerSettingsTests: XCTestCase {
         s.dynamicMoePrefetch = 7
 
         XCTAssertFalse(s.effectiveDynamicMoe)
-        XCTAssertNil(s.environment["TOSH_MOE_MODE"])
+        XCTAssertNil(s.environment["KESTREL_MOE_MODE"])
         XCTAssertFalse(s.arguments.contains("-ot"))
         XCTAssertEqual(s.arguments[s.arguments.firstIndex(of: "--n-cpu-moe")! + 1], "24")
 
-        s.extraArgs = "TOSH_MOE_UI=1 TOSH_MOE_SLOTS=999"
+        s.extraArgs = "KESTREL_MOE_UI=1 KESTREL_MOE_SLOTS=999"
 
         XCTAssertTrue(s.effectiveDynamicMoe)
-        XCTAssertEqual(s.environment["TOSH_MOE_MODE"], "cache")
-        XCTAssertEqual(s.environment["TOSH_MOE_SLOTS"], "16")
-        XCTAssertEqual(s.environment["TOSH_MOE_CPU_BANK"], "1")
+        XCTAssertEqual(s.environment["KESTREL_MOE_MODE"], "cache")
+        XCTAssertEqual(s.environment["KESTREL_MOE_SLOTS"], "16")
+        XCTAssertEqual(s.environment["KESTREL_MOE_CPU_BANK"], "1")
         XCTAssertEqual(s.environment["GGML_SCHED_PREFETCH_EXPERTS"], "7")
         XCTAssertEqual(s.environment["GGML_METAL_NCB"], "8")
         XCTAssertFalse(s.arguments.contains("--n-cpu-moe"), "the cache decides the split on its own")
@@ -1024,7 +1024,7 @@ final class ServerSettingsTests: XCTestCase {
 
         s.routerMode = true
         XCTAssertFalse(s.effectiveDynamicMoe, "router presets cannot carry the tensor override")
-        XCTAssertNil(s.environment["TOSH_MOE_MODE"])
+        XCTAssertNil(s.environment["KESTREL_MOE_MODE"])
     }
 
     func testDynamicMoeAutoSelectsCacheOnlyWhenItProvidesAUsefulFit() {
@@ -1421,13 +1421,13 @@ final class ServerSettingsTests: XCTestCase {
 
     func testFastHandOffOnlyTravelsWithASplit() {
         var s = makeSettings()
-        XCTAssertNil(s.environment["TOSH_MGPU_EVENTS"], "sin reparto no hay traspaso entre GPUs")
+        XCTAssertNil(s.environment["KESTREL_MGPU_EVENTS"], "sin reparto no hay traspaso entre GPUs")
 
         s.multiGPU = true
-        XCTAssertEqual(s.environment["TOSH_MGPU_EVENTS"], "1")
+        XCTAssertEqual(s.environment["KESTREL_MGPU_EVENTS"], "1")
 
         s.mgpuEvents = false
-        XCTAssertNil(s.environment["TOSH_MGPU_EVENTS"])
+        XCTAssertNil(s.environment["KESTREL_MGPU_EVENTS"])
     }
 
     func testMultiGPUDefaultsReachTheEngine() {
@@ -1441,13 +1441,13 @@ final class ServerSettingsTests: XCTestCase {
         s.mgpuEvents = true
         s.mgpuPeer = true
         s.splitMode = "tensor"
-        XCTAssertEqual(s.environment["TOSH_MGPU_EVENTS"], "1")
-        XCTAssertEqual(s.environment["TOSH_MGPU_PEER"], "1")
+        XCTAssertEqual(s.environment["KESTREL_MGPU_EVENTS"], "1")
+        XCTAssertEqual(s.environment["KESTREL_MGPU_PEER"], "1")
 
         // A layer split never reduces across cards, so the bridge must stay out of the way.
         s.splitMode = "layer"
-        XCTAssertEqual(s.environment["TOSH_MGPU_EVENTS"], "1")
-        XCTAssertNil(s.environment["TOSH_MGPU_PEER"],
+        XCTAssertEqual(s.environment["KESTREL_MGPU_EVENTS"], "1")
+        XCTAssertNil(s.environment["KESTREL_MGPU_PEER"],
                      "el puente no aporta nada por capas y ahí solo añade presión de memoria")
     }
 
@@ -1578,7 +1578,7 @@ final class ServerSettingsTests: XCTestCase {
 
         XCTAssertEqual(s.arguments[s.arguments.firstIndex(of: "-fa")! + 1], "1")
         XCTAssertEqual(s.benchmarkArguments[s.benchmarkArguments.firstIndex(of: "-fa")! + 1], "1")
-        XCTAssertNil(s.environment["TOSH_FA_AMD"])
+        XCTAssertNil(s.environment["KESTREL_FA_AMD"])
     }
 
     func testAmdFlashAttentionIsOnlyUserToggle() {
@@ -1589,12 +1589,12 @@ final class ServerSettingsTests: XCTestCase {
 
         XCTAssertFalse(s.effectiveFaAmd)
         XCTAssertEqual(s.arguments[s.arguments.firstIndex(of: "-fa")! + 1], "1")
-        XCTAssertNil(s.environment["TOSH_FA_AMD"])
+        XCTAssertNil(s.environment["KESTREL_FA_AMD"])
 
         s.faAmd = true
         XCTAssertTrue(s.effectiveFaAmd)
         XCTAssertEqual(s.arguments[s.arguments.firstIndex(of: "-fa")! + 1], "1")
-        XCTAssertEqual(s.environment["TOSH_FA_AMD"], "1")
+        XCTAssertEqual(s.environment["KESTREL_FA_AMD"], "1")
     }
 
     func testMicroBatchOnlyAppliesToMoEModels() throws {
@@ -1874,10 +1874,10 @@ final class ChatMessageTests: XCTestCase {
         let transport = try MCPStdioTransport(server: server)
         try await transport.start()
         let start = Date()
-        let result = try await transport.send(["jsonrpc": "2.0", "id": 1, "method": "initialize"], id: 1, timeout: 5)
+        let result = try await transport.send(MCPRequest(fields: ["jsonrpc": "2.0", "id": 1, "method": "initialize"]), id: 1, timeout: 5)
         let elapsed = Date().timeIntervalSince(start)
         await transport.stop()
-        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(result.fields["ok"] as? Bool, true)
         XCTAssertLessThan(elapsed, 2)
     }
 

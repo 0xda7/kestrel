@@ -2,7 +2,7 @@ diff --git a/examples/eval-callback/eval-callback.cpp b/examples/eval-callback/e
 index 21af6a645..e4d7780d1 100644
 --- a/examples/eval-callback/eval-callback.cpp
 +++ b/examples/eval-callback/eval-callback.cpp
-@@ -83,6 +83,87 @@ static void tosh_amax_dump() {
+@@ -83,6 +83,87 @@ static void kestrel_amax_dump() {
      fprintf(stderr, "KESTREL_AMAX worst bound=%.4g headroom=%.1fx\n", worst, worst > 0 ? 65504.0/worst : 0.0);
  }
  
@@ -18,7 +18,7 @@ index 21af6a645..e4d7780d1 100644
 +// KESTREL_LAYERSUM=1: print the sum and the absolute sum of every layer output, to line up a
 +// CPU run against a GPU one and find the first layer and batch where they part
 +static long g_ls_calls = 0;
-+static bool tosh_layersum_cb(struct ggml_tensor * t, bool ask, void * ud) {
++static bool kestrel_layersum_cb(struct ggml_tensor * t, bool ask, void * ud) {
 +    (void) ud;
 +    // KESTREL_LAYERSUM_NAMES: comma list of name prefixes, default the per-layer residual
 +    static const std::vector<std::string> names = []() {
@@ -58,7 +58,7 @@ index 21af6a645..e4d7780d1 100644
 +    return true;
 +}
 +
-+static bool tosh_nanfind_cb(struct ggml_tensor * t, bool ask, void * ud) {
++static bool kestrel_nanfind_cb(struct ggml_tensor * t, bool ask, void * ud) {
 +    (void) ud;
 +    if (ask) {
 +        return !g_nan_found && t->type == GGML_TYPE_F32;
@@ -112,20 +112,20 @@ index 21af6a645..e4d7780d1 100644
      params.cb_eval = common_debug_cb_eval;
      params.cb_eval_user_data = &cb_data;
 +    if (getenv("KESTREL_NANFIND") != nullptr) {
-+        params.cb_eval = tosh_nanfind_cb;
++        params.cb_eval = kestrel_nanfind_cb;
 +        params.cb_eval_user_data = nullptr;
 +    }
 +    if (getenv("KESTREL_LAYERSUM") != nullptr) {
-+        params.cb_eval = tosh_layersum_cb;
++        params.cb_eval = kestrel_layersum_cb;
 +        params.cb_eval_user_data = nullptr;
 +    }
 +    params.warmup = false;
      const bool amax = getenv("KESTREL_AMAX") != nullptr;
      if (amax) {
-         params.cb_eval = tosh_amax_cb;
+         params.cb_eval = kestrel_amax_cb;
 @@ -162,6 +262,9 @@ int main(int argc, char ** argv) {
      if (amax) {
-         tosh_amax_dump();
+         kestrel_amax_dump();
      }
 +    if (getenv("KESTREL_NANFIND") != nullptr) {
 +        fprintf(stderr, "KESTREL_NANFIND done: %s after %ld checked nodes\n", g_nan_found ? "found" : "none", g_nan_nodes);

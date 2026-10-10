@@ -6,15 +6,28 @@ import Foundation
 
 /// A local MCP server: launched by the app, one JSON-RPC message per line over its
 /// pipes.
+/// A parsed JSON-RPC response carried across task boundaries. `@unchecked
+/// Sendable`: JSONSerialization output is a plain value tree (String, Number,
+/// Bool, Array, Dictionary, NSNull) that is never mutated after parsing.
+/// An outgoing JSON-RPC payload. `@unchecked Sendable`: JSONSerialization
+/// output is a plain value tree that is never mutated after construction.
+struct MCPRequest: @unchecked Sendable {
+    let fields: [String: Any]
+}
+
+struct MCPResponse: @unchecked Sendable {
+    let fields: [String: Any]
+}
+
 actor MCPStdioTransport {
     private let process = Process()
     private let stdin = Pipe()
     private let stdout = Pipe()
     private let stderr = Pipe()
-    private var pending: [Int: CheckedContinuation<[String: Any], Error>] = [:]
+    private var pending: [Int: CheckedContinuation<MCPResponse, Error>] = [:]
     /// Responses that arrived before their waiter parked (send writes the
     /// request before parking, so an eager server can answer in between).
-    private var earlyResults: [Int: [String: Any]] = [:]
+    private var earlyResults: [Int: MCPResponse] = [:]
     private var buffer = Data()
     private var readerTask: Task<Void, Never>?
     private var finished = false
@@ -118,11 +131,11 @@ actor MCPStdioTransport {
               let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
         // A notification from the server has no id and nothing is waiting on it.
         guard let id = object["id"] as? Int else { return }
-        let result: Result<[String: Any], Error>
+        let result: Result<MCPResponse, Error>
         if let error = object["error"] as? [String: Any] {
             result = .failure(MCPError.remote(error["message"] as? String ?? "MCP JSON-RPC error"))
         } else {
-            result = .success(object["result"] as? [String: Any] ?? [:])
+            result = .success(MCPResponse(fields: object["result"] as? [String: Any] ?? [:]))
         }
         // Normal case: a waiter is parked. If the response beat the park
         // (send wrote the request before parking), keep it for park() to
@@ -134,13 +147,13 @@ actor MCPStdioTransport {
         }
     }
 
-    func send(_ payload: [String: Any], id: Int?, timeout: Int) async throws -> [String: Any] {
+    func send(_ payload: MCPRequest, id: Int?, timeout: Int) async throws -> MCPResponse {
         guard process.isRunning else { throw MCPError.launchFailed("\(name) is not running.") }
-        var line = try JSONSerialization.data(withJSONObject: payload)
+        var line = try JSONSerialization.data(withJSONObject: payload.fields)
         line.append(0x0A)
         guard let id else {
             try stdin.fileHandleForWriting.write(contentsOf: line)
-            return [:]
+            return MCPResponse(fields: [:])
         }
         // The request is written synchronously on the actor BEFORE the waiter
         // parks, and deliver() may only see the response after that — an
@@ -153,7 +166,7 @@ actor MCPStdioTransport {
         } catch {
             throw error
         }
-        return try await withThrowingTaskGroup(of: [String: Any].self) { group in
+        return try await withThrowingTaskGroup(of: MCPResponse.self) { group in
             group.addTask { [id] in
                 try await withCheckedThrowingContinuation { continuation in
                     Task { await self.park(id: id, continuation: continuation) }
@@ -177,7 +190,7 @@ actor MCPStdioTransport {
 
     /// Parks the continuation, or drains an early result if the response
     /// already arrived between the write and this park.
-    private func park(id: Int, continuation: CheckedContinuation<[String: Any], Error>) {
+    private func park(id: Int, continuation: CheckedContinuation<MCPResponse, Error>) {
         if let result = earlyResults.removeValue(forKey: id) {
             continuation.resume(returning: result)
         } else {

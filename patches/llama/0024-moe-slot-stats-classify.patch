@@ -5,7 +5,7 @@ index 71516638e..78948dadb 100644
 @@ -1160,17 +1160,16 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
                              slot_of[e] = -2;
                              n_unique++;
-                             if (n_fixed > 0 && tosh_moe_cold_of(layer, e) >= 0) n_cold_unique++;
+                             if (n_fixed > 0 && kestrel_moe_cold_of(layer, e) >= 0) n_cold_unique++;
                          }
                      }
                  }
@@ -21,8 +21,8 @@ index 71516638e..78948dadb 100644
              result = GGML_STATUS_FAILED;
              goto done;
 @@ -1193,33 +1192,35 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
-                 const int32_t * cfi = sv + tosh_moe_off_cold_for_id(n_expert, n_slots, max_fetch);
-                 const int32_t * ios = sv + tosh_moe_off_id_of_slot (n_expert, n_slots, max_fetch);
+                 const int32_t * cfi = sv + kestrel_moe_off_cold_for_id(n_expert, n_slots, max_fetch);
+                 const int32_t * ios = sv + kestrel_moe_off_id_of_slot (n_expert, n_slots, max_fetch);
                  const int n_cold = n_expert - n_fixed;
                  int bad_ring = 0, bad_stale = 0, bad_cold = 0, from_slot = 0, from_cold = 0;
                  for (int e = 0; e < n_expert; ++e) {

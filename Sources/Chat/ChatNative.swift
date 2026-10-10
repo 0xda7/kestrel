@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import os
 import AppKit
 import PDFKit
 import Vision
@@ -320,6 +321,14 @@ final class LiveStream: ObservableObject {
         displayedReasoning = expanded ? latestReasoning : ""
         lastReasoningPublish = expanded ? now : .distantPast
     }
+}
+
+/// A `[[String: Any]]` request body built on the MainActor and consumed by
+/// one detached task. `@unchecked Sendable`: JSON-serializable value tree,
+/// never mutated after construction.
+struct HistoryPayload: @unchecked Sendable {
+    let values: [[String: Any]]
+    init(values: [[String: Any]]) { self.values = values }
 }
 
 final class StreamBuffer: @unchecked Sendable {
@@ -1070,7 +1079,10 @@ final class ChatStore: ObservableObject {
             }
             let store = self
             task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump] in
-                var streamedText = ""
+                // Boxed: onOutput is @Sendable (the pipe-reader thread), so
+                // the accumulator is only touched through a lock — which also
+                // fixes the unfenced read below.
+                let streamedText = OSAllocatedUnfairLock<String>(initialState: "")
                 let outcome = await LatchDelegateService.runStreaming(
                     argv: [LatchDelegateService.binaryPath, "-p", prompt],
                     workingDirectory: toolCwd,
@@ -1085,7 +1097,7 @@ final class ChatStore: ObservableObject {
                     onOutput: { _, fullSoFar in
                         // StreamBuffer is snapshot-replace: hand it the full
                         // text so far, never a fragment.
-                        streamedText = fullSoFar
+                        streamedText.withLock { $0 = fullSoFar }
                         buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
                     })
                 if Task.isCancelled {
@@ -1094,7 +1106,7 @@ final class ChatStore: ObservableObject {
                     // captured var is written on the pipe-reader thread with
                     // no fence, so it is not safe to read here.
                     let partial = buffer.take().map { $0.visible }
-                        ?? streamedText
+                        ?? streamedText.withLock { $0 }
                     let trimmed = partial.trimmingCharacters(in: .whitespacesAndNewlines)
                     buffer.finish()
                     await MainActor.run {
@@ -1209,7 +1221,12 @@ final class ChatStore: ObservableObject {
             }
         }
 
-        task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump] in
+        // Boxed handoff: `history` is built on the MainActor and only read
+        // inside the detached task, but [[String: Any]] cannot carry Sendable
+        // status on its own.
+        let historyBox = HistoryPayload(values: history)
+        task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump, historyBox] in
+            let history = historyBox.values
             var nTokens = 0
             let tSent = Date()
             var tFirst: Date?

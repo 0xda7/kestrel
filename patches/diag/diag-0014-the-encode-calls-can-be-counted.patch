@@ -14,7 +14,7 @@ index 2ac344a56..d8b6aaebb 100644
 +static _Atomic uint64_t g_enc_ns[8];
 +enum { ENC_INIT = 0, ENC_PIPE, ENC_BYTES, ENC_BUF, ENC_TGMEM, ENC_DISP, ENC_BARRIER, ENC_END };
 +
-+static bool tosh_enc_count_on(void) {
++static bool kestrel_enc_count_on(void) {
 +    static int st = 0;
 +    if (st == 0) {
 +        const char * e = KESTREL_ENV("KESTREL_ENC_COUNT");
@@ -23,13 +23,13 @@ index 2ac344a56..d8b6aaebb 100644
 +    return st == 2;
 +}
 +
-+static inline uint64_t tosh_enc_now(void) {
++static inline uint64_t kestrel_enc_now(void) {
 +    struct timespec ts;
 +    clock_gettime(CLOCK_MONOTONIC, &ts);
 +    return (uint64_t) ts.tv_sec*1000000000ull + ts.tv_nsec;
 +}
 +
-+static void tosh_enc_report(void) {
++static void kestrel_enc_report(void) {
 +    static const char * names[8] = { "encoder init", "set pipeline", "set bytes", "set buffer",
 +                                     "threadgroup mem", "dispatch", "barrier", "end encoding" };
 +    uint64_t tot = 0;
@@ -47,12 +47,12 @@ index 2ac344a56..d8b6aaebb 100644
 +    }
 +}
 +
-+#define KESTREL_ENC_T0() const bool _ec = tosh_enc_count_on(); const uint64_t _t0 = _ec ? tosh_enc_now() : 0
++#define KESTREL_ENC_T0() const bool _ec = kestrel_enc_count_on(); const uint64_t _t0 = _ec ? kestrel_enc_now() : 0
 +#define KESTREL_ENC_T1(k) do { if (_ec) { \
 +        static _Atomic int _once = 0; int _e = 0; \
-+        if (atomic_compare_exchange_strong(&_once, &_e, 1)) { atexit(tosh_enc_report); } \
++        if (atomic_compare_exchange_strong(&_once, &_e, 1)) { atexit(kestrel_enc_report); } \
 +        atomic_fetch_add(&g_enc_n[k], 1); \
-+        atomic_fetch_add(&g_enc_ns[k], tosh_enc_now() - _t0); } } while (0)
++        atomic_fetch_add(&g_enc_ns[k], kestrel_enc_now() - _t0); } } while (0)
 +
  ggml_metal_encoder_t ggml_metal_encoder_init(ggml_metal_cmd_buf_t cmd_buf_raw, bool concurrent) {
 +    KESTREL_ENC_T0();

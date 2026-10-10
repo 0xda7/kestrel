@@ -158,13 +158,18 @@ final class VRAMMonitor: ObservableObject {
 /// The device list is fixed unless a GPU is plugged or unplugged, and building it
 /// takes the Metal global lock the render thread also wants.
 private enum MetalDeviceCache {
-    nonisolated(unsafe) private static var cached: [any MTLDevice] = []
-    private static let lock = NSLock()
+    /// `@unchecked Sendable`: MTLDevice handles are process-stable and every
+    /// access to the list is under `lock`.
+    private final class Box: @unchecked Sendable {
+        let lock = NSLock()
+        var cached: [any MTLDevice] = []
+    }
+    private static let box = Box()
 
     static func devices(rescan: Bool) -> [any MTLDevice] {
-        lock.lock()
-        defer { lock.unlock() }
-        if rescan || cached.isEmpty { cached = MTLCopyAllDevices() }
-        return cached
+        box.lock.lock()
+        defer { box.lock.unlock() }
+        if rescan || box.cached.isEmpty { box.cached = MTLCopyAllDevices() }
+        return box.cached
     }
 }

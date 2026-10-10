@@ -13,8 +13,8 @@ index e7afdb695..77b7cd790 100644
  
 +# the expert cache kernels ride along as one more library when the dynamic MoE is on
 +if (KESTREL_ENABLE_DYNAMIC_MOE)
-+    configure_file(${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-lru.metal
-+                   ${CMAKE_CURRENT_SOURCE_DIR}/kernels/tosh_moe.metal COPYONLY)
++    configure_file(${CMAKE_SOURCE_DIR}/kestrel-moe/kestrel-moe-lru.metal
++                   ${CMAKE_CURRENT_SOURCE_DIR}/kernels/kestrel_moe.metal COPYONLY)
 +endif()
 +
  set(METALLIB_KERNEL_SOURCES
@@ -39,7 +39,7 @@ index e7afdb695..77b7cd790 100644
      kernels/argsort.metal
      kernels/pool.metal
      kernels/misc.metal
-+    kernels/tosh_moe.metal
++    kernels/kestrel_moe.metal
  )
  
  if (GGML_METAL_EMBED_LIBRARY)
@@ -59,7 +59,7 @@ index e7afdb695..77b7cd790 100644
  endif()
 +
 +if (KESTREL_ENABLE_DYNAMIC_MOE)
-+    target_include_directories(ggml-metal PRIVATE ${CMAKE_SOURCE_DIR}/tosh-moe)
++    target_include_directories(ggml-metal PRIVATE ${CMAKE_SOURCE_DIR}/kestrel-moe)
 +    target_compile_definitions(ggml-metal PRIVATE KESTREL_ENABLE_DYNAMIC_MOE)
 +endif()
 diff --git a/ggml/src/ggml-metal/ggml-metal-context.h b/ggml/src/ggml-metal/ggml-metal-context.h
@@ -126,7 +126,7 @@ index 442ed2a07..4c346dc9b 100644
  #import "ggml-metal-fusion.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
++#include "kestrel-moe.h"
 +#endif
 +
  #import <Foundation/Foundation.h>
@@ -168,7 +168,7 @@ index 442ed2a07..4c346dc9b 100644
 +    int prefetch_stage_cur;
 +
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+    struct tosh_moe_cache * bounded_moe_cache;
++    struct kestrel_moe_cache * bounded_moe_cache;
 +    int bounded_moe_layers;
 +    int bounded_moe_experts;
 +    int bounded_moe_slots;
@@ -384,8 +384,8 @@ index 442ed2a07..4c346dc9b 100644
 +    }
 +
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+    tosh_moe_seen_dump();
-+    tosh_moe_cache_free(ctx->bounded_moe_cache);
++    kestrel_moe_seen_dump();
++    kestrel_moe_cache_free(ctx->bounded_moe_cache);
 +    [ctx->bounded_moe_ids_readback release];
 +    [ctx->bounded_moe_ids_remapped release];
 +    [ctx->bounded_moe_expert_stage release];
@@ -887,9 +887,9 @@ index 442ed2a07..4c346dc9b 100644
 +            result = GGML_STATUS_FAILED;
 +            goto done;
 +        }
-+        const int n_expert = tosh_moe_experts_of(gf->nodes[first]->src[0]);
++        const int n_expert = kestrel_moe_experts_of(gf->nodes[first]->src[0]);
 +        const int n_slots = (int) gf->nodes[first]->src[0]->ne[2];
-+        const int n_fixed = tosh_moe_fixed_of(gf->nodes[first]->src[0]);
++        const int n_fixed = kestrel_moe_fixed_of(gf->nodes[first]->src[0]);
 +        int32_t * slot_of = malloc((size_t) n_expert*sizeof(int32_t));
 +        int32_t * miss_expert = malloc((size_t) n_slots*sizeof(int32_t));
 +        int32_t * miss_slot = malloc((size_t) n_slots*sizeof(int32_t));
@@ -917,11 +917,11 @@ index 442ed2a07..4c346dc9b 100644
 +                        const int32_t e = *(const int32_t *) ((const uint8_t *) [ids_readback contents] + off);
 +                        if (e < 0) continue;
 +                        if (e >= n_expert) { ids_valid = false; continue; }
-+                        tosh_moe_observe(gf->nodes[first]->src[0], &e, 1);
++                        kestrel_moe_observe(gf->nodes[first]->src[0], &e, 1);
 +                        if (slot_of[e] == -1) {
 +                            slot_of[e] = -2;
 +                            n_unique++;
-+                            if (n_fixed > 0 && tosh_moe_cold_of(layer, e) >= 0) n_cold_unique++;
++                            if (n_fixed > 0 && kestrel_moe_cold_of(layer, e) >= 0) n_cold_unique++;
 +                        }
 +                    }
 +                }
@@ -1087,8 +1087,8 @@ index 442ed2a07..4c346dc9b 100644
 +            for (int i = first; i < gf->n_nodes; ++i) {
 +                n_layer = MAX(n_layer, ggml_metal_op_cached_moe_layer(gf->nodes[i]) + 1);
 +            }
-+            tosh_moe_cache_free(ctx->bounded_moe_cache);
-+            ctx->bounded_moe_cache = tosh_moe_cache_init_fixed(n_layer, n_expert, n_slots, n_fixed);
++            kestrel_moe_cache_free(ctx->bounded_moe_cache);
++            ctx->bounded_moe_cache = kestrel_moe_cache_init_fixed(n_layer, n_expert, n_slots, n_fixed);
 +            ctx->bounded_moe_layers = n_layer;
 +            ctx->bounded_moe_experts = n_expert;
 +            ctx->bounded_moe_slots = n_slots;
@@ -1102,8 +1102,8 @@ index 442ed2a07..4c346dc9b 100644
 +            }
 +            for (int il = 0; il < n_layer; ++il) {
 +                int n_hot = 0;
-+                const int32_t * hot = tosh_moe_hot_of(il, &n_hot);
-+                if (hot && n_hot == n_fixed) tosh_moe_cache_set_fixed(ctx->bounded_moe_cache, il, hot, n_hot);
++                const int32_t * hot = kestrel_moe_hot_of(il, &n_hot);
++                if (hot && n_hot == n_fixed) kestrel_moe_cache_set_fixed(ctx->bounded_moe_cache, il, hot, n_hot);
 +            }
 +        }
 +
@@ -1129,10 +1129,10 @@ index 442ed2a07..4c346dc9b 100644
 +                                ids_ok = false;
 +                                continue;
 +                            }
-+                            int slot = tosh_moe_cache_hold(ctx->bounded_moe_cache, layer, e);
++                            int slot = kestrel_moe_cache_hold(ctx->bounded_moe_cache, layer, e);
 +                            if (slot < 0) {
 +                                int evicted = -1;
-+                                slot = tosh_moe_cache_admit(ctx->bounded_moe_cache, layer, e, &evicted);
++                                slot = kestrel_moe_cache_admit(ctx->bounded_moe_cache, layer, e, &evicted);
 +                                if (slot >= 0) {
 +                                    miss_expert[n_miss] = e;
 +                                    miss_slot[n_miss] = slot;
@@ -1209,13 +1209,13 @@ index 442ed2a07..4c346dc9b 100644
 +                    dispatch_apply((size_t) workers, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(size_t worker) {
 +                        for (int m = (int) worker; m < n_miss; m += workers) {
 +                            memcpy(stage_ptr + (size_t) m*row,
-+                                   host_ptr + (size_t) tosh_moe_cold_of(layer, miss_expert[m])*host->nb[2], row);
++                                   host_ptr + (size_t) kestrel_moe_cold_of(layer, miss_expert[m])*host->nb[2], row);
 +                        }
 +                    });
 +                } else {
 +                    for (int m = 0; m < n_miss; ++m) {
 +                        memcpy((uint8_t *) [expert_stage contents] + stage_off + (size_t) m*row,
-+                               (const uint8_t *) host->data + (size_t) tosh_moe_cold_of(layer, miss_expert[m])*host->nb[2], row);
++                               (const uint8_t *) host->data + (size_t) kestrel_moe_cold_of(layer, miss_expert[m])*host->nb[2], row);
 +                    }
 +                }
 +                const struct ggml_metal_buffer_id dst = ggml_metal_get_buffer_id(op->src[0]);
@@ -1276,7 +1276,7 @@ index 442ed2a07..4c346dc9b 100644
 +        }
 +    }
 +    if (ctx->bounded_moe_cache != NULL) {
-+        tosh_moe_cache_step(ctx->bounded_moe_cache);
++        kestrel_moe_cache_step(ctx->bounded_moe_cache);
 +    }
 +    ggml_metal_op_cached_moe_ids_clear();
 +    ggml_metal_op_cached_moe_full_clear();
@@ -2591,11 +2591,11 @@ index dc6b695eb..0bf7c4195 100644
 +    return res;
 +}
 +
-+ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_tosh_topk_moe(ggml_metal_library_t lib) {
++ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_kestrel_topk_moe(ggml_metal_library_t lib) {
 +    char base[256];
 +    char name[256];
 +
-+    snprintf(base, 256, "kernel_tosh_topk_moe_f32");
++    snprintf(base, 256, "kernel_kestrel_topk_moe_f32");
 +    snprintf(name, 256, "%s", base);
 +
 +    ggml_metal_pipeline_with_params res = ggml_metal_library_get_pipeline(lib, name);
@@ -2787,7 +2787,7 @@ index 1bdaecc73..2b3c03f90 100644
  struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mm_id         (ggml_metal_library_t lib, const struct ggml_tensor * op);
  struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_mul_mv_id         (ggml_metal_library_t lib, const struct ggml_tensor * op);
  struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_argmax            (ggml_metal_library_t lib, const struct ggml_tensor * op);
-+struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_tosh_topk_moe     (ggml_metal_library_t lib);
++struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_kestrel_topk_moe     (ggml_metal_library_t lib);
  struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_argsort           (ggml_metal_library_t lib, const struct ggml_tensor * op);
  struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_argsort_merge     (ggml_metal_library_t lib, const struct ggml_tensor * op);
 -struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_fwht              (ggml_metal_library_t lib, int n, enum ggml_type tsrc);
@@ -2914,10 +2914,10 @@ index 81ea7f9d7..1f2c9b1dd 100644
  #import "ggml-metal-common.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#import "tosh-moe.h"
++#import "kestrel-moe.h"
 +#else
 +enum { KESTREL_MOE_OFF = 0 };
-+static inline int tosh_moe_mode(void) { return KESTREL_MOE_OFF; }
++static inline int kestrel_moe_mode(void) { return KESTREL_MOE_OFF; }
 +#endif
 +
  #include <Foundation/Foundation.h>
@@ -2944,7 +2944,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
      X(ARGSORT,         argsort)        \
      X(POOL,            pool)           \
 +    X(TURBO,           turbo)          \
-+    X(KESTREL_MOE,        tosh_moe)       \
++    X(KESTREL_MOE,        kestrel_moe)       \
      X(MISC,            misc)
  
  enum ggml_metal_lib_kind {
@@ -3334,7 +3334,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 -                dev->props.supports_gpu_family_apple7 = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
 +                // the expert cache keeps weights in host memory the GPU can read; without unified
 +            // memory that is a different decision from making every buffer shared
-+            dev->props.use_host_buffers = !dev->props.use_shared_buffers && tosh_moe_mode() != KESTREL_MOE_OFF;
++            dev->props.use_host_buffers = !dev->props.use_shared_buffers && kestrel_moe_mode() != KESTREL_MOE_OFF;
 +
 +            dev->props.supports_gpu_family_apple7 = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
  
@@ -3998,25 +3998,25 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    _Atomic uint64_t t_last;
 +    // big D2H reads (logits class) split into GPU-busy time vs the blit itself
 +    _Atomic uint64_t big_calls, big_dep_ns, big_xfer_ns;
-+} g_tosh_prof;
++} g_kestrel_prof;
 +
-+static bool tosh_prof_on(void) {
-+    int s = atomic_load_explicit(&g_tosh_prof.state, memory_order_relaxed);
++static bool kestrel_prof_on(void) {
++    int s = atomic_load_explicit(&g_kestrel_prof.state, memory_order_relaxed);
 +    if (s == 0) {
 +        const char * v = getenv("KESTREL_MOE_PROFILE");
 +        s = (v && v[0] == '1') ? 2 : 1;
-+        atomic_store_explicit(&g_tosh_prof.state, s, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_prof.state, s, memory_order_relaxed);
 +    }
 +    return s == 2;
 +}
 +
 +// name-class buckets, filled by the callers that know the tensor
 +enum { KESTREL_CLS_MOE, KESTREL_CLS_LOGITS, KESTREL_CLS_OTHER, KESTREL_CLS_N };
-+static _Atomic uint64_t g_tosh_cls_calls[2][KESTREL_CLS_N]; // [d2h][cls]
-+static _Atomic uint64_t g_tosh_cls_bytes[2][KESTREL_CLS_N];
++static _Atomic uint64_t g_kestrel_cls_calls[2][KESTREL_CLS_N]; // [d2h][cls]
++static _Atomic uint64_t g_kestrel_cls_bytes[2][KESTREL_CLS_N];
 +
 +void ggml_metal_prof_note(const char * name, size_t size, bool d2h) {
-+    if (!tosh_prof_on()) {
++    if (!kestrel_prof_on()) {
 +        return;
 +    }
 +    int cls = KESTREL_CLS_OTHER;
@@ -4027,12 +4027,12 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +            cls = KESTREL_CLS_LOGITS;
 +        }
 +    }
-+    atomic_fetch_add_explicit(&g_tosh_cls_calls[d2h][cls], 1,    memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_cls_bytes[d2h][cls], size, memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_cls_calls[d2h][cls], 1,    memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_cls_bytes[d2h][cls], size, memory_order_relaxed);
 +
 +    // first distinct "other" names, to identify unexplained traffic
 +    if (cls == KESTREL_CLS_OTHER && name &&
-+        (d2h || atomic_load_explicit(&g_tosh_prof.t_last, memory_order_relaxed) != 0)) {
++        (d2h || atomic_load_explicit(&g_kestrel_prof.t_last, memory_order_relaxed) != 0)) {
 +        static char seen[16][48];
 +        static atomic_flag lock = ATOMIC_FLAG_INIT;
 +        if (!atomic_flag_test_and_set(&lock)) {
@@ -4052,15 +4052,15 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    }
 +}
 +
-+static void tosh_prof_cls_flush(void) {
++static void kestrel_prof_cls_flush(void) {
 +    static const char * dirs[2] = { "H2D", "D2H" };
 +    static const char * clss[KESTREL_CLS_N] = { "moe", "logits", "other" };
 +    char line[256];
 +    int n = 0;
 +    for (int d = 0; d < 2; d++) {
 +        for (int c = 0; c < KESTREL_CLS_N; c++) {
-+            const uint64_t calls = atomic_exchange(&g_tosh_cls_calls[d][c], 0);
-+            const uint64_t bytes = atomic_exchange(&g_tosh_cls_bytes[d][c], 0);
++            const uint64_t calls = atomic_exchange(&g_kestrel_cls_calls[d][c], 0);
++            const uint64_t bytes = atomic_exchange(&g_kestrel_cls_bytes[d][c], 0);
 +            if (calls == 0) {
 +                continue;
 +            }
@@ -4074,24 +4074,24 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    }
 +}
 +
-+static void tosh_prof_add(int idx, size_t size, uint64_t t0) {
++static void kestrel_prof_add(int idx, size_t size, uint64_t t0) {
 +    const uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-+    atomic_fetch_add_explicit(&g_tosh_prof.calls[idx],   1,        memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_prof.bytes[idx],   size,     memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_prof.wait_ns[idx], now - t0, memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.calls[idx],   1,        memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.bytes[idx],   size,     memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.wait_ns[idx], now - t0, memory_order_relaxed);
 +
-+    uint64_t last = atomic_load_explicit(&g_tosh_prof.t_last, memory_order_relaxed);
++    uint64_t last = atomic_load_explicit(&g_kestrel_prof.t_last, memory_order_relaxed);
 +    if (now - last < 5000000000ULL ||
-+        !atomic_compare_exchange_strong(&g_tosh_prof.t_last, &last, now)) {
++        !atomic_compare_exchange_strong(&g_kestrel_prof.t_last, &last, now)) {
 +        return;
 +    }
 +    static const char * names[KESTREL_PROF_N] = { "D2H-stage", "H2D-stage", "D2H-direct", "H2D-direct" };
 +    char line[256];
 +    int n = 0;
 +    for (int i = 0; i < KESTREL_PROF_N; i++) {
-+        const uint64_t c = atomic_exchange(&g_tosh_prof.calls[i],   0);
-+        const uint64_t b = atomic_exchange(&g_tosh_prof.bytes[i],   0);
-+        const uint64_t w = atomic_exchange(&g_tosh_prof.wait_ns[i], 0);
++        const uint64_t c = atomic_exchange(&g_kestrel_prof.calls[i],   0);
++        const uint64_t b = atomic_exchange(&g_kestrel_prof.bytes[i],   0);
++        const uint64_t w = atomic_exchange(&g_kestrel_prof.wait_ns[i], 0);
 +        if (c == 0) {
 +            continue;
 +        }
@@ -4103,14 +4103,14 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        // raw stderr: llama-server filters backend INFO logs at default verbosity
 +        fprintf(stderr, "ggml_metal: moe-profile: %s\n", line);
 +    }
-+    const uint64_t bc = atomic_exchange(&g_tosh_prof.big_calls, 0);
++    const uint64_t bc = atomic_exchange(&g_kestrel_prof.big_calls, 0);
 +    if (bc > 0) {
-+        const uint64_t bd = atomic_exchange(&g_tosh_prof.big_dep_ns,  0);
-+        const uint64_t bx = atomic_exchange(&g_tosh_prof.big_xfer_ns, 0);
++        const uint64_t bd = atomic_exchange(&g_kestrel_prof.big_dep_ns,  0);
++        const uint64_t bx = atomic_exchange(&g_kestrel_prof.big_xfer_ns, 0);
 +        fprintf(stderr, "ggml_metal: moe-profile:   D2H-big %llux gpu-busy %.0fms blit %.1fms\n",
 +                (unsigned long long) bc, bd / 1e6, bx / 1e6);
 +    }
-+    tosh_prof_cls_flush();
++    kestrel_prof_cls_flush();
 +}
 +
 +// caller must hold dev->stage_lock; nil on allocation failure
@@ -4147,7 +4147,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        return false;
 +    }
 +
-+    const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
 +    [dev->stage_lock lock];
 +
@@ -4195,7 +4195,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(KESTREL_PROF_H2D_STAGE, size, t0);
++        kestrel_prof_add(KESTREL_PROF_H2D_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -4213,7 +4213,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        return false;
 +    }
 +
-+    const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
 +    const size_t per_batch = MAX((size_t) 1, GGML_METAL_STAGE_BUF_MAX / size);
 +
@@ -4273,7 +4273,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(KESTREL_PROF_H2D_STAGE, size*n_copies, t0);
++        kestrel_prof_add(KESTREL_PROF_H2D_STAGE, size*n_copies, t0);
 +    }
 +
 +    return true;
@@ -4332,7 +4332,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        return false;
 +    }
 +
-+    const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
 +    [dev->stage_lock lock];
 +
@@ -4353,7 +4353,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        dev->stage_batch_used += size;
 +        [dev->stage_lock unlock];
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
++            kestrel_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +        }
 +        return true;
 +    }
@@ -4383,10 +4383,10 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +
 +    // split the big-read wait: time before the blit ran is GPU compute, not readback
 +    if (t0 && size >= (size_t) 256*1024) {
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_calls, 1, memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_dep_ns,
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_calls, 1, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_dep_ns,
 +            (uint64_t) ((cmd_buf.GPUStartTime - cmd_buf.kernelStartTime) * 1e9), memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_xfer_ns,
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_xfer_ns,
 +            (uint64_t) ((cmd_buf.GPUEndTime - cmd_buf.GPUStartTime) * 1e9), memory_order_relaxed);
 +    }
 +
@@ -4395,7 +4395,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
++        kestrel_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -4450,7 +4450,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +            }
 +        }
 +
-+        const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++        const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
@@ -4508,7 +4508,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +            }
 +
 +            if (t0) {
-+                tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
++                kestrel_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -4533,7 +4533,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
          //[cmd_buf waitUntilCompleted];
 +
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
++            kestrel_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +        }
      }
  }
@@ -4559,7 +4559,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +            return;
 +        }
 +
-+        const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++        const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
          // dst
          id<MTLBuffer> buf_dst = [buf->dev->mtl_device newBufferWithBytesNoCopy:data
@@ -4596,7 +4596,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +            [cmd_buf waitUntilCompleted];
 +
 +            if (t0) {
-+                tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
++                kestrel_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -4646,7 +4646,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
 +        }
 +
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
++            kestrel_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +        }
      }
  }
@@ -4916,7 +4916,7 @@ index 490dd83a1..05dc54e94 100644
 +    int32_t has_bias;
 +    float   clamp;
 +    float   scale;
-+} ggml_metal_kargs_tosh_topk_moe;
++} ggml_metal_kargs_kestrel_topk_moe;
 +
  typedef struct {
      int32_t nrows;
@@ -4934,25 +4934,25 @@ index 708703e51..59970fbb5 100644
  #include "ggml-metal-ops.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
++#include "kestrel-moe.h"
 +#else
-+static inline const void * tosh_moe_state_of(const void *) { return nullptr; }
-+static inline const void * tosh_moe_ram_of(const void *)   { return nullptr; }
-+static inline const void * tosh_moe_slots_of(const void *) { return nullptr; }
-+static inline const void * tosh_moe_stage(void)            { return nullptr; }
-+static inline int tosh_moe_experts_of(const void *)         { return 0; }
-+static inline int tosh_moe_fixed_of(const void *)           { return 0; }
-+static inline bool tosh_moe_should_route(const void *, int) { return false; }
-+static inline int tosh_moe_ids_room(int)                   { return 0; }
-+static inline int tosh_moe_off_slot_for_id(int, int, int)  { return 0; }
-+static inline int tosh_moe_off_cold_for_id(int, int, int)  { return 0; }
-+static inline int tosh_moe_off_id_of_slot(int, int, int)   { return 0; }
-+static inline int tosh_moe_off_usage(int, int, int)        { return 0; }
-+static inline int tosh_moe_off_step(int, int, int)         { return 0; }
-+static inline int tosh_moe_off_n_indices(int, int, int)    { return 0; }
-+static inline int tosh_moe_off_evict(int, int, int)        { return 0; }
-+static inline int tosh_moe_off_src(int, int, int)          { return 0; }
-+static inline int tosh_moe_off_ids(int, int, int)          { return 0; }
++static inline const void * kestrel_moe_state_of(const void *) { return nullptr; }
++static inline const void * kestrel_moe_ram_of(const void *)   { return nullptr; }
++static inline const void * kestrel_moe_slots_of(const void *) { return nullptr; }
++static inline const void * kestrel_moe_stage(void)            { return nullptr; }
++static inline int kestrel_moe_experts_of(const void *)         { return 0; }
++static inline int kestrel_moe_fixed_of(const void *)           { return 0; }
++static inline bool kestrel_moe_should_route(const void *, int) { return false; }
++static inline int kestrel_moe_ids_room(int)                   { return 0; }
++static inline int kestrel_moe_off_slot_for_id(int, int, int)  { return 0; }
++static inline int kestrel_moe_off_cold_for_id(int, int, int)  { return 0; }
++static inline int kestrel_moe_off_id_of_slot(int, int, int)   { return 0; }
++static inline int kestrel_moe_off_usage(int, int, int)        { return 0; }
++static inline int kestrel_moe_off_step(int, int, int)         { return 0; }
++static inline int kestrel_moe_off_n_indices(int, int, int)    { return 0; }
++static inline int kestrel_moe_off_evict(int, int, int)        { return 0; }
++static inline int kestrel_moe_off_src(int, int, int)          { return 0; }
++static inline int kestrel_moe_off_ids(int, int, int)          { return 0; }
 +#endif
 +
  #include "ggml.h"
@@ -4973,9 +4973,9 @@ index 708703e51..59970fbb5 100644
  #include <cmath>
 +#include <unordered_map>
 +
-+static std::unordered_map<const ggml_tensor *, ggml_metal_buffer_id> g_tosh_moe_staged_ids;
++static std::unordered_map<const ggml_tensor *, ggml_metal_buffer_id> g_kestrel_moe_staged_ids;
  
-+static std::unordered_map<const ggml_tensor *, ggml_metal_buffer_id> g_tosh_moe_full_cold;
++static std::unordered_map<const ggml_tensor *, ggml_metal_buffer_id> g_kestrel_moe_full_cold;
  static ggml_metal_buffer_id ggml_metal_get_buffer_id(const ggml_tensor * t) {
      if (!t) {
          return { nullptr, 0 };
@@ -5020,8 +5020,8 @@ index 708703e51..59970fbb5 100644
 +
 +int ggml_metal_op_cached_moe_layer(const ggml_tensor * op) {
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+    if (op && op->op == GGML_OP_MUL_MAT_ID && op->src[0] && tosh_moe_state_of(op->src[0])) {
-+        const int registered = tosh_moe_layer_of(op->src[0]);
++    if (op && op->op == GGML_OP_MUL_MAT_ID && op->src[0] && kestrel_moe_state_of(op->src[0])) {
++        const int registered = kestrel_moe_layer_of(op->src[0]);
 +        if (registered >= 0) {
 +            return registered;
 +        }
@@ -5043,7 +5043,7 @@ index 708703e51..59970fbb5 100644
 +const ggml_tensor * ggml_metal_op_cached_moe_host(const ggml_tensor * op) {
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
 +    if (ggml_metal_op_cached_moe_layer(op) >= 0) {
-+        return (const ggml_tensor *) tosh_moe_ram_of(op->src[0]);
++        return (const ggml_tensor *) kestrel_moe_ram_of(op->src[0]);
 +    }
 +#else
 +    (void) op;
@@ -5052,19 +5052,19 @@ index 708703e51..59970fbb5 100644
 +}
 +
 +void ggml_metal_op_cached_moe_ids_set(const ggml_tensor * slots, ggml_metal_buffer_id ids) {
-+    g_tosh_moe_staged_ids[slots] = ids;
++    g_kestrel_moe_staged_ids[slots] = ids;
 +}
 +
 +void ggml_metal_op_cached_moe_ids_clear(void) {
-+    g_tosh_moe_staged_ids.clear();
++    g_kestrel_moe_staged_ids.clear();
 +}
 +
 +void ggml_metal_op_cached_moe_full_set(const ggml_tensor * slots, ggml_metal_buffer_id cold) {
-+    g_tosh_moe_full_cold[slots] = cold;
++    g_kestrel_moe_full_cold[slots] = cold;
 +}
 +
 +void ggml_metal_op_cached_moe_full_clear(void) {
-+    g_tosh_moe_full_cold.clear();
++    g_kestrel_moe_full_cold.clear();
 +}
 +
  struct ggml_metal_op {
@@ -5169,7 +5169,7 @@ index 708703e51..59970fbb5 100644
          case GGML_OP_SOFT_MAX:
              {
 -                n_fuse = ggml_metal_op_soft_max(ctx, idx);
-+                n_fuse = ggml_metal_op_tosh_topk_moe(ctx, idx);
++                n_fuse = ggml_metal_op_kestrel_topk_moe(ctx, idx);
 +                if (n_fuse == 0) {
 +                    n_fuse = ggml_metal_op_soft_max(ctx, idx);
 +                }
@@ -6014,7 +6014,7 @@ index 708703e51..59970fbb5 100644
      assert(op->op == GGML_OP_MUL_MAT_ID);
  
 -    const int64_t ne02 = op->src[0]->ne[2]; // n_expert
-+    const int registered = tosh_moe_experts_of(op->src[0]);
++    const int registered = kestrel_moe_experts_of(op->src[0]);
 +    const int64_t ne02 = registered > 0 ? registered : op->src[0]->ne[2]; // n_expert
      const int64_t ne21 = op->src[2]->ne[1]; // n_token
  
@@ -6537,7 +6537,7 @@ index 708703e51..59970fbb5 100644
 +// the MoE router emits softmax -> argsort -> get_rows [-> sum_rows -> clamp -> div].
 +// ggml_can_fuse_ext cannot express it: the argsort output is also read by the later
 +// mul_mat_id, so it has two uses. Match it by hand like the CUDA backend does.
-+struct ggml_metal_tosh_topk_moe_plan {
++struct ggml_metal_kestrel_topk_moe_plan {
 +    int n_fuse = 0;
 +    bool with_norm = false;
 +    float clamp = 0.0f;
@@ -6553,11 +6553,11 @@ index 708703e51..59970fbb5 100644
 +    return t;
 +}
 +
-+static bool ggml_metal_tosh_topk_moe_same(ggml_tensor * a, ggml_tensor * b) {
++static bool ggml_metal_kestrel_topk_moe_same(ggml_tensor * a, ggml_tensor * b) {
 +    return a && b && ggml_metal_view_base(a) == ggml_metal_view_base(b);
 +}
 +
-+static bool ggml_metal_tosh_topk_moe_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_tosh_topk_moe_plan & plan) {
++static bool ggml_metal_kestrel_topk_moe_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_kestrel_topk_moe_plan & plan) {
 +    // measured neutral on RDNA2 (pp512 +0.1%, tg128 -1%, both inside the noise), so the
 +    // dispatch saving does not pay for itself here; opt-in until a device shows a gain
 +    static const bool enabled = getenv("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;
@@ -6595,9 +6595,9 @@ index 708703e51..59970fbb5 100644
 +        return false;
 +    }
 +
-+    if (!ggml_metal_tosh_topk_moe_same(argsort->src[0], softmax) ||
-+        !ggml_metal_tosh_topk_moe_same(getrows->src[0], softmax) ||
-+        !ggml_metal_tosh_topk_moe_same(getrows->src[1], argsort)) {
++    if (!ggml_metal_kestrel_topk_moe_same(argsort->src[0], softmax) ||
++        !ggml_metal_kestrel_topk_moe_same(getrows->src[0], softmax) ||
++        !ggml_metal_kestrel_topk_moe_same(getrows->src[1], argsort)) {
 +        return false;
 +    }
 +
@@ -6617,10 +6617,10 @@ index 708703e51..59970fbb5 100644
 +        ggml_tensor * div     = ctx->node(idx + 5);
 +
 +        if (sumrows->op != GGML_OP_SUM_ROWS || clamp->op != GGML_OP_CLAMP || div->op != GGML_OP_DIV ||
-+            !ggml_metal_tosh_topk_moe_same(sumrows->src[0], getrows) ||
-+            !ggml_metal_tosh_topk_moe_same(clamp->src[0], sumrows) ||
-+            !ggml_metal_tosh_topk_moe_same(div->src[0], getrows) ||
-+            !ggml_metal_tosh_topk_moe_same(div->src[1], clamp) ||
++            !ggml_metal_kestrel_topk_moe_same(sumrows->src[0], getrows) ||
++            !ggml_metal_kestrel_topk_moe_same(clamp->src[0], sumrows) ||
++            !ggml_metal_kestrel_topk_moe_same(div->src[0], getrows) ||
++            !ggml_metal_kestrel_topk_moe_same(div->src[1], clamp) ||
 +            !ggml_is_contiguous(div) ||
 +            !ctx->has_n_uses(idx + 3, 1) ||
 +            !ctx->has_n_uses(idx + 4, 1)) {
@@ -6653,16 +6653,16 @@ index 708703e51..59970fbb5 100644
 +    return true;
 +}
 +
-+int ggml_metal_op_tosh_topk_moe(ggml_metal_op_t ctx, int idx) {
-+    ggml_metal_tosh_topk_moe_plan plan;
-+    if (!ggml_metal_tosh_topk_moe_fusion(ctx, idx, plan)) {
++int ggml_metal_op_kestrel_topk_moe(ggml_metal_op_t ctx, int idx) {
++    ggml_metal_kestrel_topk_moe_plan plan;
++    if (!ggml_metal_kestrel_topk_moe_fusion(ctx, idx, plan)) {
 +        return 0;
 +    }
 +
 +    ggml_metal_library_t lib = ctx->lib;
 +    ggml_metal_encoder_t enc = ctx->enc;
 +
-+    auto pipeline = ggml_metal_library_get_pipeline_tosh_topk_moe(lib);
++    auto pipeline = ggml_metal_library_get_pipeline_kestrel_topk_moe(lib);
 +    if (!pipeline.pipeline) {
 +        return 0;
 +    }
@@ -6679,7 +6679,7 @@ index 708703e51..59970fbb5 100644
 +    const size_t smem_f = GGML_PAD((2*n_expert + nth)*sizeof(float), 16);
 +    const size_t smem_i = GGML_PAD(nth*sizeof(int32_t), 16);
 +
-+    ggml_metal_kargs_tosh_topk_moe args = {
++    ggml_metal_kargs_kestrel_topk_moe args = {
 +        /*.n_expert        =*/ n_expert,
 +        /*.n_expert_used   =*/ n_expert_used,
 +        /*.nrows           =*/ nrows,
@@ -6796,7 +6796,7 @@ index 583d1156b..a522ea21c 100644
  int ggml_metal_op_arange            (ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_timestep_embedding(ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_argmax            (ggml_metal_op_t ctx, int idx);
-+int ggml_metal_op_tosh_topk_moe     (ggml_metal_op_t ctx, int idx);
++int ggml_metal_op_kestrel_topk_moe     (ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_argsort           (ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_top_k             (ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_topk_moe          (ggml_metal_op_t ctx, int idx);
@@ -6819,9 +6819,9 @@ index c6c8ce836..60178f062 100644
  #include "ggml-metal-fusion.h"
 +
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
++#include "kestrel-moe.h"
 +#else
-+static inline void tosh_moe_set_host_buft(const void *) {}
++static inline void kestrel_moe_set_host_buft(const void *) {}
 +#endif
  #include "ggml-metal-context.h"
  #include "ggml-metal-ops.h"
@@ -6912,7 +6912,7 @@ index c6c8ce836..60178f062 100644
 +
 +            // the loader needs to recognise the host-resident type wherever it shows up
 +            if (i == 0) {
-+                tosh_moe_set_host_buft(&bufts.back());
++                kestrel_moe_set_host_buft(&bufts.back());
 +            }
          }
  
@@ -7366,8 +7366,8 @@ index 6a04bedb7..172e94478 100644
  
 -kernel void kernel_topk_moe_f32(
 -        constant ggml_metal_kargs_topk_moe & args,
-+kernel void kernel_tosh_topk_moe_f32(
-+        constant ggml_metal_kargs_tosh_topk_moe & args,
++kernel void kernel_kestrel_topk_moe_f32(
++        constant ggml_metal_kargs_kestrel_topk_moe & args,
          device const char * src_logits,
          device const char * src_bias,
          device       char * dst_weights,

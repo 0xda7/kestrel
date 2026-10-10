@@ -96,14 +96,12 @@ final class MetaPromptServiceTests: XCTestCase {
     /// The empty-task guard returns the bilingual failure text before pi is
     /// ever launched.
     func testEmptyTaskDescriptionReturnsFailureText() async {
-        XCTAssertEqual(
-            await MetaPromptService.run(taskDescription: "   ", existingPrompt: "Old",
-                                        skillsList: "- a"),
-            MetaPromptService.emptyTaskMessage)
-        XCTAssertEqual(
-            await MetaPromptService.run(taskDescription: "", existingPrompt: nil,
-                                        skillsList: ""),
-            MetaPromptService.emptyTaskMessage)
+        let blankTask = await MetaPromptService.run(taskDescription: "   ", existingPrompt: "Old",
+                                                    skillsList: "- a")
+        XCTAssertEqual(blankTask, MetaPromptService.emptyTaskMessage)
+        let emptyTask = await MetaPromptService.run(taskDescription: "", existingPrompt: nil,
+                                                    skillsList: "")
+        XCTAssertEqual(emptyTask, MetaPromptService.emptyTaskMessage)
     }
 
     /// Live-fire: one real run through the confined path against pi's own

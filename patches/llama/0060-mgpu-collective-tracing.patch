@@ -24,7 +24,7 @@ index d410f00a4..38dff9f84 100644
 +static _Atomic uint64_t g_tr_gpu_ns      = 0; // GPU execution of the collective's buffers
 +static _Atomic uint64_t g_tr_sched_ns    = 0; // committed to running: queueing plus event waits
 +
-+static bool tosh_mgpu_trace(void) {
++static bool kestrel_mgpu_trace(void) {
 +    static int on = -1;
 +    if (on < 0) {
 +        const char * v = getenv("KESTREL_MGPU_TRACE");
@@ -33,11 +33,11 @@ index d410f00a4..38dff9f84 100644
 +    return on == 1;
 +}
 +
-+static uint64_t tosh_now_ns(void) {
++static uint64_t kestrel_now_ns(void) {
 +    return clock_gettime_nsec_np(CLOCK_MONOTONIC);
 +}
 +
-+static void tosh_mgpu_trace_report(void) {
++static void kestrel_mgpu_trace_report(void) {
 +    const uint64_t reduce = atomic_load(&g_tr_reduce);
 +    const uint64_t peer   = atomic_load(&g_tr_bytes_peer);
 +    const uint64_t host   = atomic_load(&g_tr_bytes_host);
@@ -67,14 +67,14 @@ index d410f00a4..38dff9f84 100644
 +// Metal reports both when the buffer was handed over and when the GPU actually ran it; the
 +// gap is the queueing and the event waits, which is the number the collective is judged on.
 +// Must be called before the buffer is committed: Metal refuses a handler added after.
-+static void tosh_trace_cmd_buf(id<MTLCommandBuffer> cmd_buf) {
-+    if (!tosh_mgpu_trace()) {
++static void kestrel_trace_cmd_buf(id<MTLCommandBuffer> cmd_buf) {
++    if (!kestrel_mgpu_trace()) {
 +        return;
 +    }
 +    static int reg = 0;
 +    if (!reg) {
 +        reg = 1;
-+        atexit(tosh_mgpu_trace_report);
++        atexit(kestrel_mgpu_trace_report);
 +    }
 +    atomic_fetch_add(&g_tr_cmd_bufs, 1);
 +    [cmd_buf addCompletedHandler:^(id<MTLCommandBuffer> cb) {
@@ -107,7 +107,7 @@ index d410f00a4..38dff9f84 100644
          }
  
 +        if (link->peer_src == metal_src) {
-+            if (tosh_mgpu_trace()) {
++            if (kestrel_mgpu_trace()) {
 +                atomic_fetch_add(&g_tr_rv_hit, 1);
 +            }
 +        }
@@ -127,12 +127,12 @@ index d410f00a4..38dff9f84 100644
              if (link->peer_view == nil) {
                  return false;
              }
-+            if (tosh_mgpu_trace()) {
++            if (kestrel_mgpu_trace()) {
 +                atomic_fetch_add(&g_tr_rv_new, 1);
 +            }
 +        }
 +
-+        if (tosh_mgpu_trace()) {
++        if (kestrel_mgpu_trace()) {
 +            atomic_fetch_add(&g_tr_copy, 1);
 +            atomic_fetch_add(&g_tr_bytes_peer, size);
          }
@@ -140,7 +140,7 @@ index d410f00a4..38dff9f84 100644
          const uint64_t seq = ++link->seq;
          @autoreleasepool {
              id<MTLCommandBuffer> cmd_src = [ctx_src->queue commandBuffer];
-+            tosh_trace_cmd_buf(cmd_src);
++            kestrel_trace_cmd_buf(cmd_src);
              ggml_metal_encode_pending_waits(ctx_src, cmd_src);
              [cmd_src encodeSignalEvent:link->ev_ready value:seq];
              [cmd_src commit];
@@ -149,7 +149,7 @@ index d410f00a4..38dff9f84 100644
              [cmd_src retain];
  
              id<MTLCommandBuffer> cmd_dst = [ctx_dst->queue commandBuffer];
-+            tosh_trace_cmd_buf(cmd_dst);
++            kestrel_trace_cmd_buf(cmd_dst);
              ggml_metal_encode_pending_waits(ctx_dst, cmd_dst);
              [cmd_dst encodeWaitForEvent:link->ev_ready value:seq];
              id<MTLBlitCommandEncoder> encoder = [cmd_dst blitCommandEncoder];
@@ -167,7 +167,7 @@ index d410f00a4..38dff9f84 100644
          return false;
      }
  
-+    if (tosh_mgpu_trace()) {
++    if (kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_copy, 1);
 +        // twice: the block is written on one card and read back on the other
 +        atomic_fetch_add(&g_tr_bytes_host, 2*size);
@@ -190,7 +190,7 @@ index d410f00a4..38dff9f84 100644
          return false;
      }
  
-+    const uint64_t t_enter = tosh_mgpu_trace() ? tosh_now_ns() : 0;
++    const uint64_t t_enter = kestrel_mgpu_trace() ? kestrel_now_ns() : 0;
 +
      // Both sides are handed the same number: reading it off the link races with whichever
      // card the loop reached first. Links skip values, so the back-pressure wait names its own.
@@ -209,15 +209,15 @@ index d410f00a4..38dff9f84 100644
  
          ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
  
-+        tosh_trace_cmd_buf(cmd_buf);
++        kestrel_trace_cmd_buf(cmd_buf);
          ggml_metal_cmd_buf_end(ctx_self, cmd_buf, false);
      }
  
-+    if (tosh_mgpu_trace()) {
++    if (kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_reduce, 1);
 +        // out through the shared block and back in: this card touches it twice
 +        atomic_fetch_add(&g_tr_bytes_host, 2*size);
-+        atomic_fetch_add(&g_tr_encode_ns, tosh_now_ns() - t_enter);
++        atomic_fetch_add(&g_tr_encode_ns, kestrel_now_ns() - t_enter);
 +    }
 +
      return true;

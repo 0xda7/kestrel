@@ -17,9 +17,9 @@ index 266b11735..e4c5d793d 100644
 +    // the buffer type is the whole of it: skipping only the bank would leave the weights in
 +    // host memory and the matmul reading them scattered, which is far slower than the cache.
 +    {
-+        const int n_slots_all = tosh_moe_slots_want();
++        const int n_slots_all = kestrel_moe_slots_want();
 +        if (n_slots_all > 0 && ne.size() == 3 && t_meta.ne[2] <= n_slots_all &&
-+            (const void *) buft == tosh_moe_host_buft() &&
++            (const void *) buft == kestrel_moe_host_buft() &&
 +            std::string(ggml_get_name(&t_meta)).find("_exps.weight") != std::string::npos) {
 +            buft = ggml_backend_dev_buffer_type(ggml_backend_buft_get_device(buft));
 +        }

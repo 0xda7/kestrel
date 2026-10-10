@@ -3,7 +3,7 @@ index a46cfad2a..d59adc6bd 100644
 --- a/ggml/src/ggml-metal/CMakeLists.txt
 +++ b/ggml/src/ggml-metal/CMakeLists.txt
 @@ -36,16 +36,17 @@ if (KESTREL_ENABLE_DYNAMIC_MOE)
-                    ${CMAKE_CURRENT_SOURCE_DIR}/kernels/tosh_moe.metal COPYONLY)
+                    ${CMAKE_CURRENT_SOURCE_DIR}/kernels/kestrel_moe.metal COPYONLY)
  endif()
  
  set(METALLIB_KERNEL_SOURCES

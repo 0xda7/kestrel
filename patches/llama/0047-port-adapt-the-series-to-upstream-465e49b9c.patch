@@ -475,7 +475,7 @@ index bac07fb44..3648d2643 100644
 +// MTLSharedEvents, so neither GPU drains and the CPU never blocks
 +static _Atomic uint64_t g_xdev_ev = 0, g_xdev_peer = 0, g_xdev_gen = 0;
 +
-+static void tosh_xdev_report(void) {
++static void kestrel_xdev_report(void) {
 +    fprintf(stderr, "KESTREL_XDEV  events=%llu  peer=%llu  generic=%llu\n",
 +            (unsigned long long) atomic_load(&g_xdev_ev),
 +            (unsigned long long) atomic_load(&g_xdev_peer),
@@ -564,7 +564,7 @@ index bac07fb44..3648d2643 100644
 +        if (count < 0) {
 +            count = getenv("KESTREL_MGPU_XDEV_COUNT") != NULL;
 +            if (count) {
-+                atexit(tosh_xdev_report);
++                atexit(kestrel_xdev_report);
 +            }
 +        }
 +
@@ -698,10 +698,10 @@ index d895cb10a..c277008a1 100644
 -#import "ggml-metal-common.h"
  
  #ifdef KESTREL_ENABLE_DYNAMIC_MOE
- #import "tosh-moe.h"
+ #import "kestrel-moe.h"
  #else
  enum { KESTREL_MOE_OFF = 0 };
- static inline int tosh_moe_mode(void) { return KESTREL_MOE_OFF; }
+ static inline int kestrel_moe_mode(void) { return KESTREL_MOE_OFF; }
  #endif
 +#import "ggml-metal-common.h"
  
@@ -1060,13 +1060,13 @@ index 8f5c9f96e..d059614b1 100644
 +#include <time.h>
 +static uint64_t g_opprof_ns[GGML_OP_COUNT];
 +static uint64_t g_opprof_n [GGML_OP_COUNT];
-+static bool tosh_opprof_on(void) {
++static bool kestrel_opprof_on(void) {
 +    static int v = -1;
 +    if (v < 0) { v = getenv("KESTREL_OPPROF") != nullptr; }
 +    return v;
 +}
-+static void tosh_opprof_dump(void) {
-+    if (!tosh_opprof_on()) return;
++static void kestrel_opprof_dump(void) {
++    if (!kestrel_opprof_on()) return;
 +    for (int i = 0; i < GGML_OP_COUNT; i++) {
 +        if (g_opprof_n[i] == 0) continue;
 +        fprintf(stderr, "KESTREL_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
@@ -1082,9 +1082,9 @@ index 8f5c9f96e..d059614b1 100644
      }
  
 +    static bool reg = false;
-+    if (!reg && tosh_opprof_on()) { reg = true; atexit(tosh_opprof_dump); }
++    if (!reg && kestrel_opprof_on()) { reg = true; atexit(kestrel_opprof_dump); }
 +    const enum ggml_op prof_op = ctx->node(idx)->op;
-+    const uint64_t prof_t0 = tosh_opprof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t prof_t0 = kestrel_opprof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
      int res = ggml_metal_op_encode_impl(ctx, idx);
 +
@@ -1163,11 +1163,11 @@ index 8f5c9f96e..d059614b1 100644
 +        return (size_t) (s ? atoi(s) : 1024) << 10;
 +    }();
 +
-+    if (const ggml_tensor * stage = (const ggml_tensor *) (tosh_moe_slots_of(op->src[0]) ? tosh_moe_stage() : nullptr)) {
++    if (const ggml_tensor * stage = (const ggml_tensor *) (kestrel_moe_slots_of(op->src[0]) ? kestrel_moe_stage() : nullptr)) {
 +        if (ggml_nbytes(op->src[0]) <= ggml_nbytes(stage) && nb02 <= stage_row_max) {
 +            const uint32_t n_u4 = (uint32_t) (ggml_nbytes(op->src[0])/16);
 +
-+            auto ps = ggml_metal_library_compile_pipeline(lib, "tosh_moe_stage", "tosh_moe_stage", nullptr);
++            auto ps = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_stage", "kestrel_moe_stage", nullptr);
 +
 +            ggml_metal_encoder_set_pipeline(enc, ps);
 +            ggml_metal_encoder_set_bytes (enc, (void *) &n_u4, sizeof(n_u4), 0);
@@ -1186,25 +1186,25 @@ index 8f5c9f96e..d059614b1 100644
 +    ggml_metal_buffer_id staged_ids_bid = {};
 +    bool has_staged_ids = false;
 +    {
-+        std::lock_guard<std::mutex> lock(g_tosh_moe_mutex);
-+        const auto it_full = g_tosh_moe_full_cold.find(op->src[0]);
-+        if (it_full != g_tosh_moe_full_cold.end()) {
++        std::lock_guard<std::mutex> lock(g_kestrel_moe_mutex);
++        const auto it_full = g_kestrel_moe_full_cold.find(op->src[0]);
++        if (it_full != g_kestrel_moe_full_cold.end()) {
 +            full_cold_bid = it_full->second;
 +            has_full_cold = true;
 +        }
-+        const auto it_ids = g_tosh_moe_staged_ids.find(op->src[0]);
-+        if (it_ids != g_tosh_moe_staged_ids.end()) {
++        const auto it_ids = g_kestrel_moe_staged_ids.find(op->src[0]);
++        if (it_ids != g_kestrel_moe_staged_ids.end()) {
 +            staged_ids_bid = it_ids->second;
 +            has_staged_ids = true;
 +        }
 +    }
 +
 +    if (has_full_cold) {
-+        const ggml_tensor * stage = (const ggml_tensor *) tosh_moe_stage();
-+        const ggml_tensor * state = (const ggml_tensor *) tosh_moe_state_of(op->src[0]);
-+        const int n_expert = tosh_moe_experts_of(op->src[0]);
++        const ggml_tensor * stage = (const ggml_tensor *) kestrel_moe_stage();
++        const ggml_tensor * state = (const ggml_tensor *) kestrel_moe_state_of(op->src[0]);
++        const int n_expert = kestrel_moe_experts_of(op->src[0]);
 +        const int n_slots = (int) ne02;
-+        const int n_fixed = tosh_moe_fixed_of(op->src[0]);
++        const int n_fixed = kestrel_moe_fixed_of(op->src[0]);
 +        const int max_fetch = n_slots - n_fixed;
 +        GGML_ASSERT(stage && state && n_expert > n_slots && nb02 % 16 == 0);
 +        // A batch routes to a fraction of the bank, so rebuilding every row is most of the
@@ -1212,12 +1212,12 @@ index 8f5c9f96e..d059614b1 100644
 +        // nothing routes to is never read, so leaving it stale is safe.
 +        static const bool compact = getenv("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
 +        ggml_metal_buffer_id ab = ggml_metal_get_buffer_id(state);
-+        ab.offs += tosh_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
++        ab.offs += kestrel_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
 +        if (compact) {
 +            struct { int32_t n_used; int32_t n_tokens; int32_t stride; int32_t n_expert; } ma = {
 +                (int32_t) ne20, (int32_t) ne21, (int32_t) (nb21/sizeof(int32_t)), n_expert
 +            };
-+            auto pm = ggml_metal_library_compile_pipeline(lib, "tosh_moe_mark_active", "tosh_moe_mark_active", nullptr);
++            auto pm = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_mark_active", "kestrel_moe_mark_active", nullptr);
 +            ggml_metal_encoder_set_pipeline(enc, pm);
 +            ggml_metal_encoder_set_bytes (enc, &ma, sizeof(ma), 0);
 +            ggml_metal_encoder_set_buffer(enc, ggml_metal_get_buffer_id(op->src[2]), 1);
@@ -1228,7 +1228,7 @@ index 8f5c9f96e..d059614b1 100644
 +        struct { uint32_t row_u4; uint32_t n_expert; int32_t use_active; } args = {
 +            (uint32_t) (nb02/16), (uint32_t) n_expert, compact ? 1 : 0
 +        };
-+        auto ps = ggml_metal_library_compile_pipeline(lib, "tosh_moe_assemble", "tosh_moe_assemble", nullptr);
++        auto ps = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_assemble", "kestrel_moe_assemble", nullptr);
 +        ggml_metal_buffer_id sb = ggml_metal_get_buffer_id(state);
 +        ggml_metal_encoder_set_pipeline(enc, ps);
 +        ggml_metal_encoder_set_bytes (enc, &args, sizeof(args), 0);
@@ -1236,10 +1236,10 @@ index 8f5c9f96e..d059614b1 100644
 +        ggml_metal_encoder_set_buffer(enc, full_cold_bid, 2);
 +        ggml_metal_encoder_set_buffer(enc, bid_src0, 3);
 +        sb.offs = ggml_metal_get_buffer_id(state).offs +
-+            tosh_moe_off_slot_for_id(n_expert, n_slots, max_fetch)*sizeof(int32_t);
++            kestrel_moe_off_slot_for_id(n_expert, n_slots, max_fetch)*sizeof(int32_t);
 +        ggml_metal_encoder_set_buffer(enc, sb, 4);
 +        sb.offs = ggml_metal_get_buffer_id(state).offs +
-+            tosh_moe_off_cold_for_id(n_expert, n_slots, max_fetch)*sizeof(int32_t);
++            kestrel_moe_off_cold_for_id(n_expert, n_slots, max_fetch)*sizeof(int32_t);
 +        ggml_metal_encoder_set_buffer(enc, sb, 5);
 +        ggml_metal_encoder_set_buffer(enc, ab, 6);
 +        const uint64_t total = (uint64_t) args.row_u4*args.n_expert;
@@ -1255,24 +1255,24 @@ index 8f5c9f96e..d059614b1 100644
 +        // The bounded host path has already copied only the selected expert rows into these
 +        // private slots. Its compact shared ID buffer names the physical slots directly.
 +        bid_src2 = staged_ids_bid;
-+    } else if (const ggml_tensor * state = (const ggml_tensor *) tosh_moe_state_of(op->src[0])) {
++    } else if (const ggml_tensor * state = (const ggml_tensor *) kestrel_moe_state_of(op->src[0])) {
 +        // the graph only routes a batch here when its remapped ids fit the state
-+        const int registered_experts = tosh_moe_experts_of(op->src[0]);
++        const int registered_experts = kestrel_moe_experts_of(op->src[0]);
 +        GGML_ASSERT(registered_experts > 0);
 +        GGML_ASSERT((int64_t) (ne21 - 1)*(int64_t) (nb21/sizeof(int32_t)) + ne20 <=
-+                tosh_moe_ids_room(registered_experts));
-+        const ggml_tensor * host = (const ggml_tensor *) tosh_moe_ram_of(op->src[0]);
++                kestrel_moe_ids_room(registered_experts));
++        const ggml_tensor * host = (const ggml_tensor *) kestrel_moe_ram_of(op->src[0]);
 +
 +        const int n_expert  = registered_experts;
 +        const int n_slots   = (int) ne02;
-+        const int n_fixed   = tosh_moe_fixed_of(op->src[0]);
++        const int n_fixed   = kestrel_moe_fixed_of(op->src[0]);
 +        const int max_fetch = n_fixed > 0 ? n_slots - n_fixed : n_slots;
 +
 +        const ggml_metal_buffer_id bid_state = ggml_metal_get_buffer_id(state);
 +        const size_t i32 = sizeof(int32_t);
 +
-+        if (tosh_moe_should_route(op->src[0], idx)) {
-+            const int n_fixed = tosh_moe_fixed_of(op->src[0]);
++        if (kestrel_moe_should_route(op->src[0], idx)) {
++            const int n_fixed = kestrel_moe_fixed_of(op->src[0]);
 +            ggml_metal_kargs_moe_lru la = {
 +                /*.n_used   =*/ (int32_t) ne20,
 +                /*.n_tokens =*/ (int32_t) ne21,
@@ -1283,29 +1283,29 @@ index 8f5c9f96e..d059614b1 100644
 +                /*.max_fetch=*/ max_fetch,
 +            };
 +
-+            auto pl = ggml_metal_library_compile_pipeline(lib, "tosh_moe_lru", "tosh_moe_lru", nullptr);
++            auto pl = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_lru", "kestrel_moe_lru", nullptr);
 +
 +            ggml_metal_encoder_set_pipeline(enc, pl);
 +            ggml_metal_encoder_set_bytes (enc, &la, sizeof(la), 0);
 +            ggml_metal_encoder_set_buffer(enc, ggml_metal_get_buffer_id(op->src[2]), 1);
 +            ggml_metal_buffer_id b = bid_state;
-+            b.offs = bid_state.offs + tosh_moe_off_slot_for_id(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_slot_for_id(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 2);
-+            b.offs = bid_state.offs + tosh_moe_off_id_of_slot(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_id_of_slot(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 3);
-+            b.offs = bid_state.offs + tosh_moe_off_usage(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_usage(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 4);
-+            b.offs = bid_state.offs + tosh_moe_off_step(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_step(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 5);
-+            b.offs = bid_state.offs + tosh_moe_off_evict(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_evict(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 6);
-+            b.offs = bid_state.offs + tosh_moe_off_src(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_src(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 7);
-+            b.offs = bid_state.offs + tosh_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 8);
-+            b.offs = bid_state.offs + tosh_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 9);
-+            b.offs = bid_state.offs + tosh_moe_off_cold_for_id(n_expert, n_slots, max_fetch)*i32;
++            b.offs = bid_state.offs + kestrel_moe_off_cold_for_id(n_expert, n_slots, max_fetch)*i32;
 +            ggml_metal_encoder_set_buffer(enc, b, 10);
 +            ggml_metal_encoder_set_threadgroup_memory_size(enc, (2*n_expert + 512)*i32, 0);
 +            ggml_metal_encoder_dispatch_threadgroups(enc, 1, 1, 1, 256, 1, 1);
@@ -1327,18 +1327,18 @@ index 8f5c9f96e..d059614b1 100644
 +            /*.n_chunks  =*/ n_chunks,
 +        };
 +
-+        auto pf = ggml_metal_library_compile_pipeline(lib, "tosh_moe_fetch", "tosh_moe_fetch", nullptr);
++        auto pf = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_fetch", "kestrel_moe_fetch", nullptr);
 +
 +        ggml_metal_buffer_id b = bid_state;
 +        ggml_metal_encoder_set_pipeline(enc, pf);
 +        ggml_metal_encoder_set_bytes (enc, &fa, sizeof(fa), 0);
 +        ggml_metal_encoder_set_buffer(enc, bid_src0, 1);
 +        ggml_metal_encoder_set_buffer(enc, ggml_metal_get_host_buffer_id(ctx->dev, host), 2);
-+        b.offs = bid_state.offs + tosh_moe_off_evict(n_expert, n_slots, max_fetch)*i32;
++        b.offs = bid_state.offs + kestrel_moe_off_evict(n_expert, n_slots, max_fetch)*i32;
 +        ggml_metal_encoder_set_buffer(enc, b, 3);
-+        b.offs = bid_state.offs + tosh_moe_off_src(n_expert, n_slots, max_fetch)*i32;
++        b.offs = bid_state.offs + kestrel_moe_off_src(n_expert, n_slots, max_fetch)*i32;
 +        ggml_metal_encoder_set_buffer(enc, b, 4);
-+        b.offs = bid_state.offs + tosh_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
++        b.offs = bid_state.offs + kestrel_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
 +        ggml_metal_encoder_set_buffer(enc, b, 5);
 +        ggml_metal_encoder_dispatch_threadgroups(enc, max_fetch*n_chunks, 1, 1, 256, 1, 1);
 +
@@ -1347,7 +1347,7 @@ index 8f5c9f96e..d059614b1 100644
 +        static const bool raw_ids = getenv("KESTREL_MOE_RAW_IDS") != nullptr;
 +        if (!raw_ids) {
 +            bid_src2 = bid_state;
-+            bid_src2.offs = bid_state.offs + tosh_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
++            bid_src2.offs = bid_state.offs + kestrel_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
 +        }
 +    }
 +
@@ -1467,24 +1467,24 @@ index a7bc5d29a..444776226 100644
          device const char * pad   [[buffer(6)]],
          device       char * dst   [[buffer(7)]],
          uint3  tgpig [[threadgroup_position_in_grid]],
-diff --git a/ggml/src/ggml-metal/kernels/tosh_moe.metal b/ggml/src/ggml-metal/kernels/tosh_moe.metal
+diff --git a/ggml/src/ggml-metal/kernels/kestrel_moe.metal b/ggml/src/ggml-metal/kernels/kestrel_moe.metal
 index 3af62d3bf..97c8427e2 100644
---- a/ggml/src/ggml-metal/kernels/tosh_moe.metal
-+++ b/ggml/src/ggml-metal/kernels/tosh_moe.metal
-@@ -212,27 +212,63 @@ kernel void tosh_moe_stage(
+--- a/ggml/src/ggml-metal/kernels/kestrel_moe.metal
++++ b/ggml/src/ggml-metal/kernels/kestrel_moe.metal
+@@ -212,27 +212,63 @@ kernel void kestrel_moe_stage(
  }
  
  // Reconstructs one logical full bank in private scratch without ever wrapping the complete
  // CPU bank as a Metal resource. Hot rows come from private resident slots; cold rows arrive
  // packed in a bounded shared buffer.
- struct tosh_assemble_args {
+ struct kestrel_assemble_args {
      uint32_t row_u4;
      uint32_t n_expert;
 +    int32_t  use_active;
  };
  
- kernel void tosh_moe_assemble(
-         constant tosh_assemble_args & args        [[buffer(0)]],
+ kernel void kestrel_moe_assemble(
+         constant kestrel_assemble_args & args        [[buffer(0)]],
          device       uint4          * dst         [[buffer(1)]],
          device const uint4          * cold        [[buffer(2)]],
          device const uint4          * slots       [[buffer(3)]],
@@ -1506,7 +1506,7 @@ index 3af62d3bf..97c8427e2 100644
  }
 +
 +// Marks the experts one batch routes to, so the assemble can skip the rest.
-+struct tosh_mark_args {
++struct kestrel_mark_args {
 +    int32_t n_used;
 +    int32_t n_tokens;
 +    int32_t stride;
@@ -1515,8 +1515,8 @@ index 3af62d3bf..97c8427e2 100644
 +
 +// One threadgroup: the clear has to be visible to the marking, and a barrier only spans a
 +// threadgroup. The work is a few thousand ids, so one is plenty.
-+kernel void tosh_moe_mark_active(
-+        constant tosh_mark_args & args   [[buffer(0)]],
++kernel void kestrel_moe_mark_active(
++        constant kestrel_mark_args & args   [[buffer(0)]],
 +        device const int32_t    * ids    [[buffer(1)]],
 +        device       int32_t    * active [[buffer(2)]],
 +        uint tid [[thread_position_in_threadgroup]],
@@ -1616,8 +1616,8 @@ index cd029ff6f..da3ef5d22 100644
 +        // Directly mapping the cold bank can save physical RAM, but on discrete GPUs it may
 +        // cause severe paging under random expert traffic. Keep it as an internal experiment;
 +        // the fast default remains the allocated/pinned host bank.
-+        const bool is_bank_buft = (const void *) buft == tosh_moe_host_buft();
-+        const bool map_bank     = tosh_moe_slots_want() > 0 && getenv("KESTREL_MOE_MMAP_BANK") != nullptr;
++        const bool is_bank_buft = (const void *) buft == kestrel_moe_host_buft();
++        const bool map_bank     = kestrel_moe_slots_want() > 0 && getenv("KESTREL_MOE_MMAP_BANK") != nullptr;
 +        const bool map_this     = map_bank ? is_bank_buft : is_default_buft;
 +
          std::vector<ggml_backend_buffer_ptr> bufs;

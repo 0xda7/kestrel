@@ -44,7 +44,7 @@ struct MessageBubble: View, Equatable {
 
     // Keeps finished bubbles from re-parsing their markdown on every flush. The
     // closures are excluded: they never vary for a given message.
-    static func == (a: MessageBubble, b: MessageBubble) -> Bool {
+    nonisolated static func == (a: MessageBubble, b: MessageBubble) -> Bool {
         a.message == b.message && a.streaming == b.streaming
             && a.liveSpeed == b.liveSpeed && a.isLastAssistant == b.isLastAssistant
             && a.isLastUser == b.isLastUser && a.canRegenerate == b.canRegenerate

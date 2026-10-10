@@ -5,10 +5,10 @@ index 2245fbb49..fa6b501d0 100644
 @@ -55,17 +55,17 @@ static _Atomic uint64_t g_cbp_commit_ns; // the commit call itself
  static _Atomic uint64_t g_cbp_create_ns; // creating and enqueuing the buffers of a graph
  
- static struct tosh_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
+ static struct kestrel_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
  static _Atomic int g_cbp_state = 0; // 0 unknown, 1 off, 2 on
  
- static bool tosh_cbp_on(void) {
+ static bool kestrel_cbp_on(void) {
      int st = atomic_load_explicit(&g_cbp_state, memory_order_relaxed);
      if (st == 0) {
 -        const char * e = getenv("KESTREL_CB_PROFILE");
@@ -19,7 +19,7 @@ index 2245fbb49..fa6b501d0 100644
      return st == 2;
  }
  
- static struct tosh_cbp_bucket * tosh_cbp_bucket_for(int n_nodes) {
+ static struct kestrel_cbp_bucket * kestrel_cbp_bucket_for(int n_nodes) {
      for (int i = 0; i < KESTREL_CBP_MAX_BUCKETS; ++i) {
 @@ -372,17 +372,17 @@ struct ggml_metal {
  };
@@ -46,7 +46,7 @@ index 2245fbb49..fa6b501d0 100644
  static _Atomic uint64_t g_tr_gpu_ns      = 0; // GPU execution of the collective's buffers
  static _Atomic uint64_t g_tr_sched_ns    = 0; // committed to running: queueing plus event waits
  
- static bool tosh_mgpu_trace(void) {
+ static bool kestrel_mgpu_trace(void) {
      static int on = -1;
      if (on < 0) {
 -        const char * v = getenv("KESTREL_MGPU_TRACE");
@@ -56,10 +56,10 @@ index 2245fbb49..fa6b501d0 100644
      return on == 1;
  }
  
- static uint64_t tosh_now_ns(void) {
+ static uint64_t kestrel_now_ns(void) {
      return clock_gettime_nsec_np(CLOCK_MONOTONIC);
  }
-@@ -615,23 +615,23 @@ static void tosh_decode_snapshot(int64_t batch) {
+@@ -615,23 +615,23 @@ static void kestrel_decode_snapshot(int64_t batch) {
  // decode actually takes. Four samples, all from one device, so no cross-GPU clock correlation
  // is involved: S0/S1 bracket the publish blit, S2/S3 the staging read. S1 to S2 is a
  // WAIT-WINDOW, not a pure event wait: it spans the signal, the peer wait and the encoder switch.
@@ -85,7 +85,7 @@ index 2245fbb49..fa6b501d0 100644
  static _Atomic uint64_t g_ct_hw[8], g_ct_hp[8], g_ct_hr[8];
  static double g_ct_ns_per_tick = 0.0;
  
-@@ -702,44 +702,44 @@ static void tosh_ct_record(id<MTLCounterSampleBuffer> cs, uint64_t base) {
+@@ -702,44 +702,44 @@ static void kestrel_ct_record(id<MTLCounterSampleBuffer> cs, uint64_t base) {
  // read then observes whatever the partner left behind and the output is wrong by construction.
  // Subtracting this run's central window from the normal one isolates the real peer stall
  // without adding an encoder to the interval being measured.
@@ -203,7 +203,7 @@ index 2245fbb49..fa6b501d0 100644
          res->has_error = false;
  
          res->gf = nil;
-@@ -1638,33 +1638,33 @@ static void tosh_trace_cmd_buf(id<MTLCommandBuffer> cmd_buf) {
+@@ -1638,33 +1638,33 @@ static void kestrel_trace_cmd_buf(id<MTLCommandBuffer> cmd_buf) {
  
  // KESTREL_MGPU_NOWAIT=1, benchmark only: the collective still publishes, still signals and still
  // reduces, but never waits for the partner. The output is wrong by construction. Subtracting
@@ -277,7 +277,7 @@ index 2245fbb49..fa6b501d0 100644
 -            count = getenv("KESTREL_MGPU_XDEV_COUNT") != NULL;
 +            count = KESTREL_ENV("KESTREL_MGPU_XDEV_COUNT") != NULL;
              if (count) {
-                 atexit(tosh_xdev_report);
+                 atexit(kestrel_xdev_report);
              }
          }
  
@@ -304,7 +304,7 @@ index 2245fbb49..fa6b501d0 100644
      struct ggml_metal_pipeline_with_params res = ggml_metal_library_get_pipeline(lib, name);
      if (!res.pipeline) {
 @@ -2380,33 +2380,33 @@ bool ggml_metal_add_inplace_f16_src(ggml_metal_t ctx, struct ggml_tensor * acc,
- static int64_t tosh_batch_of(const struct ggml_tensor * t) {
+ static int64_t kestrel_batch_of(const struct ggml_tensor * t) {
      if (t == NULL || t->ne[0] <= 0) { return 1; }
      return ggml_nelements(t)/t->ne[0];
  }
@@ -437,7 +437,7 @@ index 2245fbb49..fa6b501d0 100644
 @@ -3647,17 +3647,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
                              slot_of[e] = -2;
                              n_unique++;
-                             if (n_fixed > 0 && tosh_moe_cold_of(layer, e) >= 0) n_cold_unique++;
+                             if (n_fixed > 0 && kestrel_moe_cold_of(layer, e) >= 0) n_cold_unique++;
                          }
                      }
                  }
@@ -1585,7 +1585,7 @@ index ef39bbeea..0fc883648 100644
  
                  // the expert cache keeps weights in host memory the GPU can read; without unified
              // memory that is a different decision from making every buffer shared
-             dev->props.use_host_buffers = !dev->props.use_shared_buffers && tosh_moe_mode() != KESTREL_MOE_OFF;
+             dev->props.use_host_buffers = !dev->props.use_shared_buffers && kestrel_moe_mode() != KESTREL_MOE_OFF;
  
              dev->props.supports_gpu_family_apple7 = [dev->mtl_device supportsFamily:MTLGPUFamilyApple7];
  
@@ -1655,15 +1655,15 @@ index ef39bbeea..0fc883648 100644
      _Atomic uint64_t t_last;
      // big D2H reads (logits class) split into GPU-busy time vs the blit itself
      _Atomic uint64_t big_calls, big_dep_ns, big_xfer_ns;
- } g_tosh_prof;
+ } g_kestrel_prof;
  
- static bool tosh_prof_on(void) {
-     int s = atomic_load_explicit(&g_tosh_prof.state, memory_order_relaxed);
+ static bool kestrel_prof_on(void) {
+     int s = atomic_load_explicit(&g_kestrel_prof.state, memory_order_relaxed);
      if (s == 0) {
 -        const char * v = getenv("KESTREL_MOE_PROFILE");
 +        const char * v = KESTREL_ENV("KESTREL_MOE_PROFILE");
          s = (v && v[0] == '1') ? 2 : 1;
-         atomic_store_explicit(&g_tosh_prof.state, s, memory_order_relaxed);
+         atomic_store_explicit(&g_kestrel_prof.state, s, memory_order_relaxed);
      }
      return s == 2;
  }
@@ -1728,7 +1728,7 @@ index ef39bbeea..0fc883648 100644
  
 @@ -3568,17 +3568,17 @@ static void ggml_metal_buffer_set_tensor_impl(ggml_metal_buffer_t buf, struct gg
  
-         const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
+         const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
  
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
@@ -1751,19 +1751,19 @@ index ef39bbeea..0fc883648 100644
  
  // KESTREL_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
  // son lo que queda del hueco de decode una vez descartados commit, creacion y espera
- static bool tosh_xfer_on(void) {
-     int st = atomic_load_explicit(&g_tosh_xfer_state, memory_order_relaxed);
+ static bool kestrel_xfer_on(void) {
+     int st = atomic_load_explicit(&g_kestrel_xfer_state, memory_order_relaxed);
      if (st == 0) {
 -        const char * e = getenv("KESTREL_CB_PROFILE");
 +        const char * e = KESTREL_ENV("KESTREL_CB_PROFILE");
          st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
-         atomic_store_explicit(&g_tosh_xfer_state, st, memory_order_relaxed);
+         atomic_store_explicit(&g_kestrel_xfer_state, st, memory_order_relaxed);
      }
      return st == 2;
  }
  
  void ggml_metal_buffer_get_tensor(ggml_metal_buffer_t buf, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-     const bool xf = tosh_xfer_on();
+     const bool xf = kestrel_xfer_on();
 diff --git a/ggml/src/ggml-metal/ggml-metal-impl.h b/ggml/src/ggml-metal/ggml-metal-impl.h
 index a0666d25a..549db4449 100644
 --- a/ggml/src/ggml-metal/ggml-metal-impl.h
@@ -1782,10 +1782,10 @@ index a0666d25a..549db4449 100644
 +// getenv walks the whole environment under a lock, and the encode path asks the same names once
 +// per node and token: each call site reads its variable once
 +#ifdef __cplusplus
-+#define KESTREL_ENV(name) ([]() -> const char * { static const char * tosh_env_v = getenv(name); return tosh_env_v; }())
++#define KESTREL_ENV(name) ([]() -> const char * { static const char * kestrel_env_v = getenv(name); return kestrel_env_v; }())
 +#else
-+#define KESTREL_ENV(name) ({ static int tosh_env_i = 0; static const char * tosh_env_v = NULL; \
-+    if (!tosh_env_i) { tosh_env_v = getenv(name); tosh_env_i = 1; } tosh_env_v; })
++#define KESTREL_ENV(name) ({ static int kestrel_env_i = 0; static const char * kestrel_env_v = NULL; \
++    if (!kestrel_env_i) { kestrel_env_v = getenv(name); kestrel_env_i = 1; } kestrel_env_v; })
 +#endif
 +#endif
 +
@@ -1828,14 +1828,14 @@ index a9871f1f4..d501092dd 100644
  #include <time.h>
  static uint64_t g_opprof_ns[GGML_OP_COUNT];
  static uint64_t g_opprof_n [GGML_OP_COUNT];
- static bool tosh_opprof_on(void) {
+ static bool kestrel_opprof_on(void) {
      static int v = -1;
 -    if (v < 0) { v = getenv("KESTREL_OPPROF") != nullptr; }
 +    if (v < 0) { v = KESTREL_ENV("KESTREL_OPPROF") != nullptr; }
      return v;
  }
- static void tosh_opprof_dump(void) {
-     if (!tosh_opprof_on()) return;
+ static void kestrel_opprof_dump(void) {
+     if (!kestrel_opprof_on()) return;
      for (int i = 0; i < GGML_OP_COUNT; i++) {
          if (g_opprof_n[i] == 0) continue;
          fprintf(stderr, "KESTREL_OPPROF %-22s n=%-7llu total_us=%-10.1f us/op=%.3f\n",
@@ -2115,15 +2115,15 @@ index a9871f1f4..d501092dd 100644
          return (size_t) (s ? atoi(s) : 1024) << 10;
      }();
  
-     if (const ggml_tensor * stage = (const ggml_tensor *) (tosh_moe_slots_of(op->src[0]) ? tosh_moe_stage() : nullptr)) {
+     if (const ggml_tensor * stage = (const ggml_tensor *) (kestrel_moe_slots_of(op->src[0]) ? kestrel_moe_stage() : nullptr)) {
          if (ggml_nbytes(op->src[0]) <= ggml_nbytes(stage) && nb02 <= stage_row_max) {
              const uint32_t n_u4 = (uint32_t) (ggml_nbytes(op->src[0])/16);
  
-             auto ps = ggml_metal_library_compile_pipeline(lib, "tosh_moe_stage", "tosh_moe_stage", nullptr);
+             auto ps = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_stage", "kestrel_moe_stage", nullptr);
 @@ -3810,17 +3810,17 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
-         const int n_expert = tosh_moe_experts_of(op->src[0]);
+         const int n_expert = kestrel_moe_experts_of(op->src[0]);
          const int n_slots = (int) ne02;
-         const int n_fixed = tosh_moe_fixed_of(op->src[0]);
+         const int n_fixed = kestrel_moe_fixed_of(op->src[0]);
          const int max_fetch = n_slots - n_fixed;
          GGML_ASSERT(stage && state && n_expert > n_slots && nb02 % 16 == 0);
          // A batch routes to a fraction of the bank, so rebuilding every row is most of the
@@ -2132,12 +2132,12 @@ index a9871f1f4..d501092dd 100644
 -        static const bool compact = getenv("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
 +        static const bool compact = KESTREL_ENV("KESTREL_MOE_COMPACT_ASSEMBLE_DISABLE") == nullptr;
          ggml_metal_buffer_id ab = ggml_metal_get_buffer_id(state);
-         ab.offs += tosh_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
+         ab.offs += kestrel_moe_off_active(n_expert, n_slots, max_fetch)*sizeof(int32_t);
          if (compact) {
              struct { int32_t n_used; int32_t n_tokens; int32_t stride; int32_t n_expert; } ma = {
                  (int32_t) ne20, (int32_t) ne21, (int32_t) (nb21/sizeof(int32_t)), n_expert
              };
-             auto pm = ggml_metal_library_compile_pipeline(lib, "tosh_moe_mark_active", "tosh_moe_mark_active", nullptr);
+             auto pm = ggml_metal_library_compile_pipeline(lib, "kestrel_moe_mark_active", "kestrel_moe_mark_active", nullptr);
              ggml_metal_encoder_set_pipeline(enc, pm);
 @@ -3915,17 +3915,17 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
              ggml_metal_encoder_set_threadgroup_memory_size(enc, (2*n_expert + 512)*i32, 0);
@@ -2159,9 +2159,9 @@ index a9871f1f4..d501092dd 100644
              /*.max_fetch =*/ max_fetch,
              /*.n_chunks  =*/ n_chunks,
 @@ -3943,26 +3943,26 @@ int ggml_metal_op_mul_mat_id(ggml_metal_op_t ctx, int idx) {
-         b.offs = bid_state.offs + tosh_moe_off_src(n_expert, n_slots, max_fetch)*i32;
+         b.offs = bid_state.offs + kestrel_moe_off_src(n_expert, n_slots, max_fetch)*i32;
          ggml_metal_encoder_set_buffer(enc, b, 4);
-         b.offs = bid_state.offs + tosh_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
+         b.offs = bid_state.offs + kestrel_moe_off_n_indices(n_expert, n_slots, max_fetch)*i32;
          ggml_metal_encoder_set_buffer(enc, b, 5);
          ggml_metal_encoder_dispatch_threadgroups(enc, max_fetch*n_chunks, 1, 1, 256, 1, 1);
  
@@ -2171,7 +2171,7 @@ index a9871f1f4..d501092dd 100644
 +        static const bool raw_ids = KESTREL_ENV("KESTREL_MOE_RAW_IDS") != nullptr;
          if (!raw_ids) {
              bid_src2 = bid_state;
-             bid_src2.offs = bid_state.offs + tosh_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
+             bid_src2.offs = bid_state.offs + kestrel_moe_off_ids(n_expert, n_slots, max_fetch)*i32;
          }
      }
  
@@ -2440,11 +2440,11 @@ index a9871f1f4..d501092dd 100644
          ggml_metal_buffer_id bid_amd_idx = bid_tmp;
 @@ -6980,17 +6980,17 @@ static ggml_tensor * ggml_metal_view_base(ggml_tensor * t) {
  
- static bool ggml_metal_tosh_topk_moe_same(ggml_tensor * a, ggml_tensor * b) {
+ static bool ggml_metal_kestrel_topk_moe_same(ggml_tensor * a, ggml_tensor * b) {
      return a && b && ggml_metal_view_base(a) == ggml_metal_view_base(b);
  }
  
- static bool ggml_metal_tosh_topk_moe_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_tosh_topk_moe_plan & plan) {
+ static bool ggml_metal_kestrel_topk_moe_fusion(ggml_metal_op_t ctx, int idx, ggml_metal_kestrel_topk_moe_plan & plan) {
      // measured neutral on RDNA2 (pp512 +0.1%, tg128 -1%, both inside the noise), so the
      // dispatch saving does not pay for itself here; opt-in until a device shows a gain
 -    static const bool enabled = getenv("GGML_METAL_TOPK_MOE_ENABLE") != nullptr;

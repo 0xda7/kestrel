@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 
 struct LocalModel: Identifiable, Hashable, Sendable {
     let url: URL
@@ -244,17 +245,27 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
     nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
                                 didReceive response: URLResponse,
                                 completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        // URLSession parks later delegate callbacks until the disposition is
+        // answered, so waiting here for the MainActor decision preserves the
+        // ordering the previous async hop had — and the non-Sendable
+        // completion handler never leaves its own queue.
+        let verdict = OSAllocatedUnfairLock<URLSession.ResponseDisposition>(initialState: .cancel)
+        let done = DispatchSemaphore(value: 0)
         Task { @MainActor in
-            self.handle(response: response, completionHandler: completionHandler)
+            let d = self.respond(to: response)
+            verdict.withLock { $0 = d }
+            done.signal()
         }
+        done.wait()
+        completionHandler(verdict.withLock { $0 })
     }
 
-    private func handle(response: URLResponse,
-                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    /// Decides the disposition and applies the MainActor side effects (sink
+    /// open, phase, totals). Returns the disposition to answer URLSession with.
+    @MainActor private func respond(to response: URLResponse) -> URLSession.ResponseDisposition {
         guard let http = response as? HTTPURLResponse else {
-            completionHandler(.cancel)
             phase = .failed("Respuesta de descarga inválida / invalid download response")
-            return
+            return .cancel
         }
         let offset = requestedOffset
         let plan = ResumableDownload.responsePlan(
@@ -275,16 +286,15 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
             case .alreadyComplete:
                 total = expectedBytes
             case .reject:
-                completionHandler(.cancel)
                 phase = .failed("El servidor rechazó la reanudación / server rejected resume request")
-                return
+                return .cancel
             }
-            completionHandler(plan == .alreadyComplete ? .cancel : .allow)
             if let total, total > 0 { totalMB = Double(total) / 1_048_576 }
             if plan == .alreadyComplete { finishTransfer() }
+            return plan == .alreadyComplete ? .cancel : .allow
         } catch {
-            completionHandler(.cancel)
             phase = .failed(error.localizedDescription)
+            return .cancel
         }
     }
 

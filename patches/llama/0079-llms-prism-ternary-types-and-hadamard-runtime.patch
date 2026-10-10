@@ -1568,7 +1568,7 @@ index 551de9ddf..f470781f1 100644
              const auto & buf_map = ctx_buf_map.second;
              return !buf_map.empty() && !ggml_backend_buffer_is_host(buf_map.begin()->second);
 @@ -1902,19 +1905,312 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
-     tosh_moe_seed_banks();
+     kestrel_moe_seed_banks();
  
      if (use_mmap_buffer) {
          for (auto & mapping : ml.mappings) {

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 import Metal
 
 extension Notification.Name {
@@ -742,14 +743,14 @@ struct ServerSettings {
     /// (a CI packaging failure, an engineless local build), start() reports the
     /// missing binary instead of silently launching whatever it finds elsewhere.
     static var defaultBinary: String {
-        if let resolved = cachedDefaultBinary { return resolved }
+        if let resolved = cachedDefaultBinary.withLock({ $0 }) { return resolved }
         let bundled = Bundle.main.resourceURL?.appendingPathComponent("bin/llama-server").path
             ?? "Contents/Resources/bin/llama-server"
-        cachedDefaultBinary = bundled
+        cachedDefaultBinary.withLock { $0 = bundled }
         return bundled
     }
 
-    nonisolated(unsafe) private static var cachedDefaultBinary: String?
+    private nonisolated static let cachedDefaultBinary = OSAllocatedUnfairLock<String?>(initialState: nil)
 
     /// The engine to launch. "bundled" resolves against the running bundle, so two
     /// installs sharing this defaults domain each use their own binary.
@@ -1851,9 +1852,7 @@ final class ServerController: ObservableObject {
     /// Cached: the UI reads this from view bodies, and MTLCopyAllDevices() is far
     /// too expensive to run on every render.
     nonisolated static func availableGPUs(rescan: Bool = false) -> [GPUDevice] {
-        gpuCacheLock.lock()
-        defer { gpuCacheLock.unlock() }
-        if !rescan, let cached = cachedGPUs { return cached }
+        if !rescan, let cached = gpuCache.withLock({ $0 }) { return cached }
         let devices = MTLCopyAllDevices().enumerated().map { i, dev in
             GPUDevice(index: i, name: dev.name,
                       vramMB: Int(dev.recommendedMaxWorkingSetSize / 1_048_576),
@@ -1863,12 +1862,11 @@ final class ServerController: ObservableObject {
                       peerCount: Int(dev.peerCount),
                       supportsBF16: dev.supportsFamily(.metal3))
         }
-        cachedGPUs = devices
+        gpuCache.withLock { $0 = devices }
         return devices
     }
 
-    nonisolated(unsafe) private static var cachedGPUs: [GPUDevice]?
-    private nonisolated static let gpuCacheLock = NSLock()
+    private nonisolated static let gpuCache = OSAllocatedUnfairLock<[GPUDevice]?>(initialState: nil)
 
     /// Whether any detected GPU is an external eGPU. Used to surface the
     /// VRAM-resident-weights option, which fixes eGPU slowness over Thunderbolt.
@@ -2080,6 +2078,9 @@ final class ServerController: ObservableObject {
             guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
             Task { @MainActor in self?.consume(text) }
         }
+        // Snapshot after launch finished mutating args: the Sendable
+        // termination handler may not capture the mutable local itself.
+        let argsAtLaunch = args
         p.terminationHandler = { [weak self] proc in
             Task { @MainActor in
                 guard let self else { return }
@@ -2103,10 +2104,10 @@ final class ServerController: ObservableObject {
                     let clipFailed = tail.contains("failed to load clip")
                         || tail.contains("unknown projector type")
                         || tail.contains("failed to load multimodal model")
-                    if clipFailed && !self.retryWithoutMmproj && args.contains("--mmproj") {
+                    if clipFailed && !self.retryWithoutMmproj && argsAtLaunch.contains("--mmproj") {
                         // Don't auto-attach this projector again for this model.
-                        if let i = args.firstIndex(of: "--mmproj"), i + 1 < args.count {
-                            ServerSettings.recordIncompatibleMmproj(model: settings.modelPath, projector: args[i + 1])
+                        if let i = argsAtLaunch.firstIndex(of: "--mmproj"), i + 1 < argsAtLaunch.count {
+                            ServerSettings.recordIncompatibleMmproj(model: settings.modelPath, projector: argsAtLaunch[i + 1])
                         }
                         self.retryWithoutMmproj = true
                         EngineLock.remove(pid: proc.processIdentifier)

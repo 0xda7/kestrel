@@ -39,15 +39,15 @@ index 3a77125fd..92846d11c 100644
 +        // KESTREL_MOE_SLOT_STATS: read back the map the assemble kernel will use and check that
 +        // every routed expert resolves to a source that actually holds it.
 +        if (slot_stats && n_fixed > 0) {
-+            const struct ggml_tensor * st = (const struct ggml_tensor *) tosh_moe_state_of(gf->nodes[first]->src[0]);
++            const struct ggml_tensor * st = (const struct ggml_tensor *) kestrel_moe_state_of(gf->nodes[first]->src[0]);
 +            const int max_fetch = n_slots - n_fixed;
-+            const int n_ints = tosh_moe_state_ints(n_expert, n_slots, max_fetch);
++            const int n_ints = kestrel_moe_state_ints(n_expert, n_slots, max_fetch);
 +            int32_t * sv = malloc((size_t) n_ints*sizeof(int32_t));
 +            if (st && sv) {
 +                ggml_backend_tensor_get((struct ggml_tensor *) st, sv, 0, (size_t) n_ints*sizeof(int32_t));
-+                const int32_t * sfi = sv + tosh_moe_off_slot_for_id(n_expert, n_slots, max_fetch);
-+                const int32_t * cfi = sv + tosh_moe_off_cold_for_id(n_expert, n_slots, max_fetch);
-+                const int32_t * ios = sv + tosh_moe_off_id_of_slot (n_expert, n_slots, max_fetch);
++                const int32_t * sfi = sv + kestrel_moe_off_slot_for_id(n_expert, n_slots, max_fetch);
++                const int32_t * cfi = sv + kestrel_moe_off_cold_for_id(n_expert, n_slots, max_fetch);
++                const int32_t * ios = sv + kestrel_moe_off_id_of_slot (n_expert, n_slots, max_fetch);
 +                const int n_cold = n_expert - n_fixed;
 +                int bad_ring = 0, bad_stale = 0, bad_cold = 0, from_slot = 0, from_cold = 0;
 +                for (int e = 0; e < n_expert; ++e) {

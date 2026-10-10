@@ -9,7 +9,7 @@ import SwiftUI
 struct ChatResponseMetrics: View, Equatable {
     let message: ChatMessage
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.message == rhs.message }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.message == rhs.message }
 
     private var speed: Double? {
         message.genSpeed ?? message.timings?.generationTokensPerSecond

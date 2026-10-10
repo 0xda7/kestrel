@@ -5,8 +5,8 @@ index d59adc6bd..cb04bfefb 100644
 @@ -33,16 +33,17 @@ set(METALLIB_KERNELS_QUANTIZE   "${CMAKE_CURRENT_SOURCE_DIR}/kernels/quantize.h"
  # the expert cache kernels ride along as one more library when the dynamic MoE is on
  if (KESTREL_ENABLE_DYNAMIC_MOE)
-     configure_file(${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-lru.metal
-                    ${CMAKE_CURRENT_SOURCE_DIR}/kernels/tosh_moe.metal COPYONLY)
+     configure_file(${CMAKE_SOURCE_DIR}/kestrel-moe/kestrel-moe-lru.metal
+                    ${CMAKE_CURRENT_SOURCE_DIR}/kernels/kestrel_moe.metal COPYONLY)
  endif()
  
  set(METALLIB_KERNEL_SOURCES

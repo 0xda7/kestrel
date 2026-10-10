@@ -29,7 +29,7 @@ index 5fb37f18a..0fb45b20d 100644
 +
          }
  
-         const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
+         const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
  
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data

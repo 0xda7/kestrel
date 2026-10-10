@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 import Darwin
 
 struct GGUFMetadata: Sendable {
@@ -100,28 +101,37 @@ enum GGUFMetadataCache {
         case invalid
     }
 
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var metadataEntries: [FileKey: MetadataEntry] = [:]
-    nonisolated(unsafe) private static var tensorEntries: [FileKey: GGUFTensorFlags] = [:]
-    nonisolated(unsafe) private static var nextNEntries: [FileKey: Bool] = [:]
+    /// One lock over the three tables, so a stale-entry sweep always rewrites
+    /// them together. `MetadataEntry`/`GGUFTensorFlags`/`FileKey` are value
+    /// types, which makes the state `Sendable`.
+    private struct CacheState {
+        var metadata: [FileKey: MetadataEntry] = [:]
+        var tensor: [FileKey: GGUFTensorFlags] = [:]
+        var nextN: [FileKey: Bool] = [:]
+
+        mutating func removeStaleEntries(for path: String, keeping key: FileKey) {
+            metadata = metadata.filter { $0.key.path != path || $0.key == key }
+            tensor = tensor.filter { $0.key.path != path || $0.key == key }
+            nextN = nextN.filter { $0.key.path != path || $0.key == key }
+        }
+    }
+
+    private static let cache = OSAllocatedUnfairLock<CacheState>(initialState: CacheState())
 
     static func metadata(at path: String) -> GGUFMetadata? {
         guard let key = fileKey(for: path) else { return nil }
 
-        lock.lock()
-        if let entry = metadataEntries[key] {
-            lock.unlock()
+        if let entry = cache.withLock({ $0.metadata[key] }) {
             if case .valid(let metadata) = entry { return metadata }
             return nil
         }
-        lock.unlock()
 
         let parsed = parseMetadata(at: key.path)
 
-        lock.lock()
-        removeStaleEntries(for: key.path, keeping: key)
-        metadataEntries[key] = parsed.map(MetadataEntry.valid) ?? .invalid
-        lock.unlock()
+        cache.withLock {
+            $0.removeStaleEntries(for: key.path, keeping: key)
+            $0.metadata[key] = parsed.map(MetadataEntry.valid) ?? .invalid
+        }
         return parsed
     }
 
@@ -132,37 +142,31 @@ enum GGUFMetadataCache {
                                    expertBytesPerLayer: 0, otherBytesPerLayer: 0)
         }
 
-        lock.lock()
-        if let flags = tensorEntries[key] {
-            lock.unlock()
+        if let flags = cache.withLock({ $0.tensor[key] }) {
             return flags
         }
-        lock.unlock()
 
         let parsed = parseTensorFlags(at: key.path)
 
-        lock.lock()
-        removeStaleEntries(for: key.path, keeping: key)
-        tensorEntries[key] = parsed
-        nextNEntries[key] = parsed.hasNextNTensor
-        lock.unlock()
+        cache.withLock {
+            $0.removeStaleEntries(for: key.path, keeping: key)
+            $0.tensor[key] = parsed
+            $0.nextN[key] = parsed.hasNextNTensor
+        }
         return parsed
     }
 
     static func hasNextNTensor(at path: String) -> Bool {
         guard let key = fileKey(for: path) else { return false }
-        lock.lock()
-        if let cached = nextNEntries[key] {
-            lock.unlock()
+        if let cached = cache.withLock({ $0.nextN[key] }) {
             return cached
         }
-        lock.unlock()
 
         let found = scanForNextNTensor(at: key.path)
-        lock.lock()
-        removeStaleEntries(for: key.path, keeping: key)
-        nextNEntries[key] = found
-        lock.unlock()
+        cache.withLock {
+            $0.removeStaleEntries(for: key.path, keeping: key)
+            $0.nextN[key] = found
+        }
         return found
     }
 
@@ -172,12 +176,6 @@ enum GGUFMetadataCache {
               let size = (attributes[.size] as? NSNumber)?.uint64Value else { return nil }
         let date = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         return FileKey(path: standardized, size: size, modificationDate: date)
-    }
-
-    private static func removeStaleEntries(for path: String, keeping key: FileKey) {
-        metadataEntries = metadataEntries.filter { $0.key.path != path || $0.key == key }
-        tensorEntries = tensorEntries.filter { $0.key.path != path || $0.key == key }
-        nextNEntries = nextNEntries.filter { $0.key.path != path || $0.key == key }
     }
 
     private static func readPrefix(at path: String, limit: Int) -> Data? {

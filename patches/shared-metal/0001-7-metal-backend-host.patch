@@ -2210,25 +2210,25 @@
 +    _Atomic uint64_t t_last;
 +    // big D2H reads (logits class) split into GPU-busy time vs the blit itself
 +    _Atomic uint64_t big_calls, big_dep_ns, big_xfer_ns;
-+} g_tosh_prof;
++} g_kestrel_prof;
 +
-+static bool tosh_prof_on(void) {
-+    int s = atomic_load_explicit(&g_tosh_prof.state, memory_order_relaxed);
++static bool kestrel_prof_on(void) {
++    int s = atomic_load_explicit(&g_kestrel_prof.state, memory_order_relaxed);
 +    if (s == 0) {
 +        const char * v = getenv("KESTREL_MOE_PROFILE");
 +        s = (v && v[0] == '1') ? 2 : 1;
-+        atomic_store_explicit(&g_tosh_prof.state, s, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_prof.state, s, memory_order_relaxed);
 +    }
 +    return s == 2;
 +}
 +
 +// name-class buckets, filled by the callers that know the tensor
 +enum { KESTREL_CLS_MOE, KESTREL_CLS_LOGITS, KESTREL_CLS_OTHER, KESTREL_CLS_N };
-+static _Atomic uint64_t g_tosh_cls_calls[2][KESTREL_CLS_N]; // [d2h][cls]
-+static _Atomic uint64_t g_tosh_cls_bytes[2][KESTREL_CLS_N];
++static _Atomic uint64_t g_kestrel_cls_calls[2][KESTREL_CLS_N]; // [d2h][cls]
++static _Atomic uint64_t g_kestrel_cls_bytes[2][KESTREL_CLS_N];
 +
 +void ggml_metal_prof_note(const char * name, size_t size, bool d2h) {
-+    if (!tosh_prof_on()) {
++    if (!kestrel_prof_on()) {
 +        return;
      }
 +    int cls = KESTREL_CLS_OTHER;
@@ -2239,12 +2239,12 @@
 +            cls = KESTREL_CLS_LOGITS;
 +        }
 +    }
-+    atomic_fetch_add_explicit(&g_tosh_cls_calls[d2h][cls], 1,    memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_cls_bytes[d2h][cls], size, memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_cls_calls[d2h][cls], 1,    memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_cls_bytes[d2h][cls], size, memory_order_relaxed);
 +
 +    // first distinct "other" names, to identify unexplained traffic
 +    if (cls == KESTREL_CLS_OTHER && name &&
-+        (d2h || atomic_load_explicit(&g_tosh_prof.t_last, memory_order_relaxed) != 0)) {
++        (d2h || atomic_load_explicit(&g_kestrel_prof.t_last, memory_order_relaxed) != 0)) {
 +        static char seen[16][48];
 +        static atomic_flag lock = ATOMIC_FLAG_INIT;
 +        if (!atomic_flag_test_and_set(&lock)) {
@@ -2264,15 +2264,15 @@
 +    }
  }
  
-+static void tosh_prof_cls_flush(void) {
++static void kestrel_prof_cls_flush(void) {
 +    static const char * dirs[2] = { "H2D", "D2H" };
 +    static const char * clss[KESTREL_CLS_N] = { "moe", "logits", "other" };
 +    char line[256];
 +    int n = 0;
 +    for (int d = 0; d < 2; d++) {
 +        for (int c = 0; c < KESTREL_CLS_N; c++) {
-+            const uint64_t calls = atomic_exchange(&g_tosh_cls_calls[d][c], 0);
-+            const uint64_t bytes = atomic_exchange(&g_tosh_cls_bytes[d][c], 0);
++            const uint64_t calls = atomic_exchange(&g_kestrel_cls_calls[d][c], 0);
++            const uint64_t bytes = atomic_exchange(&g_kestrel_cls_bytes[d][c], 0);
 +            if (calls == 0) {
 +                continue;
 +            }
@@ -2286,24 +2286,24 @@
 +    }
 +}
 +
-+static void tosh_prof_add(int idx, size_t size, uint64_t t0) {
++static void kestrel_prof_add(int idx, size_t size, uint64_t t0) {
 +    const uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-+    atomic_fetch_add_explicit(&g_tosh_prof.calls[idx],   1,        memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_prof.bytes[idx],   size,     memory_order_relaxed);
-+    atomic_fetch_add_explicit(&g_tosh_prof.wait_ns[idx], now - t0, memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.calls[idx],   1,        memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.bytes[idx],   size,     memory_order_relaxed);
++    atomic_fetch_add_explicit(&g_kestrel_prof.wait_ns[idx], now - t0, memory_order_relaxed);
 +
-+    uint64_t last = atomic_load_explicit(&g_tosh_prof.t_last, memory_order_relaxed);
++    uint64_t last = atomic_load_explicit(&g_kestrel_prof.t_last, memory_order_relaxed);
 +    if (now - last < 5000000000ULL ||
-+        !atomic_compare_exchange_strong(&g_tosh_prof.t_last, &last, now)) {
++        !atomic_compare_exchange_strong(&g_kestrel_prof.t_last, &last, now)) {
 +        return;
 +    }
 +    static const char * names[KESTREL_PROF_N] = { "D2H-stage", "H2D-stage", "D2H-direct", "H2D-direct" };
 +    char line[256];
 +    int n = 0;
 +    for (int i = 0; i < KESTREL_PROF_N; i++) {
-+        const uint64_t c = atomic_exchange(&g_tosh_prof.calls[i],   0);
-+        const uint64_t b = atomic_exchange(&g_tosh_prof.bytes[i],   0);
-+        const uint64_t w = atomic_exchange(&g_tosh_prof.wait_ns[i], 0);
++        const uint64_t c = atomic_exchange(&g_kestrel_prof.calls[i],   0);
++        const uint64_t b = atomic_exchange(&g_kestrel_prof.bytes[i],   0);
++        const uint64_t w = atomic_exchange(&g_kestrel_prof.wait_ns[i], 0);
 +        if (c == 0) {
 +            continue;
 +        }
@@ -2315,14 +2315,14 @@
 +        // raw stderr: llama-server filters backend INFO logs at default verbosity
 +        fprintf(stderr, "ggml_metal: moe-profile: %s\n", line);
 +    }
-+    const uint64_t bc = atomic_exchange(&g_tosh_prof.big_calls, 0);
++    const uint64_t bc = atomic_exchange(&g_kestrel_prof.big_calls, 0);
 +    if (bc > 0) {
-+        const uint64_t bd = atomic_exchange(&g_tosh_prof.big_dep_ns,  0);
-+        const uint64_t bx = atomic_exchange(&g_tosh_prof.big_xfer_ns, 0);
++        const uint64_t bd = atomic_exchange(&g_kestrel_prof.big_dep_ns,  0);
++        const uint64_t bx = atomic_exchange(&g_kestrel_prof.big_xfer_ns, 0);
 +        fprintf(stderr, "ggml_metal: moe-profile:   D2H-big %llux gpu-busy %.0fms blit %.1fms\n",
 +                (unsigned long long) bc, bd / 1e6, bx / 1e6);
 +    }
-+    tosh_prof_cls_flush();
++    kestrel_prof_cls_flush();
 +}
 +
 +// caller must hold dev->stage_lock; nil on allocation failure
@@ -2359,7 +2359,7 @@
 +        return false;
 +    }
 +
-+    const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
 +    [dev->stage_lock lock];
 +
@@ -2407,7 +2407,7 @@
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(KESTREL_PROF_H2D_STAGE, size, t0);
++        kestrel_prof_add(KESTREL_PROF_H2D_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -2466,7 +2466,7 @@
 +        return false;
 +    }
 +
-+    const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++    const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
 +    [dev->stage_lock lock];
 +
@@ -2487,7 +2487,7 @@
 +        dev->stage_batch_used += size;
 +        [dev->stage_lock unlock];
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
++            kestrel_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +        }
 +        return true;
 +    }
@@ -2517,10 +2517,10 @@
 +
 +    // split the big-read wait: time before the blit ran is GPU compute, not readback
 +    if (t0 && size >= (size_t) 256*1024) {
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_calls, 1, memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_dep_ns,
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_calls, 1, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_dep_ns,
 +            (uint64_t) ((cmd_buf.GPUStartTime - cmd_buf.kernelStartTime) * 1e9), memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_prof.big_xfer_ns,
++        atomic_fetch_add_explicit(&g_kestrel_prof.big_xfer_ns,
 +            (uint64_t) ((cmd_buf.GPUEndTime - cmd_buf.GPUStartTime) * 1e9), memory_order_relaxed);
 +    }
 +
@@ -2529,7 +2529,7 @@
 +    [dev->stage_lock unlock];
 +
 +    if (t0) {
-+        tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
++        kestrel_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
 +    }
 +
 +    return true;
@@ -2560,7 +2560,7 @@
 +            }
 +        }
 +
-+        const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++        const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
@@ -2618,7 +2618,7 @@
 +            }
 +
 +            if (t0) {
-+                tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
++                kestrel_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -2643,7 +2643,7 @@
          //[cmd_buf waitUntilCompleted];
 +
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
++            kestrel_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
 +        }
      }
  }
@@ -2669,7 +2669,7 @@
 +            return;
 +        }
 +
-+        const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
++        const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
          // dst
          id<MTLBuffer> buf_dst = [buf->dev->mtl_device newBufferWithBytesNoCopy:data
@@ -2706,7 +2706,7 @@
 +            [cmd_buf waitUntilCompleted];
 +
 +            if (t0) {
-+                tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
++                kestrel_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +            }
 +
 +            return;
@@ -2756,7 +2756,7 @@
 +        }
 +
 +        if (t0) {
-+            tosh_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
++            kestrel_prof_add(KESTREL_PROF_D2H_DIRECT, size, t0);
 +        }
      }
  }
@@ -3782,7 +3782,7 @@
 -        fprintf(fout, "\nbuild: %s (%d)\n", test::build_commit.c_str(), test::build_number);
 +        // the build number only tracks upstream, so name the engine version too
 +        fprintf(fout, "\nbuild: %s (%d), Kestrel engine %s\n", test::build_commit.c_str(), test::build_number,
-+                common_tosh_version());
++                common_kestrel_version());
      }
  };
  
