@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Kestrel — Local LLM Runtime for Intel Macs with AMD GPUs",
+    "output": "kestrel-solution.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "viewBox": [
+      1300,
+      680
+    ],
+    "views": [
+      {
+        "id": "inference-path",
+        "label": "Inference path",
+        "focus": [
+          "chat",
+          "servers",
+          "llama",
+          "gpu"
+        ],
+        "note": "Chat requests flow through the engine manager into the patched llama-server on Metal."
+      },
+      {
+        "id": "engines",
+        "label": "Bundled engines",
+        "focus": [
+          "llama",
+          "sd",
+          "whisper",
+          "gpu"
+        ],
+        "note": "All three engines carry the AMD Metal kernel work and share the GPU."
+      },
+      {
+        "id": "build-chain",
+        "label": "Build chain",
+        "focus": [
+          "upstream",
+          "patches",
+          "ci"
+        ],
+        "note": "Pinned upstream commits meet the patch series; CI cross-compiles, signs and notarizes."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "remote",
+      "type": "external",
+      "label": "Remote providers",
+      "sublabel": "OpenAI- / Anthropic-compatible",
+      "pos": [
+        50,
+        20
+      ],
+      "size": [
+        200,
+        60
+      ]
+    },
+    {
+      "id": "chat",
+      "type": "frontend",
+      "label": "Chat & Agents",
+      "sublabel": "SwiftUI · tools · MCP",
+      "pos": [
+        50,
+        150
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "servers",
+      "type": "backend",
+      "label": "Engine Manager",
+      "sublabel": "router · multi-GPU · profiles",
+      "pos": [
+        400,
+        150
+      ],
+      "size": [
+        220,
+        64
+      ]
+    },
+    {
+      "id": "studio",
+      "type": "frontend",
+      "label": "Image & Audio Studio",
+      "sublabel": "diffusion · dictation · subtitles",
+      "pos": [
+        50,
+        290
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "llama",
+      "type": "backend",
+      "label": "llama-server",
+      "sublabel": "OpenAI-compatible API :8080",
+      "pos": [
+        760,
+        150
+      ],
+      "size": [
+        210,
+        70
+      ],
+      "tag": "cdc06426e + 92 AMD patches"
+    },
+    {
+      "id": "sd",
+      "type": "backend",
+      "label": "sd-cli",
+      "sublabel": "text-to-image · upscaler",
+      "pos": [
+        760,
+        303
+      ],
+      "size": [
+        210,
+        64
+      ],
+      "tag": "241518b"
+    },
+    {
+      "id": "whisper",
+      "type": "backend",
+      "label": "whisper-cli / server",
+      "sublabel": "GPU speech-to-text",
+      "pos": [
+        760,
+        450
+      ],
+      "size": [
+        210,
+        64
+      ],
+      "tag": "v1.9.3"
+    },
+    {
+      "id": "gpu",
+      "type": "external",
+      "label": "AMD GPUs · Metal 3",
+      "sublabel": "Radeon Pro 5500M · eGPU",
+      "pos": [
+        1030,
+        300
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "upstream",
+      "type": "external",
+      "label": "Upstream repos",
+      "sublabel": "llama.cpp · sd.cpp · whisper.cpp",
+      "pos": [
+        50,
+        560
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "patches",
+      "type": "backend",
+      "label": "Patch series",
+      "sublabel": "92 llama · shared-metal · image · whisper",
+      "pos": [
+        400,
+        560
+      ],
+      "size": [
+        230,
+        64
+      ]
+    },
+    {
+      "id": "ci",
+      "type": "cloud",
+      "label": "GitHub Actions",
+      "sublabel": "macos-26 · x86_64 · sign · notarize · DMG",
+      "pos": [
+        760,
+        560
+      ],
+      "size": [
+        230,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Kestrel.app — SwiftUI (macOS 14+, Intel)",
+      "wraps": [
+        "chat",
+        "servers",
+        "studio"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Bundled engines (patched upstream stack)",
+      "wraps": [
+        "llama",
+        "sd",
+        "whisper"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "chat-to-remote",
+      "from": "chat",
+      "to": "remote",
+      "label": "SSE · Keychain key",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [
+        [
+          8,
+          182
+        ],
+        [
+          8,
+          50
+        ]
+      ]
+    },
+    {
+      "id": "chat-to-servers",
+      "from": "chat",
+      "to": "servers",
+      "label": "model requests",
+      "variant": "emphasis"
+    },
+    {
+      "id": "servers-to-llama",
+      "from": "servers",
+      "to": "llama",
+      "label": "spawns engine",
+      "variant": "emphasis"
+    },
+    {
+      "id": "llama-to-gpu",
+      "from": "llama",
+      "to": "gpu",
+      "variant": "emphasis",
+      "toSide": "top",
+      "via": [
+        [
+          1130,
+          185
+        ]
+      ]
+    },
+    {
+      "id": "studio-to-sd",
+      "from": "studio",
+      "to": "sd",
+      "label": "image jobs"
+    },
+    {
+      "id": "studio-to-whisper",
+      "from": "studio",
+      "to": "whisper",
+      "label": "transcription"
+    },
+    {
+      "id": "sd-to-gpu",
+      "from": "sd",
+      "to": "gpu",
+      "toSide": "left",
+      "route": "straight"
+    },
+    {
+      "id": "whisper-to-gpu",
+      "from": "whisper",
+      "to": "gpu",
+      "toSide": "bottom",
+      "via": [
+        [
+          1130,
+          482
+        ]
+      ]
+    },
+    {
+      "id": "upstream-to-patches",
+      "from": "upstream",
+      "to": "patches",
+      "label": "pinned commits"
+    },
+    {
+      "id": "patches-to-ci",
+      "from": "patches",
+      "to": "ci",
+      "label": "strict series check",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Runtime",
+      "items": [
+        "llama-server serves both the in-app chat and an OpenAI-compatible API on :8080",
+        "Router mode swaps models per request without a restart"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "AMD Metal stack",
+      "items": [
+        "llama.cpp carries the 92-patch AMD series: wave64 kernels, flash attention, MoE experts on CPU",
+        "sd and whisper bundle the same shared-metal backend for the pre-kernels-split ggml"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Build chain",
+      "items": [
+        "Engine pins sit at the newest upstream each full patch series applies on (strict git-apply dry-runs)",
+        "CI cross-compiles x86_64 on macos-26, signs, notarizes and cuts the DMG"
+      ]
+    }
+  ]
+}
