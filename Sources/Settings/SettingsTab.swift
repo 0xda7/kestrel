@@ -643,14 +643,28 @@ struct SettingsView: View {
         }
     }
 
-    private var otherSettingsForm: some View {
+    @ViewBuilder private var otherSettingsForm: some View {
         Form {
-
             if settingsDestination == .speech {
-            SpeechModelsSettingsSection()
+                SpeechModelsSettingsSection()
             }
-
             if settingsDestination == .models {
+                modelsSettingsSections
+            }
+            if settingsDestination == .inference {
+                inferenceSettingsSections
+            }
+        }
+        .formStyle(.grouped)
+        .toggleStyle(SettingsCompactToggleStyle())
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The old single Form builder was one 460-line view function — big
+    /// enough to blow up IRGen under Swift 6 — so each destination is its
+    /// own computed view now.
+    @ViewBuilder private var modelsSettingsSections: some View {
             let dynamicSettings = ServerSettings.fromDefaults()
             let dynamicRoute = dynamicSettings.dynamicMoeAutoRoute
             let dynamicInfo = dynamicSettings.dynamicMoeModelInfo
@@ -937,7 +951,7 @@ struct SettingsView: View {
             }
             }
 
-            if settingsDestination == .inference {
+    @ViewBuilder private var inferenceSettingsSections: some View {
             Section {
                 LabeledContent(loc.t("Contexto", "Context")) {
                     KestrelDropdown(selection: $ctx, options: [4096, 8192, 16384, 32768, 65536, 131072, 262144].map {
@@ -1097,14 +1111,7 @@ struct SettingsView: View {
 
             RemoteProvidersSection()
             }
-
-        }
-        .formStyle(.grouped)
-        .toggleStyle(SettingsCompactToggleStyle())
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: .infinity)
     }
-}
 
 /// Each appearance has one small shared bitmap. The selected 720 px image is
 /// loaded lazily and reused by every guide, avoiding category-specific images.

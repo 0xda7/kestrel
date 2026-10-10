@@ -177,9 +177,10 @@ struct DashboardView: View {
                     "Loads a saved profile. If the server is running, it stops so the profile applies."))
     }
 
-    private var serverCard: some View {
-        Card(title: manager.displayName(for: server, loc: loc), icon: "server.rack",
-             trailing: { if !profileStore.profiles.isEmpty { profileMenu } }) {
+    /// Extracted from `serverCard`: the file's build function was large
+    /// enough to blow up IRGen under Swift 6, so it is composed of these
+    /// pieces now.
+    @ViewBuilder private var modelPickerRow: some View {
             if routerMode {
                 HStack(spacing: 8) {
                     Image(systemName: "shippingbox.and.arrow.backward").frame(width: 18).foregroundStyle(.secondary)
@@ -211,6 +212,9 @@ struct DashboardView: View {
                     .disabled(server.state == .running || server.state == .starting)
                 }
             }
+    }
+
+    @ViewBuilder private var modelConfigurationDisclosure: some View {
             DisclosureGroup(loc.t("Configuración del modelo", "Model configuration")) {
                 if hardware.gpus.count > 1 {
                     HStack(spacing: 8) {
@@ -266,7 +270,6 @@ struct DashboardView: View {
             }
             row("number", loc.t("Peticiones: %@", "Requests: %@", "\(server.requestCount)"))
 
-            let serverBusy = server.state == .running || server.state == .starting
             let restartNote = serverBusy
                 ? loc.t(" Se aplica al reiniciar el servidor.", " Applies when the server restarts.")
                 : ""
@@ -336,6 +339,14 @@ struct DashboardView: View {
                     }
                 }
             }
+    }
+
+    /// The model picker and controls disable while a launch is in flight.
+    private var serverBusy: Bool { server.state == .running || server.state == .starting }
+
+    @ViewBuilder private var serverCard: some View {
+            modelPickerRow
+            modelConfigurationDisclosure
             SpecMetricsView(port: port)
             VStack(alignment: .leading, spacing: 10) {
                 Label(loc.t("Servicios y opciones avanzadas", "Services and advanced options"),
@@ -437,7 +448,6 @@ struct DashboardView: View {
             Spacer(minLength: 0)
         }
     }
-}
 
 private struct DashboardMultiGPUOverview: View {
     @EnvironmentObject private var vram: VRAMMonitor

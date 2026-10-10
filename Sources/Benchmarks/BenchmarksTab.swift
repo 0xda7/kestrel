@@ -1421,7 +1421,7 @@ private struct BenchmarkResultTableRow: View, Equatable {
     let onApplyGlobal: () -> Void
     let onDelete: () -> Void
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.result.id == rhs.result.id && lhs.isBest == rhs.isBest
             && lhs.maxPrompt == rhs.maxPrompt && lhs.maxGeneration == rhs.maxGeneration
     }
@@ -1615,7 +1615,7 @@ private struct BenchHistoryRow: View, Equatable {
     let onApplyGlobal: () -> Void
     let onDelete: () -> Void
 
-    static func == (a: Self, b: Self) -> Bool {
+    nonisolated static func == (a: Self, b: Self) -> Bool {
         a.r.id == b.r.id && a.isBest == b.isBest && a.showsDivider == b.showsDivider
     }
 

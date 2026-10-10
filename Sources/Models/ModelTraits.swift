@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import os
 
 /// What a downloaded GGUF brings with it: experts, vision projector, MTP head, DFlash draft.
 struct ModelTraits {
@@ -35,28 +36,20 @@ struct ModelTraits {
 /// Each read hits the file system and the GGUF header, and every model card and
 /// model menu asks on redraw, so results are held until the folder is rescanned.
 enum ModelTraitsCache {
-    private static let lock = NSLock()
-    private static var entries: [String: ModelTraits] = [:]
+    private static let entries = OSAllocatedUnfairLock<[String: ModelTraits]>(initialState: [:])
 
     static func traits(for path: String) -> ModelTraits {
-        lock.lock()
-        if let cached = entries[path] {
-            lock.unlock()
+        if let cached = entries.withLock({ $0[path] }) {
             return cached
         }
-        lock.unlock()
         let traits = ModelTraits.of(path: path)
-        lock.lock()
-        entries[path] = traits
-        lock.unlock()
+        entries.withLock { $0[path] = traits }
         return traits
     }
 
     /// For view bodies: never reads the header, so drawing cannot block on it.
     static func cached(for path: String) -> ModelTraits? {
-        lock.lock()
-        defer { lock.unlock() }
-        return entries[path]
+        entries.withLock { $0[path] }
     }
 
     static func warm(paths: [String], then done: @escaping () -> Void) {
@@ -71,9 +64,7 @@ enum ModelTraitsCache {
     }
 
     static func invalidate() {
-        lock.lock()
-        entries.removeAll()
-        lock.unlock()
+        entries.withLock { $0.removeAll() }
     }
 }
 

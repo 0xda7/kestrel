@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // Remote inference routes: chat can run through a user-configured provider
 // speaking the OpenAI or Anthropic dialect instead of the local patched
@@ -87,14 +88,13 @@ enum InferenceRoutes {
 
     // MARK: Per-provider credentials (Keychain, one item per route)
 
-    private static let keyCacheLock = NSLock()
     /// Session cache of resolved credentials. Every uncached Keychain READ
     /// decrypts the secret and evaluates the item's ACL — on ad-hoc local
     /// builds that raises the password dialog once per item per launch. The
     /// chat send path resolves the active route's key on EVERY message, so
     /// this cache is what turns a per-message prompt into at most one per
     /// launch. setAPIKey/delete keep it coherent.
-    private static var keyCache: [String: String] = [:]
+    private static let keyCache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
 
     private static func keychainAccount(for routeID: UUID) -> String {
         "remote-api-key-\(routeID.uuidString)"
@@ -105,24 +105,17 @@ enum InferenceRoutes {
     /// Cached in-process after the first successful read.
     static func apiKey(for route: InferenceRoute) -> String {
         let account = keychainAccount(for: route.id)
-        keyCacheLock.lock()
-        if let cached = keyCache[account] {
-            keyCacheLock.unlock()
+        if let cached = keyCache.withLock({ $0[account] }) {
             return cached
         }
-        keyCacheLock.unlock()
         let scoped = Keychain.get(account) ?? ""
         if !scoped.isEmpty {
-            keyCacheLock.lock()
-            keyCache[account] = scoped
-            keyCacheLock.unlock()
+            keyCache.withLock { $0[account] = scoped }
             return scoped
         }
         let legacy = Keychain.get(legacyKeychainAccount) ?? ""
         if !legacy.isEmpty {
-            keyCacheLock.lock()
-            keyCache[account] = legacy
-            keyCacheLock.unlock()
+            keyCache.withLock { $0[account] = legacy }
         }
         return legacy
     }
@@ -132,10 +125,7 @@ enum InferenceRoutes {
     /// evaluates the item's ACL, so this never raises the access dialog.
     static func hasAPIKey(for route: InferenceRoute) -> Bool {
         let account = keychainAccount(for: route.id)
-        keyCacheLock.lock()
-        let cached = keyCache[account] != nil
-        keyCacheLock.unlock()
-        if cached { return true }
+        if keyCache.withLock({ $0[account] }) != nil { return true }
         return Keychain.exists(account) || Keychain.exists(legacyKeychainAccount)
     }
 
@@ -150,10 +140,11 @@ enum InferenceRoutes {
         } else {
             Keychain.setThisDeviceOnly(trimmed, account: account)
         }
-        keyCacheLock.lock()
-        if trimmed.isEmpty { keyCache.removeValue(forKey: account) }
-        else { keyCache[account] = trimmed }
-        keyCacheLock.unlock()
+        if trimmed.isEmpty {
+            keyCache.withLock { $0.removeValue(forKey: account) }
+        } else {
+            keyCache.withLock { $0[account] = trimmed }
+        }
         let unscoped = load().filter { $0.isConfigured }.allSatisfy {
             hasAPIKey(for: $0)
         }

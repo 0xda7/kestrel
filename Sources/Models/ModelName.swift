@@ -4,6 +4,7 @@
 
 import Foundation
 import SwiftUI
+import os
 
 /// Readable model name parsed from the GGUF filename convention
 /// (BaseName-SizeLabel-FineTune-Version-Encoding), or from `general.name`.
@@ -233,18 +234,17 @@ struct ModelName {
     /// Titles prefer useful embedded metadata. Quantization uses the header unless
     /// the filename carries a more specific UD quantization variant.
     static func forPath(_ path: String) -> ModelName {
-        if let cached = cacheLock.withLock({ cache[path] }) { return cached }
+        if let cached = cache.withLock({ $0[path] }) { return cached }
         let name = resolve(path)
-        cacheLock.withLock { cache[path] = name }
+        cache.withLock { $0[path] = name }
         return name
     }
 
-    nonisolated(unsafe) private static var cache: [String: ModelName] = [:]
-    private static let cacheLock = NSLock()
+    private static let cache = OSAllocatedUnfairLock<[String: ModelName]>(initialState: [:])
 
     /// Called from list rows, so it is cached: each pass otherwise costs three stat
     /// calls per model and the name never changes while the file does not.
-    static func forgetCachedNames() { cacheLock.withLock { cache.removeAll() } }
+    static func forgetCachedNames() { cache.withLock { $0.removeAll() } }
 
     private static func resolve(_ path: String) -> ModelName {
         let byFile = ModelName(URL(fileURLWithPath: path).lastPathComponent)

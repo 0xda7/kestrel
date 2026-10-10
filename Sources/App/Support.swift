@@ -619,13 +619,10 @@ enum Keychain {
     /// item created by an older build raises the password dialog. Caching one
     /// successful read per launch turns "prompt on every navigation / every
     /// message" into "at most once per item per launch".
-    private static let cacheLock = NSLock()
-    private static var cache: [String: String] = [:]
+    private static let cache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
 
     static func get(_ account: String) -> String? {
-        cacheLock.lock()
-        if let cached = cache[account] { cacheLock.unlock(); return cached }
-        cacheLock.unlock()
+        if let cached = cache.withLock({ $0[account] }) { return cached }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -637,9 +634,7 @@ enum Keychain {
               let data = item as? Data else { return nil }
         let value = String(data: data, encoding: .utf8)
         if let value {
-            cacheLock.lock()
-            cache[account] = value
-            cacheLock.unlock()
+            cache.withLock { $0[account] = value }
         }
         return value
     }
@@ -650,10 +645,7 @@ enum Keychain {
     /// (settings UI, migration logic) — the value is read later, once, only
     /// when a request actually needs it.
     static func exists(_ account: String) -> Bool {
-        cacheLock.lock()
-        let cached = cache[account] != nil
-        cacheLock.unlock()
-        if cached { return true }
+        if cache.withLock({ $0[account] }) != nil { return true }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -677,9 +669,7 @@ enum Keychain {
         // Cache only what the keychain actually accepted: get()/exists()
         // read the cache first, so caching a failed write would assert a
         // credential that is not stored (a caller-visible lie).
-        cacheLock.lock()
-        if ok { cache[account] = value } else { cache.removeValue(forKey: account) }
-        cacheLock.unlock()
+        cache.withLock { $0[account] = ok ? value : nil }
     }
 
     /// Stores private local material without iCloud sync or device migration.
@@ -698,9 +688,7 @@ enum Keychain {
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let ok = SecItemAdd(add as CFDictionary, nil) == errSecSuccess
         if ok {
-            cacheLock.lock()
-            cache[account] = value
-            cacheLock.unlock()
+            cache.withLock { $0[account] = value }
         }
         return ok
     }
@@ -711,9 +699,7 @@ enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ] as CFDictionary)
-        cacheLock.lock()
-        cache.removeValue(forKey: account)
-        cacheLock.unlock()
+        cache.withLock { $0.removeValue(forKey: account) }
     }
 
     /// Returns the local engine's API key, generating one on first use.
@@ -753,8 +739,7 @@ enum LocalSecretStore {
     /// (every chat send resolves the engine key via ServerSettings.activeAPIKey)
     /// and the file is only re-read after this process last saw it change —
     /// store() is the only writer, so the cache cannot go stale in-process.
-    private static let cacheLock = NSLock()
-    private static var cache: [String: String] = [:]
+    private static let cache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
 
     static func url(_ name: String) -> URL {
         let base = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory,
@@ -764,18 +749,14 @@ enum LocalSecretStore {
     }
 
     static func value(_ name: String) -> String? {
-        cacheLock.lock()
-        if let cached = cache[name] { cacheLock.unlock(); return cached }
-        cacheLock.unlock()
+        if let cached = cache.withLock({ $0[name] }) { return cached }
         let path = url(name).path
         guard FileManager.default.fileExists(atPath: path),
               var contents = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
         while contents.hasSuffix("\n") { contents.removeLast() }
         let value = contents.isEmpty ? nil : contents
         if let value {
-            cacheLock.lock()
-            cache[name] = value
-            cacheLock.unlock()
+            cache.withLock { $0[name] = value }
         }
         return value
     }
@@ -789,9 +770,7 @@ enum LocalSecretStore {
             try value.write(to: fileURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o600],
                                                   ofItemAtPath: fileURL.path)
-            cacheLock.lock()
-            cache[name] = value
-            cacheLock.unlock()
+            cache.withLock { $0[name] = value }
             return true
         } catch {
             return false

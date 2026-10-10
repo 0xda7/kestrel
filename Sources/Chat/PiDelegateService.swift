@@ -214,72 +214,79 @@ enum PiDelegateService {
         process.standardError = stderr
         process.environment = childEnvironment()
 
-        let lock = NSLock()
-        var lineBuffer = Data()
-        var visible = ""
-        var reasoning = ""
-        var finalAssistant: String?
-        var stderrTail = ""
+        /// All mutable pump state behind one lock. `@unchecked Sendable`:
+        /// every field is only touched with `lock` held (apply is documented
+        /// to be called with it held), which is what makes the readability
+        /// handlers safe to run on the pipe's own threads.
+        final class PumpState: @unchecked Sendable {
+            let lock = NSLock()
+            var lineBuffer = Data()
+            var visible = ""
+            var reasoning = ""
+            var finalAssistant: String?
+            var stderrTail = ""
 
-        /// Applies one parsed record to the guarded state. Called with the
-        /// lock HELD; the caller delivers any onOutput snapshot after unlocking.
-        func apply(_ line: String) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8),
-                  let record = (try? JSONSerialization.jsonObject(with: data))
-                      as? [String: Any] else { return }
-            let type = record["type"] as? String ?? ""
-            switch type {
-            case "message_update":
-                guard let event = record["assistantMessageEvent"] as? [String: Any],
-                      let kind = event["type"] as? String else { return }
-                switch kind {
-                case "text_delta":
-                    guard let delta = event["delta"] as? String else { return }
-                    guard visible.count < Self.maximumStreamCharacters else { return }
-                    visible += delta
-                case "reasoning_delta", "thinking_delta":
-                    guard let delta = event["delta"] as? String else { return }
-                    guard reasoning.count < Self.maximumStreamCharacters else { return }
-                    reasoning += delta
-                case "toolcall_start", "tool_execution_start":
-                    // Tool activity belongs in the reasoning panel: visible in
-                    // real time, never mistaken for the reply itself.
-                    let name = event["toolName"] as? String
-                        ?? event["name"] as? String ?? "tool"
-                    reasoning += "\n[tool: \(name)]\n"
+            /// Applies one parsed record to the guarded state. Called with the
+            /// lock HELD; the caller delivers any onOutput snapshot after unlocking.
+            func apply(_ line: String) {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8),
+                      let record = (try? JSONSerialization.jsonObject(with: data))
+                          as? [String: Any] else { return }
+                let type = record["type"] as? String ?? ""
+                switch type {
+                case "message_update":
+                    guard let event = record["assistantMessageEvent"] as? [String: Any],
+                          let kind = event["type"] as? String else { return }
+                    switch kind {
+                    case "text_delta":
+                        guard let delta = event["delta"] as? String else { return }
+                        guard visible.count < PiDelegateService.maximumStreamCharacters else { return }
+                        visible += delta
+                    case "reasoning_delta", "thinking_delta":
+                        guard let delta = event["delta"] as? String else { return }
+                        guard reasoning.count < PiDelegateService.maximumStreamCharacters else { return }
+                        reasoning += delta
+                    case "toolcall_start", "tool_execution_start":
+                        // Tool activity belongs in the reasoning panel: visible in
+                        // real time, never mistaken for the reply itself.
+                        let name = event["toolName"] as? String
+                            ?? event["name"] as? String ?? "tool"
+                        reasoning += "\n[tool: \(name)]\n"
+                    default:
+                        break
+                    }
+                case "message_end":
+                    guard let message = record["message"] as? [String: Any],
+                          message["role"] as? String == "assistant" else { return }
+                    if let text = PiDelegateService.assistantText(from: message["content"]) {
+                        finalAssistant = text
+                    }
                 default:
                     break
                 }
-            case "message_end":
-                guard let message = record["message"] as? [String: Any],
-                      message["role"] as? String == "assistant" else { return }
-                if let text = Self.assistantText(from: message["content"]) {
-                    finalAssistant = text
-                }
-            default:
-                break
             }
         }
+        let state = PumpState()
 
         stdout.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock()
-            lineBuffer.append(chunk)
+            state.lock.lock()
+            state.lineBuffer.append(chunk)
             // LF framing: split complete lines, keep the trailing remainder.
             // Records mutate the guarded state here; snapshots for onOutput are
             // taken under the lock and delivered after it is released, so the
             // callback can never race (or deadlock against) the accumulator.
             var snapshot: (reasoning: String, visible: String)?
-            while let newline = lineBuffer.firstIndex(of: 0x0A) {
-                let lineData = lineBuffer[lineBuffer.startIndex..<newline]
-                lineBuffer.removeSubrange(lineBuffer.startIndex...newline)
+            while let newline = state.lineBuffer.firstIndex(of: 0x0A) {
+                let lineData = state.lineBuffer[state.lineBuffer.startIndex..<newline]
+                state.lineBuffer.removeSubrange(state.lineBuffer.startIndex...newline)
                 let line = String(decoding: lineData, as: UTF8.self)
-                apply(line)
-                snapshot = (reasoning, visible)
+                state.apply(line)
+                snapshot = (state.reasoning, state.visible)
             }
-            lock.unlock()
+            state.lock.unlock()
             if let snapshot, let onOutput {
                 onOutput(snapshot.reasoning, snapshot.visible)
             }
@@ -287,16 +294,16 @@ enum PiDelegateService {
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
-            lock.lock()
-            stderrTail += String(decoding: chunk, as: UTF8.self)
-            if stderrTail.count > 4000 {
-                stderrTail = String(stderrTail.suffix(2000))
+            state.lock.lock()
+            state.stderrTail += String(decoding: chunk, as: UTF8.self)
+            if state.stderrTail.count > 4000 {
+                state.stderrTail = String(state.stderrTail.suffix(2000))
             }
-            lock.unlock()
+            state.lock.unlock()
         }
 
         do { try process.run() } catch {
-            return (reasoning, .failed(
+            return (state.reasoning, .failed(
                 reason: "Failed to launch the pi runtime: \(error.localizedDescription)"))
         }
         onLaunch?(process)
@@ -334,41 +341,41 @@ enum PiDelegateService {
         // instead of being lost to the async handler's lag.
         func collectResults() -> (streamed: String, authoritative: String?,
                                   reasoning: String, stderr: String) {
-            lock.lock()
-            let remainder = lineBuffer.isEmpty ? nil : String(decoding: lineBuffer, as: UTF8.self)
-            lineBuffer.removeAll()
-            if let remainder { apply(remainder) }
-            var tail = stderrTail
-            stderrTail = ""
-            lock.unlock()
+            state.lock.lock()
+            let remainder = state.lineBuffer.isEmpty ? nil : String(decoding: state.lineBuffer, as: UTF8.self)
+            state.lineBuffer.removeAll()
+            if let remainder { state.apply(remainder) }
+            var tail = state.stderrTail
+            state.stderrTail = ""
+            state.lock.unlock()
             stdout.fileHandleForReading.readabilityHandler = nil
             stderr.fileHandleForReading.readabilityHandler = nil
             let stdoutLeftover = stdout.fileHandleForReading.readDataToEndOfFile()
             let stderrLeftover = stderr.fileHandleForReading.readDataToEndOfFile()
-            lock.lock()
+            state.lock.lock()
             if !stdoutLeftover.isEmpty {
                 // Final line(s) without a trailing LF still parse as records.
                 for line in String(decoding: stdoutLeftover, as: UTF8.self)
                     .split(separator: "\n", omittingEmptySubsequences: true) {
-                    apply(String(line))
+                    state.apply(String(line))
                 }
             }
             // An in-flight readabilityHandler can append after the
             // removeAll() above but before the handlers were detached —
             // nil'ing the handler fences nothing. Drain whatever reappeared
             // so a late authoritative message_end is never lost.
-            if !lineBuffer.isEmpty {
-                let late = String(decoding: lineBuffer, as: UTF8.self)
-                lineBuffer.removeAll()
+            if !state.lineBuffer.isEmpty {
+                let late = String(decoding: state.lineBuffer, as: UTF8.self)
+                state.lineBuffer.removeAll()
                 for line in late.split(separator: "\n", omittingEmptySubsequences: true) {
-                    apply(String(line))
+                    state.apply(String(line))
                 }
             }
             tail += String(decoding: stderrLeftover, as: UTF8.self)
             if tail.count > 4000 { tail = String(tail.suffix(2000)) }
-            let values = (streamed: visible, authoritative: finalAssistant,
-                          reasoning: reasoning, stderr: tail)
-            lock.unlock()
+            let values = (streamed: state.visible, authoritative: state.finalAssistant,
+                          reasoning: state.reasoning, stderr: tail)
+            state.lock.unlock()
             return values
         }
         let results = collectResults()

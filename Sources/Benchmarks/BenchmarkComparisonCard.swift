@@ -12,7 +12,7 @@ struct BenchmarkComparisonCard: View, Equatable {
     @State private var runA: UUID?
     @State private var runB: UUID?
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.history.map(\.id) == rhs.history.map(\.id)
     }
 

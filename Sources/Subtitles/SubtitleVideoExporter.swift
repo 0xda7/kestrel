@@ -76,9 +76,10 @@ final class SubtitleVideoExporter: ObservableObject {
             postProcessingAsVideoLayer: videoLayer, in: parentLayer
         )
 
-        try await Self.preserveColour(from: sourceVideo, on: videoComposition)
+        let formats = (try? await sourceVideo.load(.formatDescriptions)) ?? []
+        Self.preserveColour(from: formats, on: videoComposition)
 
-        let preset = await Self.preset(for: composition, source: sourceVideo)
+        let preset = Self.preset(for: composition, formats: formats)
         guard let export = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw CocoaError(.fileWriteUnknown)
         }
@@ -103,12 +104,13 @@ final class SubtitleVideoExporter: ObservableObject {
     }
 
     /// Burning text in means re-encoding, but not necessarily down a generation:
-    /// an HEVC source re-encoded as H.264 pays for nothing.
+    /// an HEVC source re-encoded as H.264 pays for nothing. Synchronous on
+    /// purpose: an `async` signature would force the non-Sendable AVAsset
+    /// arguments across an isolation boundary.
     nonisolated private static func preset(for composition: AVAsset,
-                                           source: AVAssetTrack) async -> String {
+                                           formats: [CMFormatDescription]) -> String {
         let available = AVAssetExportSession.exportPresets(compatibleWith: composition)
-        guard let formats = try? await source.load(.formatDescriptions),
-              formats.contains(where: { CMFormatDescriptionGetMediaSubType($0) == kCMVideoCodecType_HEVC }),
+        guard formats.contains(where: { CMFormatDescriptionGetMediaSubType($0) == kCMVideoCodecType_HEVC }),
               available.contains(AVAssetExportPresetHEVCHighestQuality) else {
             return AVAssetExportPresetHighestQuality
         }
@@ -117,9 +119,9 @@ final class SubtitleVideoExporter: ObservableObject {
 
     /// Without carrying the source's colour tags across, a wide-gamut or HDR clip
     /// comes back flattened.
-    nonisolated private static func preserveColour(from source: AVAssetTrack,
-                                                   on composition: AVMutableVideoComposition) async throws {
-        guard let format = try await source.load(.formatDescriptions).first else { return }
+    nonisolated private static func preserveColour(from formats: [CMFormatDescription],
+                                                   on composition: AVMutableVideoComposition) {
+        guard let format = formats.first else { return }
         let ext = CMFormatDescriptionGetExtensions(format) as? [CFString: Any]
         guard let primaries = ext?[kCMFormatDescriptionExtension_ColorPrimaries] as? String,
               let transfer = ext?[kCMFormatDescriptionExtension_TransferFunction] as? String,

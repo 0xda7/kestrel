@@ -20,6 +20,9 @@ final class AppleSpeechDictationController: ObservableObject {
     private var onText: ((String) -> Void)?
     private var committed = ""
     private var stoppingByUser = false
+    /// Only `append(_:)` is touched off MainActor (the AVAudioEngine tap runs on
+    /// the audio render thread), and Speech documents `append` as thread-safe;
+    /// every other access to the request is MainActor-isolated.
     private nonisolated(unsafe) var liveRequest: SFSpeechAudioBufferRecognitionRequest?
 
     func toggle(onText: @escaping (String) -> Void) {

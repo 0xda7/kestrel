@@ -136,7 +136,7 @@ enum ChatToolsService {
 
     static func executeStreaming(name: String, arguments: [String: Any], port: Int,
                                  workingDirectory: String? = nil,
-                                 onUpdate: @escaping (String) async -> Void) async throws -> ToolExecutionResult {
+                                 onUpdate: @escaping @Sendable (String) async -> Void) async throws -> ToolExecutionResult {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/tools")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

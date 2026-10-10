@@ -148,7 +148,10 @@ final class EngineChecker: ObservableObject {
     private var process: Process?
     private var buffer = ""
 
-    func start(settings: ServerSettings, onFinish: @escaping (EngineCheckResult) -> Void) {
+    /// `onFinish` is MainActor-isolated: the only caller delivers into view
+    /// state, and an isolated closure is implicitly Sendable, so the
+    /// termination handler can carry it across safely.
+    func start(settings: ServerSettings, onFinish: @MainActor @escaping (EngineCheckResult) -> Void) {
         guard !running else { return }
         let path = EngineCheck.binaryPath(serverBinary: settings.serverBinary)
         guard FileManager.default.isExecutableFile(atPath: path) else { return }
