@@ -66,9 +66,20 @@ enum InferenceRoutes {
         if let data = try? JSONEncoder().encode(routes) {
             UserDefaults.standard.set(data, forKey: storageKey)
         }
-        // Dropping the active route with it gone keeps the resolver honest.
+        // A route re-created in the editor keeps its name but gets a new id.
+        // Re-bind the active selection by name before giving up on it: an
+        // edit must never silently strand the chat on the local engine while
+        // Settings still lists the provider as configured.
         if let active = activeID, !routes.contains(where: { $0.id.uuidString == active }) {
-            UserDefaults.standard.removeObject(forKey: activeKey)
+            let previous = load().first(where: { $0.id.uuidString == active })
+            let rebound = previous?.name.isEmpty == false
+                ? routes.first(where: { $0.name == previous?.name })
+                : nil
+            if let rebound {
+                UserDefaults.standard.set(rebound.id.uuidString, forKey: activeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: activeKey)
+            }
         }
     }
 

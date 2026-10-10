@@ -48,6 +48,15 @@ struct RemoteProvidersSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            if activeSelection.isEmpty && !routes.isEmpty {
+                Label(loc.t("Sin ruta activa: el chat responde con el motor local aunque los proveedores estén configurados.",
+                            "No active route: chat answers with the local engine even though providers are configured."),
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if InferenceRoutes.legacySharedKeyPresent {
                 Label(loc.t("Los proveedores sin clave propia usan la clave compartida heredada; guarda una clave por proveedor para migrarla.",
                             "Providers without their own key fall back to the inherited shared key; save a per-provider key to migrate off it."),

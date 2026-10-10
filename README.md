@@ -15,7 +15,6 @@ Native macOS app · Metal acceleration · No cloud, no accounts, no per-token co
 
 ### [⬇️ Download the latest release](https://github.com/0xda7/kestrel/releases/latest) · [📝 Changelog](CHANGELOG.md)
 
-*[Versión en español más abajo](#kestrel-en-español)*
 
 <img src="Assets/home.jpg" alt="Kestrel home screen — hardware detection and model recommendations" width="760">
 
@@ -121,6 +120,17 @@ For scale, the same gpt-oss-20B run against the Apple Silicon numbers posted in 
 | tg128 | 95.0 | 63.3 | 64.3 | 95.9 |
 
 A 2021 card holds its own: it trails the M3 Max on short prompts, leads it from 8k tokens up, and generates at the same rate as an M4 Max. Two things to keep in mind. The M3 Max `tg128` is low because that run was heat throttled, as the maintainer notes in the linked reply, so the M4 Max figure is the one to compare generation against; both it and the run here measured generation on its own, which is what avoids the throttling. And the file is not the same: theirs is the stock MXFP4 build, ours a `Q4_K_M` repack. That matters less than the name suggests, because **87% of our file is still MXFP4** — the 72 expert tensors keep the model's native format, and only the remaining 13% (attention, embeddings, norms) is repacked to Q8_0/Q5_0/Q4_K, which is why it weighs 10.81 GiB against their 11.27.
+
+## Agentic capabilities
+
+Kestrel is not only a chat window — the model can act on your machine, and every one of these paths is confined and attributed:
+
+- **Agent tools** — the assistant can read and edit files, run shell commands, and fetch URLs, with every step gated behind a per-conversation switch, a per-turn permission prompt, and a configurable turn budget. Tool results are attributed to the tool that produced them and shown inline.
+- **JavaScript sandbox** — a browserless JS tool runs compute snippets without shell access.
+- **MCP (Model Context Protocol)** — connect external tool servers over stdio or HTTP; their tools appear alongside the built-ins and stay scoped to the servers you enabled. Responses are delivered as typed records, and a hung server answers with a timeout instead of hanging the turn.
+- **External agent runtimes** — a conversation can be answered by the latch harness or the pi runtime instead of the local model. Both run with a time budget (model-requested timeouts floored at 60 s, clamped at 900 s), stream partial output into the reasoning panel, and write one JSONL trace per run for inspection. The meta-prompt path (Prompt Space → "Create with pi…") runs pi with tools off entirely, and an empty or failed provider answer is surfaced as a bilingual failure — never a silent blank.
+- **Provider routing** — each conversation answers through the local engine, a configured remote route (OpenAI- or Anthropic-compatible, with per-route keys in the Keychain), or one of the agent runtimes. Settings shows which route is active; when none is selected, the chat says it is using the local engine instead of implying a provider is wired in.
+- **OpenAI-compatible API** — external agents (VS Code, CLI tools, your own scripts) can drive Kestrel's models at `http://127.0.0.1:8080/v1`, including router mode, which loads whatever model each request names.
 
 ## Install
 
@@ -402,6 +412,10 @@ Contributed by users on their own machines with the built-in benchmark (`pp512` 
 | Radeon Pro Vega II 32 GB (GCN) | Mac Pro 2019 — Xeon W 12-core, 96 GB | gemma-4-26B-A4B Q4_K_M — MoE | 190.3 | 47.9 |
 | Radeon RX 6900 XT 16 GB | Mac Pro 2019 — Xeon W 16-core, 96 GB DDR4 | Qwen3-4B Q4_K_M — dense | 291.4 | 97.5 |
 | Radeon RX 5600 XT 6 GB | Hackintosh — Core i5-12400F, DDR5 | Qwen3-4B Q4_K_M — dense | 100.0 | 52.1 |
+| Radeon Pro 5500M 8 GB | MacBook Pro 16" 2019 — Core i9-9980HK | Spark-X2.5 1.7B Q8_0 — dense | 1013.9 | 54.9 |
+| Radeon Pro 5500M 8 GB | MacBook Pro 16" 2019 — Core i9-9980HK | Spark-X2.5 4B Q4_K_M — dense | 395.9 | 33.0 |
+
+The Spark-X2.5 rows were measured on the developer machine with `llama-bench` (`pp512`/`tg128`, `-ngl 99`, two repetitions) on engine build `cdc06426e` with the AMD patch series; both models fit the card's 8 GB entirely in VRAM.
 
 Two of these rows carry a lesson. The 30B MoE on the 6950 XT jumped from 36 to 48 t/s once the tester let the app find the right expert offload (`ncmoe` 31 → 23) — that one setting is usually the difference between "fine" and "fast" on a MoE, and the **Find optimum** button in Benchmarks sweeps it for you. And the Vega II is a wave64 card: its 35B prompt speed went 167 → 285 t/s (+70%) in 0.81.67, when the expert matmul finally moved to the tiled GPU path.
 
@@ -451,74 +465,3 @@ Quick and friendly. Every contribution funds continued development. Thank you fo
 Donations help keep the project independent. See the support links above.
 
 ---
-
-## Kestrel en español
-
-**Ejecuta modelos de lenguaje grandes localmente en Macs Intel con GPU AMD.** Aceleración Metal. Sin nube, sin cuentas, sin costos por token.
-
-### [⬇️ Descarga la última versión](https://github.com/0xda7/kestrel/releases/latest) · [📝 Cambios](CHANGELOG.md) · [💜 Apoya el proyecto](#apoya-el-proyecto)
-
-### ¿Qué es Kestrel?
-
-Kestrel te permite ejecutar modelos LLM modernos **completamente en tu propio Mac** — tus chats nunca salen del equipo, no hay cuentas y no pagas por token.
-
-Casi todas las herramientas de LLM locales en macOS apuntan a Apple Silicon; los Macs Intel con GPU AMD dedicada (incluidos los Hackintosh) quedan fuera: los motores estándar producen **texto corrupto** en estas GPUs y leen los pesos por PCIe a una fracción de la velocidad posible.
-
-**Kestrel lo resuelve.** Empaqueta `llama.cpp` con parches específicos para AMD dentro de una app nativa SwiftUI, de modo que una tarjeta como la RX 6700 XT pasa de inservible a realmente rápida (Qwen3-8B: de 0.6–2.6 t/s a ~61 t/s). Al abrirla detecta tu hardware y te recomienda modelos que correrán bien, sin adivinar.
-
-### Funciones
-
-- **Chat nativo** — conversaciones persistentes, Markdown completo con copiar código, regenerar, prompt de sistema, tokens/seg en vivo, adjuntar archivos, bifurcar conversaciones y métricas por mensaje
-- **Herramientas de agente y MCP** — el modelo puede leer, editar y ejecutar archivos y comandos con permiso paso a paso, correr JavaScript en un sandbox y usar herramientas de servidores MCP externos que conectes
-- **Dictado por voz** — el botón de micrófono transcribe directo al cuadro de mensaje en el propio Mac (framework Speech de Apple); nada sale del equipo
-- **Estudio de audio y subtítulos en GPU** — Whisper.cpp transcribe audio o vídeo, muestra y sigue el segmento activo durante la reproducción, conserva proyectos recuperables con original y traducción, mantiene términos consistentes mediante contexto y glosario, permite editar y comparar ambas pistas, prueba VAD en una muestra y exporta SRT, VTT, TXT, JSON o una copia MOV subtitulada
-- **Visión** — adjunta imágenes (o pega una captura con Cmd+V) y los modelos con visión las describen; el proyector (`mmproj`) se empareja solo
-- **Generación de imágenes (beta)** — estudio local de texto-a-imagen (stable-diffusion.cpp sobre el mismo stack Metal AMD): texto-a-imagen e imagen-a-imagen, con catálogo ajustado a tu VRAM, vista previa de la imagen formándose y un **escalador** que también acepta tus fotos (×2/×4, por lotes, y comparador con deslizador)
-- **Gestor de modelos** — catálogo curado con **estimaciones de VRAM/RAM para *tu* equipo**, explorador de Hugging Face ordenable por tendencia, descargas, favoritos o última actualización, descargas con progreso y aviso cuando un repositorio vuelve a publicar un modelo que ya tienes
-- **Soporte MoE** — cálculo automático de `--n-cpu-moe` para que modelos de 35B corran bien en GPUs de 12 GB
-- **Decodificación especulativa automática y sin pérdida** — MTP se activa solo en los modelos que traen el cabezal, y DFlash usa un borrador pequeño por modelo cuando lo descargas; ambos se ajustan a tu VRAM, se desenganchan en el contenido donde no compensa y no cambian la salida
-- **Motor integrado** — llama.cpp oficial con el kernel de **Flash Attention para AMD** activo por defecto, para que la atención corra en la GPU en vez de caer a CPU
-- **Benchmarks** — mide velocidad de prompt y generación por configuración, con historial y gráficas comparativas
-- **API compatible con OpenAI** en `http://127.0.0.1:8080`, con acceso opcional por red local y descubrimiento Bonjour; también puede servir embeddings para clientes RAG locales
-- **Modo router** — un solo servidor que carga el modelo que pida cada petición compatible con OpenAI, sin reiniciar entre modelos; los clientes externos y el chat integrado cambian al vuelo
-- **Varios servidores y multi-GPU** — varios motores independientes a la vez, cada uno con su modelo, GPU (o conjunto exacto de GPUs), puerto y perfil; las eGPU corren a velocidad completa con pesos residentes en VRAM
-- **Cada parámetro explicado** — tooltips bilingües y documentación integrada
-- **Perfiles, modo barra de menú y auto-inicio**
-
-#### En pruebas 🧪
-
-Funciones nuevas, aún en validación — actívalas en Ajustes, pero pueden tener detalles por pulir:
-
-- **Recordar conversaciones (caché en disco)** — guarda la caché KV de cada chat, así al reabrirlo o reiniciar la app no se reprocesa el prompt; la restauración es byte-exacta y un chat de 8.6k tokens vuelve en 0.9 s en vez de 24.8 s. También pre-calienta la caché para clientes externos (VS Code/Cline), evitando el prefill frío de varios minutos en la primera petición.
-- **Generación de vídeo (experimental, primera versión)** — un modo Vídeo junto a Chat e Imágenes, sobre el mismo motor stable-diffusion.cpp, con Wan 2.1/2.2, LTX-2 y HunyuanVideo. Léelo antes de descargar 7 GB: unos segundos de vídeo tardan minutos, 49 fotogramas a 480p ya llenan una tarjeta de 12 GB y **solo entra Wan 2.1 1.3B**; los demás piden 24 GB o más. Pedir más fotogramas o más píxeles de los que caben falla, no degrada. El clip vuelve como fotogramas que puedes recorrer, y se exporta a mp4. El motor está medido; la interfaz es nueva y los valores por defecto van a cambiar.
-- **Repartir el modelo entre varias GPUs** — validado en un equipo con dos GPUs (RX 6900 XT + RX 6800 XT por eGPU): un MoE de 35B con todos los expertos en VRAM generó a ~3× la velocidad de una sola GPU con offload, y hay testers corriendo modelos de 122B repartidos en cuatro tarjetas. Puedes elegir el conjunto exacto de tarjetas por servidor; sigue marcado experimental mientras llegan más configuraciones.
-- **Tarjetas AMD GCN / Vega (RX 500, Vega, Radeon VII)** — usan wavefront de 64 (los kernels de Metal asumen 32), lo que producía salida corrupta. Kestrel incluye un **path wave64 en GPU** que se activa solo al detectar una de estas tarjetas y ya cubre el modelo completo: decode de pesos (K-quants incluidos Q2_K/Q3_K, tipos IQ y MXFP4, quants legacy, ternarios Q1_0/Q2_0, bf16 y expertos MoE), las reducciones (softmax, normalización, sumas, argmax y el scan SSM), las capas Gated Delta Net de la familia Qwen3.5/3.6, la **atención** (variantes wave64 desde 0.81.55, con KV cuantizado, y desde 0.83.10 el prompt usa el kernel por bloques) y el matmul de prompt de capas densas y de expertos. En una Vega 64: Qwen3 4B Q3_K_M pasó de **3.96 a 44 t/s** de generación en 0.83.9, y sus prompts largos de **295 a 457 t/s** a 8k de contexto en 0.83.10. Un tester midió en una RX 580 un modelo K-quant pasar de **1.3 a ~51 t/s**, coherente. Recomendado: modelo K-quant, Flash Attention en **ON** y KV en f16. Es no-op verificado en RDNA (wave32); en GCN/Vega real sigue validándose con testers.
-
-### Instalación
-
-Descarga el `.dmg` desde [Releases](https://github.com/0xda7/kestrel/releases/latest), ábrelo y arrastra **Kestrel** a Aplicaciones. Todo viene incluido — sin Homebrew, sin Python.
-
-> **Primer arranque:** desde la 0.86.5 la app va firmada con un Apple Developer ID y notarizada por Apple, así que se abre directamente, sin avisos ni nada que aprobar. En la **0.86.4 y anteriores** macOS bloquea la primera apertura: ve a **Ajustes del Sistema → Privacidad y Seguridad** y pulsa **"Abrir igualmente"**, o ejecuta `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
-
-> **Macs antiguos sin AVX2 (p. ej. Mac Pro 5,1 y otros Xeon anteriores a 2013):** el build normal necesita las instrucciones AVX2 y arranca con "illegal hardware instruction" en esas máquinas. Cada versión publica además un **build sin AVX2** — descarga el `.dmg` cuyo nombre termina en **`-noavx2`**. Se actualiza por su propio canal, así que una vez instalado solo te ofrecerá builds sin AVX2.
-
-### Requisitos y notas
-
-- macOS 14 o posterior · Mac Intel con GPU AMD compatible con Metal · 16 GB de RAM mínimo (32 GB recomendado para MoE de 35B).
-- **Hackintosh:** las GPUs AMD RDNA 2 funcionan muy bien con el kext [NootRX](https://github.com/ChefKissInc/NootRX).
-- **Beta:** funciona para uso diario pero pueden aparecer detalles por pulir; reporta lo que encuentres en [Issues](https://github.com/0xda7/kestrel/issues) (exporta diagnósticos desde Ajustes → Registro del servidor).
-- **Limitaciones conocidas:** los clientes externos (VS Code, Cline…) envían un prompt fijo de 15-19k tokens en cada petición, lo que en frío satura la GPU varios minutos (el chat integrado no se ve afectado). Los modelos MoE grandes con offload antes ahogaban al driver AMD y se estancaban a mitad de generación; **0.81.49 lo solucionó** con un buffer de staging persistente y ahora corren estables y planos (confirmado en RX 6700 XT y en el Mac Pro de dos GPUs de un tester). Queda un watchdog como red de seguridad.
-- **Caché con visión:** `llama.cpp` no permite guardar/restaurar slots ni usar cache-reuse mientras hay un `mmproj` cargado. Kestrel desactiva esas funciones automáticamente para modelos de visión; la caché normal en memoria sigue funcionando.
-
-### Apoya el proyecto
-
-Kestrel es libre y de código abierto, hecho para la comunidad Mac AMD. Si te resulta útil, patrocinarlo lo mantiene independiente y avanzando.
-
-#### 💜 [Conviértete en patrocinador](https://github.com/0xda7/kestrel#support-the-project)
-
-Rápido y sencillo. Cada aporte financia el desarrollo. Gracias por ser parte de esto.
-
-
-### Licencia
-
-**GPL-3.0** — libre para usar, estudiar, modificar y redistribuir; cualquier derivado distribuido debe seguir siendo GPL-3.0 y conservar el copyright. El proyecto nunca podrá convertirse en software comercial cerrado.
