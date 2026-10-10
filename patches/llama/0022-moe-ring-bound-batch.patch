@@ -14,7 +14,7 @@ index 92846d11c..71516638e 100644
 +            // A batch whose experts fit the ring is served entirely on the device, which is
 +            // twice as fast as staging it a layer at a time through the host.
 +            const struct ggml_tensor * ids = gf->nodes[i]->src[2];
-+            const int n_fixed = tosh_moe_fixed_of(gf->nodes[i]->src[0]);
++            const int n_fixed = kestrel_moe_fixed_of(gf->nodes[i]->src[0]);
 +            const int64_t room = n_fixed > 0 ? gf->nodes[i]->src[0]->ne[2] - n_fixed
 +                                             : gf->nodes[i]->src[0]->ne[2];
 +            if (ids && ids->ne[0]*ids->ne[1] <= room) {
@@ -33,25 +33,25 @@ index 2807aa4e2..ed5b2b9b6 100644
 --- a/src/llama-graph.cpp
 +++ b/src/llama-graph.cpp
 @@ -2151,17 +2151,21 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
-         moe_cached = bank && n_bank_experts > 0 && need <= tosh_moe_ids_room(n_bank_experts);
+         moe_cached = bank && n_bank_experts > 0 && need <= kestrel_moe_ids_room(n_bank_experts);
      }
      if (moe_cached) {
-         ggml_tensor * bank = (ggml_tensor *) tosh_moe_ram_of(moe_first);
-         const int n_bank_experts = tosh_moe_experts_of(moe_first);
+         ggml_tensor * bank = (ggml_tensor *) kestrel_moe_ram_of(moe_first);
+         const int n_bank_experts = kestrel_moe_experts_of(moe_first);
          const bool whole_bank = bank && n_bank_experts > 0 && moe_first->ne[2] >= n_bank_experts;
-         const bool split_wide = tosh_moe_fixed_of(moe_first) > 0 &&
+         const bool split_wide = kestrel_moe_fixed_of(moe_first) > 0 &&
              getenv("KESTREL_MOE_BOUNDED_STAGE") != nullptr;
 -        moe_cached = whole_bank || split_wide || n_tokens*n_expert_used <= moe_first->ne[2];
 +        // A split bank can only admit experts into the ring, so that is the bound, not the
 +        // slot count: past it the pick leaves ids at -1 and the batch reads outside the bank.
-+        const int n_fixed = tosh_moe_fixed_of(moe_first);
++        const int n_fixed = kestrel_moe_fixed_of(moe_first);
 +        const int64_t room = n_fixed > 0 ? moe_first->ne[2] - n_fixed : moe_first->ne[2];
 +        moe_cached = whole_bank || split_wide || n_tokens*n_expert_used <= room;
      }
  
      ggml_tensor * expert_ids = selected_experts;
      if (!moe_cached) {
-         gate_up_exps = tosh_moe_bank_of(gate_up_exps);
-         gate_exps    = tosh_moe_bank_of(gate_exps);
-         up_exps      = tosh_moe_bank_of(up_exps);
-         down_exps    = tosh_moe_bank_of(down_exps);
+         gate_up_exps = kestrel_moe_bank_of(gate_up_exps);
+         gate_exps    = kestrel_moe_bank_of(gate_exps);
+         up_exps      = kestrel_moe_bank_of(up_exps);
+         down_exps    = kestrel_moe_bank_of(down_exps);

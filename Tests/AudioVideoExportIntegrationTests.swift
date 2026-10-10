@@ -8,8 +8,8 @@ import XCTest
 final class AudioVideoExportIntegrationTests: XCTestCase {
     @MainActor
     func testCaptionedVideoExportWhenFixtureIsProvided() async throws {
-        guard let path = ProcessInfo.processInfo.environment["TOSH_AUDIO_VIDEO_FIXTURE"] else {
-            throw XCTSkip("Set TOSH_AUDIO_VIDEO_FIXTURE to run the video export integration test")
+        guard let path = ProcessInfo.processInfo.environment["KESTREL_AUDIO_VIDEO_FIXTURE"] else {
+            throw XCTSkip("Set KESTREL_AUDIO_VIDEO_FIXTURE to run the video export integration test")
         }
         let source = URL(fileURLWithPath: path)
         let output = FileManager.default.temporaryDirectory

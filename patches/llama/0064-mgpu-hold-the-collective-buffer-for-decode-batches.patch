@@ -12,7 +12,7 @@ index 8dacceed9..45289079e 100644
  // KESTREL_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
  // latency and the shared host block is faster.
 +// rows in the exchanged tensor: one for a generated token, the whole prompt for a prefill
-+static int64_t tosh_batch_of(const struct ggml_tensor * t) {
++static int64_t kestrel_batch_of(const struct ggml_tensor * t) {
 +    if (t == NULL || t->ne[0] <= 0) { return 1; }
 +    return ggml_nelements(t)/t->ne[0];
 +}
@@ -64,16 +64,16 @@ index 8dacceed9..45289079e 100644
              return false;
          }
  
-         if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
+         if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
          [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
  
-         tosh_trace_cmd_buf(cmd_buf);
-         tosh_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
+         kestrel_trace_cmd_buf(cmd_buf);
+         kestrel_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
-+        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t_self)));
++        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t_self)));
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
@@ -84,15 +84,15 @@ index 8dacceed9..45289079e 100644
  
          ggml_metal_add_inplace_buffer(ctx_self, cmd_buf, t_self, link_in->shadow[slot], 0);
  
-         if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
+         if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
          [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
-         tosh_trace_cmd_buf(cmd_buf);
-         tosh_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
+         kestrel_trace_cmd_buf(cmd_buf);
+         kestrel_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
-+        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t_self)));
++        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t_self)));
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
@@ -100,18 +100,18 @@ index 8dacceed9..45289079e 100644
      return true;
 @@ -2646,17 +2658,17 @@ static bool ggml_metal_exchange_reduce_peer(ggml_metal_t ctx_self, ggml_metal_t
          [cmd_buf encodeSignalEvent:link_in->ev_x_done value:seq];
-         if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
+         if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
          [cmd_buf encodeWaitForEvent:link_out->ev_x_done value:seq];
  
          ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
  
-         tosh_trace_cmd_buf(cmd_buf);
-         tosh_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
+         kestrel_trace_cmd_buf(cmd_buf);
+         kestrel_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
-+        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t_self)));
++        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t_self)));
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
@@ -121,20 +121,20 @@ index 8dacceed9..45289079e 100644
          if (cts != nil) {
              id<MTLCounterSampleBuffer> csr = cts;
              const uint64_t cb2 = cbase;
-             [cmd_buf addCompletedHandler:^(id<MTLCommandBuffer> cb) { (void) cb; tosh_ct_record(csr, cb2); }];
+             [cmd_buf addCompletedHandler:^(id<MTLCommandBuffer> cb) { (void) cb; kestrel_ct_record(csr, cb2); }];
          }
  
-         tosh_trace_cmd_buf(cmd_buf);
-         tosh_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
+         kestrel_trace_cmd_buf(cmd_buf);
+         kestrel_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_self->dev) peerIndex]) & 1));
 -        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold());
-+        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t_self)));
++        ggml_metal_cmd_buf_end(ctx_self, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t_self)));
      }
  
-     if (tosh_mgpu_trace()) {
+     if (kestrel_mgpu_trace()) {
          atomic_fetch_add(&g_tr_reduce, 1);
          // out through the shared block and back in: this card touches it twice
          atomic_fetch_add(&g_tr_bytes_host, 2*size);
-         atomic_fetch_add(&g_tr_encode_ns, tosh_now_ns() - t_enter);
+         atomic_fetch_add(&g_tr_encode_ns, kestrel_now_ns() - t_enter);
      }
 @@ -3455,17 +3467,19 @@ done:
  // KESTREL_MGPU_MERGE=1: a tensor split cuts the graph at every partial node, so a token costs one
@@ -154,6 +154,6 @@ index 8dacceed9..45289079e 100644
  }
  
  enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph * gf) {
-     if (tosh_mgpu_trace()) { atomic_fetch_add(&g_tr_graphs, 1); }
+     if (kestrel_mgpu_trace()) { atomic_fetch_add(&g_tr_graphs, 1); }
      // command buffers run in commit order, so a held one has to go in before this graph
      if (!ggml_metal_merge_graph()) {

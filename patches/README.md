@@ -23,7 +23,7 @@ one patch per change, so each one can be read, measured and reverted on its own.
 |---|---|
 | `0001-metal-kernels` | `ggml/src/ggml-metal/kernels/` |
 | `0002-metal-backend-host` | the rest of `ggml/src/ggml-metal/` |
-| `0003-moe-cache` | `tosh-moe/`, turbo quant |
+| `0003-moe-cache` | `kestrel-moe/`, turbo quant |
 | `0004-ggml-core` | `ggml/` outside the Metal backend |
 | `0005-llama-core` | `src/` |
 | `0006-common-and-spec` | `common/` |

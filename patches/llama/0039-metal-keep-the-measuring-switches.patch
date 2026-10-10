@@ -18,7 +18,7 @@ index 78948dadb..bac07fb44 100644
 +// Off by default, and it attaches no completion handler when off.
 +#define KESTREL_CBP_MAX_BUCKETS 24
 +
-+struct tosh_cbp_bucket {
++struct kestrel_cbp_bucket {
 +    _Atomic int      n_nodes;    // 0 = free slot
 +    _Atomic uint64_t n_graphs;
 +    _Atomic uint64_t n_cbs;
@@ -39,10 +39,10 @@ index 78948dadb..bac07fb44 100644
 +static _Atomic uint64_t g_cbp_commit_ns; // the commit call itself
 +static _Atomic uint64_t g_cbp_create_ns; // creating and enqueuing the buffers of a graph
 +
-+static struct tosh_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
++static struct kestrel_cbp_bucket g_cbp[KESTREL_CBP_MAX_BUCKETS];
 +static _Atomic int g_cbp_state = 0; // 0 unknown, 1 off, 2 on
 +
-+static bool tosh_cbp_on(void) {
++static bool kestrel_cbp_on(void) {
 +    int st = atomic_load_explicit(&g_cbp_state, memory_order_relaxed);
 +    if (st == 0) {
 +        const char * e = getenv("KESTREL_CB_PROFILE");
@@ -52,7 +52,7 @@ index 78948dadb..bac07fb44 100644
 +    return st == 2;
 +}
 +
-+static struct tosh_cbp_bucket * tosh_cbp_bucket_for(int n_nodes) {
++static struct kestrel_cbp_bucket * kestrel_cbp_bucket_for(int n_nodes) {
 +    for (int i = 0; i < KESTREL_CBP_MAX_BUCKETS; ++i) {
 +        int cur = atomic_load_explicit(&g_cbp[i].n_nodes, memory_order_relaxed);
 +        if (cur == n_nodes) {
@@ -72,15 +72,15 @@ index 78948dadb..bac07fb44 100644
 +}
 +
 +// per-graph GPU timeline, filled by the completion handlers of that graph
-+struct tosh_cbp_graph {
-+    struct tosh_cbp_bucket * bucket;
++struct kestrel_cbp_graph {
++    struct kestrel_cbp_bucket * bucket;
 +    _Atomic uint64_t t_first_ns;  // min GPUStartTime, ns
 +    _Atomic uint64_t t_last_ns;   // max GPUEndTime, ns
 +    _Atomic uint64_t gpu_ns;      // this graph's own GPU busy time
 +    _Atomic int      n_left;      // command buffers still running
 +};
 +
-+static void tosh_cbp_attach(id<MTLCommandBuffer> cb, struct tosh_cbp_graph * g) {
++static void kestrel_cbp_attach(id<MTLCommandBuffer> cb, struct kestrel_cbp_graph * g) {
 +    if (g == NULL) {
 +        return;
 +    }
@@ -133,29 +133,29 @@ index 78948dadb..bac07fb44 100644
 +}
 +
 +// definidos en ggml-metal-device.m
-+extern _Atomic uint64_t g_tosh_d2h_ns, g_tosh_d2h_bytes, g_tosh_d2h_n;
-+extern _Atomic uint64_t g_tosh_h2d_ns, g_tosh_h2d_bytes, g_tosh_h2d_n;
++extern _Atomic uint64_t g_kestrel_d2h_ns, g_kestrel_d2h_bytes, g_kestrel_d2h_n;
++extern _Atomic uint64_t g_kestrel_h2d_ns, g_kestrel_h2d_bytes, g_kestrel_h2d_n;
 +
-+static void tosh_cbp_dump_dev(ggml_metal_device_t dev) {
-+    if (!tosh_cbp_on()) {
++static void kestrel_cbp_dump_dev(ggml_metal_device_t dev) {
++    if (!kestrel_cbp_on()) {
 +        return;
 +    }
 +    {
-+        const uint64_t dn = atomic_load_explicit(&g_tosh_d2h_n, memory_order_relaxed);
-+        const uint64_t hn = atomic_load_explicit(&g_tosh_h2d_n, memory_order_relaxed);
++        const uint64_t dn = atomic_load_explicit(&g_kestrel_d2h_n, memory_order_relaxed);
++        const uint64_t hn = atomic_load_explicit(&g_kestrel_h2d_n, memory_order_relaxed);
 +        fprintf(stderr, "KESTREL_CBP  readback: %llu lecturas, %.2f MiB, %.1f ms | subidas: %llu, %.2f MiB, %.1f ms\n",
 +                (unsigned long long) dn,
-+                atomic_load_explicit(&g_tosh_d2h_bytes, memory_order_relaxed)/1048576.0,
-+                atomic_load_explicit(&g_tosh_d2h_ns,    memory_order_relaxed)/1e6,
++                atomic_load_explicit(&g_kestrel_d2h_bytes, memory_order_relaxed)/1048576.0,
++                atomic_load_explicit(&g_kestrel_d2h_ns,    memory_order_relaxed)/1e6,
 +                (unsigned long long) hn,
-+                atomic_load_explicit(&g_tosh_h2d_bytes, memory_order_relaxed)/1048576.0,
-+                atomic_load_explicit(&g_tosh_h2d_ns,    memory_order_relaxed)/1e6);
-+        atomic_store_explicit(&g_tosh_d2h_n, 0, memory_order_relaxed);
-+        atomic_store_explicit(&g_tosh_d2h_bytes, 0, memory_order_relaxed);
-+        atomic_store_explicit(&g_tosh_d2h_ns, 0, memory_order_relaxed);
-+        atomic_store_explicit(&g_tosh_h2d_n, 0, memory_order_relaxed);
-+        atomic_store_explicit(&g_tosh_h2d_bytes, 0, memory_order_relaxed);
-+        atomic_store_explicit(&g_tosh_h2d_ns, 0, memory_order_relaxed);
++                atomic_load_explicit(&g_kestrel_h2d_bytes, memory_order_relaxed)/1048576.0,
++                atomic_load_explicit(&g_kestrel_h2d_ns,    memory_order_relaxed)/1e6);
++        atomic_store_explicit(&g_kestrel_d2h_n, 0, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_d2h_bytes, 0, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_d2h_ns, 0, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_h2d_n, 0, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_h2d_bytes, 0, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_h2d_ns, 0, memory_order_relaxed);
 +    }
 +    {
 +        const uint64_t n = atomic_load_explicit(&g_cbp_sync_n, memory_order_relaxed);
@@ -225,7 +225,7 @@ index 78948dadb..bac07fb44 100644
  }
  
  void ggml_metal_free(ggml_metal_t ctx) {
-+    tosh_cbp_dump_dev(ctx->dev);
++    kestrel_cbp_dump_dev(ctx->dev);
 +
      GGML_LOG_INFO("%s: deallocating\n", __func__);
  
@@ -244,7 +244,7 @@ index 78948dadb..bac07fb44 100644
      }
  
      // wait for any backend operations to finish
-+    const bool cbp_on = tosh_cbp_on();
++    const bool cbp_on = kestrel_cbp_on();
 +    uint64_t cbp_t = cbp_on ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
      if (ctx->cmd_buf_last) {
          [ctx->cmd_buf_last waitUntilCompleted];
@@ -302,12 +302,12 @@ index 78948dadb..bac07fb44 100644
      //
      // tests on M1 Pro and M2 Ultra using LLaMA models, show that optimal values for n_cb are 1 or 2
  
-+    struct tosh_cbp_graph * cbp = NULL;
++    struct kestrel_cbp_graph * cbp = NULL;
 +    uint64_t cbp_t0 = 0;
-+    if (tosh_cbp_on()) {
-+        struct tosh_cbp_bucket * b = tosh_cbp_bucket_for(gf->n_nodes);
++    if (kestrel_cbp_on()) {
++        struct kestrel_cbp_bucket * b = kestrel_cbp_bucket_for(gf->n_nodes);
 +        if (b != NULL) {
-+            cbp = (struct tosh_cbp_graph *) calloc(1, sizeof(struct tosh_cbp_graph));
++            cbp = (struct kestrel_cbp_graph *) calloc(1, sizeof(struct kestrel_cbp_graph));
 +            if (cbp != NULL) {
 +                cbp->bucket = b;
 +                atomic_store_explicit(&cbp->n_left, 1, memory_order_relaxed); // released below
@@ -341,7 +341,7 @@ index 78948dadb..bac07fb44 100644
          {
              id<MTLCommandBuffer> cmd_buf = [queue commandBufferWithUnretainedReferences];
              ggml_metal_encode_pending_waits(ctx, cmd_buf);
-+            tosh_cbp_attach(cmd_buf, cbp);
++            kestrel_cbp_attach(cmd_buf, cbp);
              [cmd_buf retain];
  
              if (ctx->cmd_bufs[n_cb].obj) {
@@ -359,7 +359,7 @@ index 78948dadb..bac07fb44 100644
          for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
              id<MTLCommandBuffer> cmd_buf = [queue commandBufferWithUnretainedReferences];
              ggml_metal_encode_pending_waits(ctx, cmd_buf);
-+            tosh_cbp_attach(cmd_buf, cbp);
++            kestrel_cbp_attach(cmd_buf, cbp);
              [cmd_buf retain];
  
              if (ctx->cmd_bufs[cb_idx].obj) {
@@ -425,7 +425,7 @@ index 78948dadb..bac07fb44 100644
              ctx->capture_compute,
              ctx->debug_graph);
  
-+        const bool cbp_on = tosh_cbp_on();
++        const bool cbp_on = kestrel_cbp_on();
 +        const uint64_t cbp_t0 = cbp_on ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +
          for (int idx = 0; idx < ggml_metal_op_n_nodes(ctx_op); ++idx) {
@@ -472,7 +472,7 @@ index 12ba16fd8..14d306094 100644
  #import "ggml-metal-common.h"
  
  #ifdef KESTREL_ENABLE_DYNAMIC_MOE
- #import "tosh-moe.h"
+ #import "kestrel-moe.h"
  #else
 @@ -1893,16 +1895,17 @@ void ggml_metal_device_event_synchronize(ggml_metal_device_t dev, ggml_metal_eve
      const bool res = [event waitUntilSignaledValue:atomic_load_explicit(&ev->value, memory_order_relaxed) timeoutMS:60000];
@@ -518,17 +518,17 @@ index 12ba16fd8..14d306094 100644
 @@ -3280,16 +3286,24 @@ bool ggml_metal_device_stage_get(ggml_metal_device_t dev, struct ggml_metal_buff
  
      if (t0) {
-         tosh_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
+         kestrel_prof_add(KESTREL_PROF_D2H_STAGE, size, t0);
      }
  
      return true;
  }
  
-+_Atomic uint64_t g_tosh_d2h_ns, g_tosh_d2h_bytes, g_tosh_d2h_n;
-+_Atomic uint64_t g_tosh_h2d_ns, g_tosh_h2d_bytes, g_tosh_h2d_n;
-+static _Atomic int g_tosh_xfer_state = 0;
++_Atomic uint64_t g_kestrel_d2h_ns, g_kestrel_d2h_bytes, g_kestrel_d2h_n;
++_Atomic uint64_t g_kestrel_h2d_ns, g_kestrel_h2d_bytes, g_kestrel_h2d_n;
++static _Atomic int g_kestrel_xfer_state = 0;
 +
-+static bool tosh_xfer_on(void);
++static bool kestrel_xfer_on(void);
 +static void ggml_metal_buffer_set_tensor_impl(ggml_metal_buffer_t buf, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
 +static void ggml_metal_buffer_get_tensor_impl(ggml_metal_buffer_t buf, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size);
 +
@@ -549,15 +549,15 @@ index 12ba16fd8..14d306094 100644
  }
  
  void ggml_metal_buffer_set_tensor(ggml_metal_buffer_t buf, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-+    const bool xf = tosh_xfer_on();
++    const bool xf = kestrel_xfer_on();
 +    const uint64_t xf_t0 = xf ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +    if (xf) {
-+        atomic_fetch_add_explicit(&g_tosh_h2d_n, 1, memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_h2d_bytes, size, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_h2d_n, 1, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_h2d_bytes, size, memory_order_relaxed);
 +    }
 +    ggml_metal_buffer_set_tensor_impl(buf, tensor, data, offset, size);
 +    if (xf) {
-+        atomic_fetch_add_explicit(&g_tosh_h2d_ns,
++        atomic_fetch_add_explicit(&g_kestrel_h2d_ns,
 +                clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - xf_t0, memory_order_relaxed);
 +    }
 +}
@@ -607,7 +607,7 @@ index 12ba16fd8..14d306094 100644
 +            }
          }
  
-         const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
+         const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
  
          // src
          void * data_ptr = (void *)(uintptr_t) data; // "const cast" the src data
@@ -633,33 +633,33 @@ index 12ba16fd8..14d306094 100644
          //[cmd_buf waitUntilCompleted];
  
          if (t0) {
-             tosh_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
+             kestrel_prof_add(KESTREL_PROF_H2D_DIRECT, size, t0);
          }
      }
  }
  
 +// KESTREL_CB_PROFILE: coste de las lecturas de vuelta (logits) y de las escrituras, que
 +// son lo que queda del hueco de decode una vez descartados commit, creacion y espera
-+static bool tosh_xfer_on(void) {
-+    int st = atomic_load_explicit(&g_tosh_xfer_state, memory_order_relaxed);
++static bool kestrel_xfer_on(void) {
++    int st = atomic_load_explicit(&g_kestrel_xfer_state, memory_order_relaxed);
 +    if (st == 0) {
 +        const char * e = getenv("KESTREL_CB_PROFILE");
 +        st = (e != NULL && strcmp(e, "0") != 0) ? 2 : 1;
-+        atomic_store_explicit(&g_tosh_xfer_state, st, memory_order_relaxed);
++        atomic_store_explicit(&g_kestrel_xfer_state, st, memory_order_relaxed);
 +    }
 +    return st == 2;
 +}
 +
  void ggml_metal_buffer_get_tensor(ggml_metal_buffer_t buf, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-+    const bool xf = tosh_xfer_on();
++    const bool xf = kestrel_xfer_on();
 +    const uint64_t xf_t0 = xf ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
 +    if (xf) {
-+        atomic_fetch_add_explicit(&g_tosh_d2h_n, 1, memory_order_relaxed);
-+        atomic_fetch_add_explicit(&g_tosh_d2h_bytes, size, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_d2h_n, 1, memory_order_relaxed);
++        atomic_fetch_add_explicit(&g_kestrel_d2h_bytes, size, memory_order_relaxed);
 +    }
 +    ggml_metal_buffer_get_tensor_impl(buf, tensor, data, offset, size);
 +    if (xf) {
-+        atomic_fetch_add_explicit(&g_tosh_d2h_ns,
++        atomic_fetch_add_explicit(&g_kestrel_d2h_ns,
 +                clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - xf_t0, memory_order_relaxed);
 +    }
 +}

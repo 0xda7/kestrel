@@ -14,11 +14,11 @@ index da733d9e8..1fb695fc4 100644
 +                // the metal comm path declined this collective; the fallback costs ~10 command
 +                // buffers per visit, so a persistent decline is the first thing to chase when
 +                // decode underperforms. KESTREL_MGPU_TRACE=1 prints it once per point.
-+                static int tosh_trace_fb = -1;
-+                if (tosh_trace_fb < 0) { tosh_trace_fb = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
++                static int kestrel_trace_fb = -1;
++                if (kestrel_trace_fb < 0) { kestrel_trace_fb = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
 +                static thread_local std::vector<ggml_tensor *> seen;
 +                bool first_seen = false;
-+                if (tosh_trace_fb) {
++                if (kestrel_trace_fb) {
 +                    ggml_tensor * t0 = backend_ctx->backend_configs[0].cgraphs[i].cgraph_main->nodes[
 +                        backend_ctx->backend_configs[0].cgraphs[i].cgraph_main->n_nodes - 1];
 +                    first_seen = true;
@@ -119,7 +119,7 @@ index 3622fe6cb..cd9dfa040 100644
  static _Atomic uint64_t g_tr_rv_hit      = 0; // remote views reused
  static _Atomic uint64_t g_tr_encode_ns   = 0; // CPU time inside the collective
  static _Atomic uint64_t g_tr_gpu_ns      = 0; // GPU execution of the collective's buffers
-@@ -826,16 +832,17 @@ static void tosh_mgpu_trace_report(void) {
+@@ -826,16 +832,17 @@ static void kestrel_mgpu_trace_report(void) {
              for (int k = 0; k < 3; k++) {
                  fprintf(stderr, "    %s us ", rn[k]);
                  for (int i = 0; i < 8; i++) { fprintf(stderr, "%s %.1f%%  ", lbl[i], 100.0*atomic_load(&hh[k][i])/nn); }
@@ -195,7 +195,7 @@ index 3622fe6cb..cd9dfa040 100644
 +        id<MTLBlitCommandEncoder> enc = [cmd_buf blitCommandEncoder];
 +        [enc fillBuffer:bid.metal range:NSMakeRange(bid.offs, ggml_nbytes(t)) value:0];
 +        [enc endEncoding];
-+        ggml_metal_cmd_buf_end(ctx, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t)));
++        ggml_metal_cmd_buf_end(ctx, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t)));
 +    }
 +    return true;
 +}
@@ -208,7 +208,7 @@ index 3622fe6cb..cd9dfa040 100644
 +    // strict loss: the butterfly is already one round and every extra event op costs
 +    // (49 t/s one-shot vs 61.6 staged), so the two-card case stays on the staged path.
 +    if (n < 3 || n > 4 || !ggml_metal_oneshot_enabled()) {
-+        if (tosh_mgpu_trace()) fprintf(stderr, "oneshot: bail n=%zu enabled=%d\n", n, ggml_metal_oneshot_enabled());
++        if (kestrel_mgpu_trace()) fprintf(stderr, "oneshot: bail n=%zu enabled=%d\n", n, ggml_metal_oneshot_enabled());
 +        return false;
 +    }
 +
@@ -230,7 +230,7 @@ index 3622fe6cb..cd9dfa040 100644
 +        if (ggml_metal_get_buffer_id(tensors[i]).metal == nil ||
 +            ggml_nbytes(tensors[i]) != size ||
 +            ggml_metal_library_get_pipeline_bin_one(ctx_i->lib, GGML_OP_ADD).pipeline == NULL) {
-+            if (tosh_mgpu_trace()) fprintf(stderr, "oneshot: bail basic i=%zu n=%zu size=%zu\n", i, n, size);
++            if (kestrel_mgpu_trace()) fprintf(stderr, "oneshot: bail basic i=%zu n=%zu size=%zu\n", i, n, size);
 +            return false;
 +        }
 +
@@ -293,7 +293,7 @@ index 3622fe6cb..cd9dfa040 100644
 +            out_l[i][j] = ggml_metal_xdev_link_get(ctx_i, ctx_j);
 +            in_l[i][j]  = ggml_metal_xdev_link_get(ctx_j, ctx_i);
 +            if (out_l[i][j] == NULL || in_l[i][j] == NULL) {
-+                if (tosh_mgpu_trace()) fprintf(stderr, "oneshot: bail link i=%zu j=%zu\n", i, j);
++                if (kestrel_mgpu_trace()) fprintf(stderr, "oneshot: bail link i=%zu j=%zu\n", i, j);
 +                return false;
 +            }
 +            prev[i][j] = out_l[i][j]->x_slot[sp];
@@ -304,11 +304,11 @@ index 3622fe6cb..cd9dfa040 100644
 +            // (here) before it is reserved (at iteration j,i), so reserve it now too
 +            if (!ggml_metal_xdev_link_reserve(ctx_i, ctx_j, out_l[i][j], 2 * size) ||
 +                !ggml_metal_xdev_link_reserve(ctx_j, ctx_i, in_l[i][j], 2 * size)) {
-+                if (tosh_mgpu_trace()) fprintf(stderr, "oneshot: bail reserve i=%zu j=%zu\n", i, j);
++                if (kestrel_mgpu_trace()) fprintf(stderr, "oneshot: bail reserve i=%zu j=%zu\n", i, j);
 +                return false;
 +            }
 +            if (out_l[i][j]->cap < 2 * size || in_l[i][j]->cap < 2 * size) {
-+                if (tosh_mgpu_trace()) fprintf(stderr, "oneshot: bail cap i=%zu j=%zu cap=%zu/%zu need=%zu\n",
++                if (kestrel_mgpu_trace()) fprintf(stderr, "oneshot: bail cap i=%zu j=%zu cap=%zu/%zu need=%zu\n",
 +                                               i, j, out_l[i][j]->cap, in_l[i][j]->cap, 2*size);
 +                return false;
 +            }
@@ -324,7 +324,7 @@ index 3622fe6cb..cd9dfa040 100644
 +    for (size_t i = 0; i < n; i++) {
 +        ggml_metal_t ctx_i = ctxs[i];
 +        struct ggml_tensor * t_self = tensors[i];
-+        const uint64_t t_enter = tosh_mgpu_trace() ? tosh_now_ns() : 0;
++        const uint64_t t_enter = kestrel_mgpu_trace() ? kestrel_now_ns() : 0;
 +
 +        @autoreleasepool {
 +            id<MTLCommandBuffer> cmd_buf = ggml_metal_cmd_buf_continue(ctx_i);
@@ -341,9 +341,9 @@ index 3622fe6cb..cd9dfa040 100644
 +                    if (prev[i][j] == 0) {
 +                        continue;
 +                    }
-+                    if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
++                    if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
 +                    if (ggml_metal_bp_satisfied()) {
-+                        [cmd_buf encodeWaitForEvent:tosh_wait_dummy(ctx_i) value:1];
++                        [cmd_buf encodeWaitForEvent:kestrel_wait_dummy(ctx_i) value:1];
 +                    } else {
 +                        [cmd_buf encodeWaitForEvent:out_l[i][j]->ev_x_done value:prev[i][j]];
 +                    }
@@ -376,16 +376,16 @@ index 3622fe6cb..cd9dfa040 100644
 +                if (j == i) {
 +                    continue;
 +                }
-+                if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
++                if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
 +                [cmd_buf encodeSignalEvent:out_l[i][j]->ev_x_ready value:seq];
 +            }
 +            for (size_t j = 0; j < n; j++) {
 +                if (j == i) {
 +                    continue;
 +                }
-+                if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
++                if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
 +                if (ggml_metal_collective_nowait() || ggml_metal_wait_satisfied()) {
-+                    [cmd_buf encodeWaitForEvent:tosh_wait_dummy(ctx_i) value:1];
++                    [cmd_buf encodeWaitForEvent:kestrel_wait_dummy(ctx_i) value:1];
 +                } else {
 +                    [cmd_buf encodeWaitForEvent:in_l[i][j]->ev_x_ready value:seq];
 +                }
@@ -427,7 +427,7 @@ index 3622fe6cb..cd9dfa040 100644
 +                if (j == i) {
 +                    continue;
 +                }
-+                if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
++                if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_signals, 1);
 +                [cmd_buf encodeSignalEvent:in_l[i][j]->ev_x_done value:seq];
 +            }
 +
@@ -443,19 +443,19 @@ index 3622fe6cb..cd9dfa040 100644
 +        }
 +    }
 +
-+            tosh_trace_cmd_buf(cmd_buf);
-+            tosh_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_i->dev) peerIndex]) & 1));
-+            ggml_metal_cmd_buf_end(ctx_i, cmd_buf, ggml_metal_collective_hold_batch(tosh_batch_of(t_self)));
++            kestrel_trace_cmd_buf(cmd_buf);
++            kestrel_trace_exchange(cmd_buf, seq, (int) (([(id<MTLDevice>) ggml_metal_device_get_obj(ctx_i->dev) peerIndex]) & 1));
++            ggml_metal_cmd_buf_end(ctx_i, cmd_buf, ggml_metal_collective_hold_batch(kestrel_batch_of(t_self)));
 +        }
 +
-+        if (tosh_mgpu_trace()) {
++        if (kestrel_mgpu_trace()) {
 +            atomic_fetch_add(&g_tr_reduce, 1);
 +            atomic_fetch_add(&g_tr_bytes_host, 2 * size * (n - 1));
-+            atomic_fetch_add(&g_tr_encode_ns, tosh_now_ns() - t_enter);
++            atomic_fetch_add(&g_tr_encode_ns, kestrel_now_ns() - t_enter);
 +        }
 +    }
 +
-+    if (tosh_mgpu_trace()) {
++    if (kestrel_mgpu_trace()) {
 +        atomic_fetch_add(&g_tr_oneshot, 1);
 +    }
 +
@@ -504,15 +504,15 @@ index 3622fe6cb..cd9dfa040 100644
          id<MTLCommandBuffer> cmd_buf = ggml_metal_cmd_buf_continue(ctx_self);
  
          if (seq_prev > 0) {
-             if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
+             if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_waits, 1);
              if (ggml_metal_bp_satisfied()) {
-                 [cmd_buf encodeWaitForEvent:tosh_wait_dummy(ctx_self) value:1];
+                 [cmd_buf encodeWaitForEvent:kestrel_wait_dummy(ctx_self) value:1];
 diff --git a/ggml/src/ggml-metal/ggml-metal.cpp b/ggml/src/ggml-metal/ggml-metal.cpp
 index c90cb36e3..348a24c1e 100644
 --- a/ggml/src/ggml-metal/ggml-metal.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal.cpp
 @@ -12,16 +12,20 @@
- static inline void tosh_moe_set_host_buft(const void *) {}
+ static inline void kestrel_moe_set_host_buft(const void *) {}
  #endif
  #include "ggml-metal-context.h"
  #include "ggml-metal-ops.h"
@@ -555,11 +555,11 @@ index c90cb36e3..348a24c1e 100644
  
      const size_t n_backends = comm_ctx->backends.size();
  
-+    static int tosh_trace_al = -1;
-+    if (tosh_trace_al < 0) { tosh_trace_al = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
++    static int kestrel_trace_al = -1;
++    if (kestrel_trace_al < 0) { kestrel_trace_al = getenv("KESTREL_MGPU_TRACE") ? 1 : 0; }
 +
      if (tensors[0] == nullptr || tensors[0]->type != GGML_TYPE_F32) {
-+        if (tosh_trace_al) fprintf(stderr, "allreduce bail: t0=%p type=%d\n", (void*)tensors[0], tensors[0] ? (int)tensors[0]->type : -1);
++        if (kestrel_trace_al) fprintf(stderr, "allreduce bail: t0=%p type=%d\n", (void*)tensors[0], tensors[0] ? (int)tensors[0]->type : -1);
          return false;
      }
  
@@ -576,15 +576,15 @@ index c90cb36e3..348a24c1e 100644
      for (size_t i = 0; i < n_backends; i++) {
          ggml_tensor * t = tensors[i];
          if (t == nullptr || t->type != GGML_TYPE_F32 || ggml_nelements(t) != ne) {
-+            if (tosh_trace_al) fprintf(stderr, "allreduce bail: elem i=%zu ne=%lld\n", i, t ? (long long)ggml_nelements(t) : -1);
++            if (kestrel_trace_al) fprintf(stderr, "allreduce bail: elem i=%zu ne=%lld\n", i, t ? (long long)ggml_nelements(t) : -1);
              return false;
          }
          if (!ggml_are_same_shape(t, tensors[0]) || !ggml_is_contiguous(t)) {
-+            if (tosh_trace_al) fprintf(stderr, "allreduce bail: shape/contig i=%zu %s\n", i, t->name);
++            if (kestrel_trace_al) fprintf(stderr, "allreduce bail: shape/contig i=%zu %s\n", i, t->name);
              return false;
          }
          if (!ggml_backend_buffer_is_metal(t->buffer)) {
-+            if (tosh_trace_al) fprintf(stderr, "allreduce bail: buft i=%zu %s\n", i, t->name);
++            if (kestrel_trace_al) fprintf(stderr, "allreduce bail: buft i=%zu %s\n", i, t->name);
              return false;
          }
 -        // a device with an empty slice contributes nothing and the generic path zeroes it
@@ -608,7 +608,7 @@ index c90cb36e3..348a24c1e 100644
          view_tmp(i, 0);
          ggml_metal_t ctx = (ggml_metal_t) comm_ctx->backends[i]->context;
          if (!ggml_metal_add_inplace_supported(ctx, tensors[i], &tmp[i])) {
-+            if (tosh_trace_al) fprintf(stderr, "allreduce bail: add_inplace i=%zu %s op=%s\n", i, tensors[i]->name, ggml_op_name(tensors[i]->op));
++            if (kestrel_trace_al) fprintf(stderr, "allreduce bail: add_inplace i=%zu %s op=%s\n", i, tensors[i]->name, ggml_op_name(tensors[i]->op));
              return false;
          }
      }

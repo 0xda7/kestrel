@@ -85,7 +85,7 @@ index 947732000..0abe83b75 100644
  endif()
  
 +if (KESTREL_ENABLE_DYNAMIC_MOE)
-+    set(KESTREL_MOE_SOURCES ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-cache.cpp ${CMAKE_SOURCE_DIR}/tosh-moe/tosh-moe-fill.cpp)
++    set(KESTREL_MOE_SOURCES ${CMAKE_SOURCE_DIR}/kestrel-moe/kestrel-moe-cache.cpp ${CMAKE_SOURCE_DIR}/kestrel-moe/kestrel-moe-fill.cpp)
 +endif()
 +
  add_library(ggml-base
@@ -110,7 +110,7 @@ index 947732000..0abe83b75 100644
              gguf.cpp)
  
 +if (KESTREL_ENABLE_DYNAMIC_MOE)
-+    target_include_directories(ggml-base PUBLIC ${CMAKE_SOURCE_DIR}/tosh-moe)
++    target_include_directories(ggml-base PUBLIC ${CMAKE_SOURCE_DIR}/kestrel-moe)
 +    target_compile_definitions(ggml-base PUBLIC KESTREL_ENABLE_DYNAMIC_MOE)
 +endif()
 +
@@ -372,13 +372,13 @@ index 20bf96501..d6b3705ed 100644
          ggml_backend_t split_backend = sched->backends[split_backend_id];
  
 +        // KESTREL_MOE_PROFILE: dump the first splits once, to map which ops run where
-+        static int tosh_split_dump = -1;
-+        if (tosh_split_dump < 0) {
++        static int kestrel_split_dump = -1;
++        if (kestrel_split_dump < 0) {
 +            const char * v = getenv("KESTREL_MOE_PROFILE");
-+            tosh_split_dump = (v && v[0] == '1') ? 90 : 0;
++            kestrel_split_dump = (v && v[0] == '1') ? 90 : 0;
 +        }
-+        if (tosh_split_dump > 0) {
-+            tosh_split_dump--;
++        if (kestrel_split_dump > 0) {
++            kestrel_split_dump--;
 +            struct ggml_tensor * n0 = split->graph.n_nodes > 0 ? split->graph.nodes[0] : NULL;
 +            char ins[160] = "";
 +            for (int i = 0, off = 0; i < split->n_inputs && off < 140; i++) {

@@ -52,7 +52,7 @@ index b083e0c70..2245fbb49 100644
      // pending waits guard memory a peer blit can still be reading, so they must run and complete before synchronize returns
      if (ctx->n_ev_wait_pending > 0 || ctx->n_peer_waits > 0) {
          @autoreleasepool {
-             if (tosh_mgpu_trace()) atomic_fetch_add(&g_tr_cmd_all, 1);
+             if (kestrel_mgpu_trace()) atomic_fetch_add(&g_tr_cmd_all, 1);
 diff --git a/ggml/src/ggml-metal/ggml-metal.cpp b/ggml/src/ggml-metal/ggml-metal.cpp
 index 42fbfa927..02569a06e 100644
 --- a/ggml/src/ggml-metal/ggml-metal.cpp

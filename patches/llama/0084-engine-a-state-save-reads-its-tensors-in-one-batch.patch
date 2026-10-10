@@ -136,7 +136,7 @@ index a66f9b6f4..ef39bbeea 100644
          return false;
      }
  
-     const uint64_t t0 = tosh_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
+     const uint64_t t0 = kestrel_prof_on() ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0;
  
      [dev->stage_lock lock];
  

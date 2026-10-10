@@ -57,9 +57,9 @@ final class SplitEnvironmentTests: XCTestCase {
 
     func testTensorSplitCarriesTheBridgeAndTheFastHandover() {
         let s = settings(devices: 2, mode: "tensor", group: 0)
-        XCTAssertEqual(s.environment["TOSH_MGPU_PEER"], "1")
-        XCTAssertEqual(s.environment["TOSH_MGPU_EVENTS"], "1")
-        XCTAssertNil(s.environment["TOSH_MGPU_TENSOR_GROUP"], "one group is a plain tensor split")
+        XCTAssertEqual(s.environment["KESTREL_MGPU_PEER"], "1")
+        XCTAssertEqual(s.environment["KESTREL_MGPU_EVENTS"], "1")
+        XCTAssertNil(s.environment["KESTREL_MGPU_TENSOR_GROUP"], "one group is a plain tensor split")
         XCTAssertTrue(s.arguments.contains("--split-mode"))
     }
 
@@ -74,13 +74,13 @@ final class SplitEnvironmentTests: XCTestCase {
     func testEachArrangementReachesTheEngineWhole() {
         let mesh = settings(devices: 4, mode: "tensor", group: 2)
         XCTAssertEqual(mesh.environment["GGML_METAL_DEVICE_LIST"], "0,1,2,3")
-        XCTAssertEqual(mesh.environment["TOSH_MGPU_TENSOR_GROUP"], "2")
-        XCTAssertEqual(mesh.environment["TOSH_MGPU_PEER"], "1")
-        XCTAssertEqual(mesh.environment["TOSH_MGPU_EVENTS"], "1")
+        XCTAssertEqual(mesh.environment["KESTREL_MGPU_TENSOR_GROUP"], "2")
+        XCTAssertEqual(mesh.environment["KESTREL_MGPU_PEER"], "1")
+        XCTAssertEqual(mesh.environment["KESTREL_MGPU_EVENTS"], "1")
         XCTAssertEqual(mesh.arguments[mesh.arguments.firstIndex(of: "--split-mode")! + 1], "tensor")
 
         let tp4 = settings(devices: 4, mode: "tensor", group: 0)
-        XCTAssertNil(tp4.environment["TOSH_MGPU_TENSOR_GROUP"])
+        XCTAssertNil(tp4.environment["KESTREL_MGPU_TENSOR_GROUP"])
         XCTAssertEqual(tp4.arguments[tp4.arguments.firstIndex(of: "--split-mode")! + 1], "tensor")
 
         let tp2 = settings(devices: 2, mode: "tensor", group: 0)
@@ -90,7 +90,7 @@ final class SplitEnvironmentTests: XCTestCase {
 
     func testALayerSplitLeavesTheBridgeOut() {
         let s = settings(devices: 4, mode: "layer", group: 2)
-        XCTAssertNil(s.environment["TOSH_MGPU_PEER"])
-        XCTAssertNil(s.environment["TOSH_MGPU_TENSOR_GROUP"])
+        XCTAssertNil(s.environment["KESTREL_MGPU_PEER"])
+        XCTAssertNil(s.environment["KESTREL_MGPU_TENSOR_GROUP"])
     }
 }

@@ -55,17 +55,17 @@ index 07ca49ad0..2807aa4e2 100644
  #include "llama-graph.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
-+static inline ggml_tensor * tosh_moe_bank_of(ggml_tensor * t) {
-+    return t ? (ggml_tensor *) tosh_moe_bank_ptr(t) : t;
++#include "kestrel-moe.h"
++static inline ggml_tensor * kestrel_moe_bank_of(ggml_tensor * t) {
++    return t ? (ggml_tensor *) kestrel_moe_bank_ptr(t) : t;
 +}
 +#else
-+static inline const void * tosh_moe_state_of(const void *) { return nullptr; }
-+static inline const void * tosh_moe_ram_of(const void *)   { return nullptr; }
-+static inline int tosh_moe_experts_of(const void *)         { return 0; }
-+static inline int tosh_moe_fixed_of(const void *)           { return 0; }
-+static inline int tosh_moe_ids_room(int) { return 0; }
-+static inline ggml_tensor * tosh_moe_bank_of(ggml_tensor * t) { return t; }
++static inline const void * kestrel_moe_state_of(const void *) { return nullptr; }
++static inline const void * kestrel_moe_ram_of(const void *)   { return nullptr; }
++static inline int kestrel_moe_experts_of(const void *)         { return 0; }
++static inline int kestrel_moe_fixed_of(const void *)           { return 0; }
++static inline int kestrel_moe_ids_room(int) { return 0; }
++static inline ggml_tensor * kestrel_moe_bank_of(ggml_tensor * t) { return t; }
 +#endif
 +
  #include "llama-impl.h"
@@ -88,31 +88,31 @@ index 07ca49ad0..2807aa4e2 100644
 +    // Every expert the batch routes to has to get a slot: the pick leaves the ones over the
 +    // bank marked -1 and nothing downstream can run them. A bank of every expert always fits.
 +    ggml_tensor * moe_first = gate_up_exps ? gate_up_exps : gate_exps;
-+    bool moe_cached = tosh_moe_state_of(moe_first) != nullptr;
++    bool moe_cached = kestrel_moe_state_of(moe_first) != nullptr;
 +    if (moe_cached) {
 +        // the backend writes the remapped routing into a fixed slice of the cache state, so a
 +        // batch whose ids do not fit there stays on the plain path
-+        ggml_tensor * bank = (ggml_tensor *) tosh_moe_ram_of(moe_first);
++        ggml_tensor * bank = (ggml_tensor *) kestrel_moe_ram_of(moe_first);
 +        const int64_t need = (selected_experts->ne[1] - 1)*(int64_t) (selected_experts->nb[1]/sizeof(int32_t))
 +            + selected_experts->ne[0];
-+        const int n_bank_experts = tosh_moe_experts_of(moe_first);
-+        moe_cached = bank && n_bank_experts > 0 && need <= tosh_moe_ids_room(n_bank_experts);
++        const int n_bank_experts = kestrel_moe_experts_of(moe_first);
++        moe_cached = bank && n_bank_experts > 0 && need <= kestrel_moe_ids_room(n_bank_experts);
 +    }
 +    if (moe_cached) {
-+        ggml_tensor * bank = (ggml_tensor *) tosh_moe_ram_of(moe_first);
-+        const int n_bank_experts = tosh_moe_experts_of(moe_first);
++        ggml_tensor * bank = (ggml_tensor *) kestrel_moe_ram_of(moe_first);
++        const int n_bank_experts = kestrel_moe_experts_of(moe_first);
 +        const bool whole_bank = bank && n_bank_experts > 0 && moe_first->ne[2] >= n_bank_experts;
-+        const bool split_wide = tosh_moe_fixed_of(moe_first) > 0 &&
++        const bool split_wide = kestrel_moe_fixed_of(moe_first) > 0 &&
 +            getenv("KESTREL_MOE_BOUNDED_STAGE") != nullptr;
 +        moe_cached = whole_bank || split_wide || n_tokens*n_expert_used <= moe_first->ne[2];
 +    }
 +
 +    ggml_tensor * expert_ids = selected_experts;
 +    if (!moe_cached) {
-+        gate_up_exps = tosh_moe_bank_of(gate_up_exps);
-+        gate_exps    = tosh_moe_bank_of(gate_exps);
-+        up_exps      = tosh_moe_bank_of(up_exps);
-+        down_exps    = tosh_moe_bank_of(down_exps);
++        gate_up_exps = kestrel_moe_bank_of(gate_up_exps);
++        gate_exps    = kestrel_moe_bank_of(gate_exps);
++        up_exps      = kestrel_moe_bank_of(up_exps);
++        down_exps    = kestrel_moe_bank_of(down_exps);
 +    }
 +
  
@@ -1022,19 +1022,19 @@ index 43c396f15..266b11735 100644
  #include "llama-model-loader.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
++#include "kestrel-moe.h"
 +#else
-+static inline int          tosh_moe_slots_want(void)                     { return 0; }
-+static inline void         tosh_moe_bind(const void *, const void *)     {}
-+static inline void         tosh_moe_bind_experts(const void *, int)      {}
-+static inline void         tosh_moe_bind_fixed(const void *, int)        {}
-+static inline void         tosh_moe_unbind_all(void)                     {}
-+static inline void         tosh_moe_layer_set(const void *, int, int)    {}
-+static inline void         tosh_moe_bind_state(const void *, const void *) {}
-+static inline void         tosh_moe_set_stage(const void *)                {}
-+static inline const void * tosh_moe_stage(void)                          { return nullptr; }
-+static inline const void * tosh_moe_host_buft(void)                       { return nullptr; }
-+static inline int          tosh_moe_state_ints(int, int, int)             { return 0; }
++static inline int          kestrel_moe_slots_want(void)                     { return 0; }
++static inline void         kestrel_moe_bind(const void *, const void *)     {}
++static inline void         kestrel_moe_bind_experts(const void *, int)      {}
++static inline void         kestrel_moe_bind_fixed(const void *, int)        {}
++static inline void         kestrel_moe_unbind_all(void)                     {}
++static inline void         kestrel_moe_layer_set(const void *, int, int)    {}
++static inline void         kestrel_moe_bind_state(const void *, const void *) {}
++static inline void         kestrel_moe_set_stage(const void *)                {}
++static inline const void * kestrel_moe_stage(void)                          { return nullptr; }
++static inline const void * kestrel_moe_host_buft(void)                       { return nullptr; }
++static inline int          kestrel_moe_state_ints(int, int, int)             { return 0; }
 +#endif
 +
  #include "ggml-alloc.h"
@@ -1074,7 +1074,7 @@ index 43c396f15..266b11735 100644
          : metadata(meta), set_tensor_data(set_tensor_data), set_tensor_data_ud(set_tensor_data_ud) {
 +    // the bindings are keyed by tensor pointer, so a previous model's entries have to go or a
 +    // freed address can be reused and match the wrong bank
-+    tosh_moe_unbind_all();
++    kestrel_moe_unbind_all();
 +
      int trace = 0;
      if (getenv("LLAMA_TRACE")) {
@@ -1114,9 +1114,9 @@ index 43c396f15..266b11735 100644
 +    // An expert bank the user placed in host memory gets a bank of device slots beside it,
 +    // plus the small i32 state the cache kernels keep between steps. The graph reads the
 +    // slots; the host bank is only ever touched by the fetch.
-+    const int n_slots = tosh_moe_slots_want();
++    const int n_slots = kestrel_moe_slots_want();
 +    if (n_slots > 0 && !duplicated && ne.size() == 3 && t_meta.ne[2] >= n_slots &&
-+        (const void *) buft == tosh_moe_host_buft() &&
++        (const void *) buft == kestrel_moe_host_buft() &&
 +        std::string(ggml_get_name(&t_meta)).find("_exps.weight") != std::string::npos) {
 +        const int64_t n_exp = t_meta.ne[2];
 +        const bool split_bank = getenv("KESTREL_MOE_SPLIT_BANK") != nullptr && n_slots < n_exp;
@@ -1159,7 +1159,7 @@ index 43c396f15..266b11735 100644
 +
 +        const int state_slots = (int) slots_meta.ne[2];
 +        const int max_fetch = split_bank ? split_ring : state_slots;
-+        const int n_state   = tosh_moe_state_ints((int) n_exp, state_slots, max_fetch);
++        const int n_state   = kestrel_moe_state_ints((int) n_exp, state_slots, max_fetch);
 +
 +        ggml_tensor state_meta = {};
 +        state_meta.type  = GGML_TYPE_I32;
@@ -1172,32 +1172,32 @@ index 43c396f15..266b11735 100644
 +        sscanf(ggml_get_name(&t_meta), "blk.%d.", &il);
 +
 +        // the banks of a layer share one routing, so they share the state the pick keeps
-+        ggml_tensor * state = il >= 0 && tosh_moe_state_of_layer.count(il) ? tosh_moe_state_of_layer[il] : nullptr;
++        ggml_tensor * state = il >= 0 && kestrel_moe_state_of_layer.count(il) ? kestrel_moe_state_of_layer[il] : nullptr;
 +        if (!state) {
 +            const std::string state_name = std::string(ggml_get_name(&t_meta)) + ".state";
 +            state = ggml_dup_tensor(ctx_for_buft(buft_dev), &state_meta);
 +            ggml_set_name(state, state_name.c_str());
 +            if (il >= 0) {
-+                tosh_moe_state_of_layer[il] = state;
++                kestrel_moe_state_of_layer[il] = state;
 +            }
 +        }
 +
-+        tosh_moe_bind(slots, host);
-+        tosh_moe_bind_experts(slots, (int) n_exp);
-+        tosh_moe_bind_fixed(slots, split_bank ? n_slots : 0);
-+        tosh_moe_bind_state(slots, state);
++        kestrel_moe_bind(slots, host);
++        kestrel_moe_bind_experts(slots, (int) n_exp);
++        kestrel_moe_bind_fixed(slots, split_bank ? n_slots : 0);
++        kestrel_moe_bind_state(slots, state);
 +
 +        // one scratch the size of the widest bank, reused by every layer: a batch too wide for
 +        // the cache copies its bank here in one go and reads it from the device. The registry
 +        // is the source of truth, not a local static, which would survive into the next load.
-+        const ggml_tensor * have = (const ggml_tensor *) tosh_moe_stage();
++        const ggml_tensor * have = (const ggml_tensor *) kestrel_moe_stage();
 +        if (!have || ggml_nbytes(have) < ggml_nbytes(&t_meta)) {
 +            ggml_tensor * stage = ggml_dup_tensor(ctx_for_buft(buft_dev), &t_meta);
-+            ggml_set_name(stage, "tosh.moe.stage");
-+            tosh_moe_set_stage(stage);
++            ggml_set_name(stage, "kestrel.moe.stage");
++            kestrel_moe_set_stage(stage);
 +        }
 +        if (il >= 0) {
-+            tosh_moe_layer_set(slots, il, (int) n_exp);
++            kestrel_moe_layer_set(slots, il, (int) n_exp);
 +        }
 +
 +        n_created++;
@@ -1291,7 +1291,7 @@ index 9e51d0ce7..b7dc551a7 100644
      std::map<ctx_key, ggml_context_ptr, ctx_key_comparator> ctx_map;
  
 +    // The three expert banks of a layer share one cache state during this load.
-+    std::map<int, ggml_tensor *> tosh_moe_state_of_layer;
++    std::map<int, ggml_tensor *> kestrel_moe_state_of_layer;
 +
      // track tensors that had to be moved for debugging:
      size_t n_tensors_moved = 0;
@@ -1309,11 +1309,11 @@ index e195f50d0..6274fc5cd 100644
  #include "llama-model.h"
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
-+#include "tosh-moe.h"
++#include "kestrel-moe.h"
 +#else
-+static inline void tosh_moe_seed_banks(void) {}
-+static inline const void * tosh_moe_host_buft(void) { return nullptr; }
-+static inline int tosh_moe_slots_want(void) { return 0; }
++static inline void kestrel_moe_seed_banks(void) {}
++static inline const void * kestrel_moe_host_buft(void) { return nullptr; }
++static inline int kestrel_moe_slots_want(void) { return 0; }
 +#endif
 +
  #include "llama-arch.h"
@@ -1351,7 +1351,7 @@ index e195f50d0..6274fc5cd 100644
          }
      }
  
-+    tosh_moe_seed_banks();
++    kestrel_moe_seed_banks();
 +
      if (use_mmap_buffer) {
          for (auto & mapping : ml.mappings) {

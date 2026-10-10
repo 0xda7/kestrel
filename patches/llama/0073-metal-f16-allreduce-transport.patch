@@ -197,7 +197,7 @@ index cd9dfa040..b083e0c70 100644
  // KESTREL_MGPU_PEER_MIN_BATCH, the same knob the copy path reads: below it a crossing is all
  // latency and the shared host block is faster.
  // rows in the exchanged tensor: one for a generated token, the whole prompt for a prefill
- static int64_t tosh_batch_of(const struct ggml_tensor * t) {
+ static int64_t kestrel_batch_of(const struct ggml_tensor * t) {
      if (t == NULL || t->ne[0] <= 0) { return 1; }
      return ggml_nelements(t)/t->ne[0];
  }

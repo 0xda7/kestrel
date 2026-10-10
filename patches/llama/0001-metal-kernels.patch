@@ -7230,11 +7230,11 @@ index b21c53b74..1b3957871 100644
      threadgroup float * shared_sums = shared;
      threadgroup float * shared_x_dt = shared + sgptg * NW;
      threadgroup float * shared_dA   = shared + sgptg * NW + sgptg;
-diff --git a/ggml/src/ggml-metal/kernels/tosh_moe.metal b/ggml/src/ggml-metal/kernels/tosh_moe.metal
+diff --git a/ggml/src/ggml-metal/kernels/kestrel_moe.metal b/ggml/src/ggml-metal/kernels/kestrel_moe.metal
 new file mode 100644
 index 000000000..3af62d3bf
 --- /dev/null
-+++ b/ggml/src/ggml-metal/kernels/tosh_moe.metal
++++ b/ggml/src/ggml-metal/kernels/kestrel_moe.metal
 @@ -0,0 +1,238 @@
 +#include <metal_stdlib>
 +using namespace metal;
@@ -7242,7 +7242,7 @@ index 000000000..3af62d3bf
 +// Timestamp LRU over a bank of slots, one threadgroup, no host involvement: the routing
 +// arrives as expert ids and leaves as slot ids, or -1 for an expert this step will not
 +// fetch. Fixed shapes, so it can sit inside a captured graph.
-+struct tosh_lru_args {
++struct kestrel_lru_args {
 +    int32_t n_used;      // experts per token
 +    int32_t n_tokens;
 +    int32_t stride;      // ints between one token's ids and the next, which is not n_used
@@ -7252,8 +7252,8 @@ index 000000000..3af62d3bf
 +    int32_t max_fetch;   // cap per step; the rest stay non-resident
 +};
 +
-+kernel void tosh_moe_lru(
-+        constant tosh_lru_args & args         [[buffer(0)]],
++kernel void kestrel_moe_lru(
++        constant kestrel_lru_args & args         [[buffer(0)]],
 +        device const int32_t   * ids          [[buffer(1)]],   // the routing, untouched
 +        device   int32_t       * ids_out      [[buffer(9)]],   // the same, as slots
 +        device const int32_t   * cold_for_id  [[buffer(10)]],
@@ -7396,14 +7396,14 @@ index 000000000..3af62d3bf
 +// Brings the rows the LRU just scheduled from the host bank into their slots. Only the
 +// missing ones travel, so the window the device touches stays small no matter how big the
 +// bank is.
-+struct tosh_fetch_args {
++struct kestrel_fetch_args {
 +    uint32_t row_u4;     // row size in uint4 units
 +    int32_t  max_fetch;
 +    int32_t  n_chunks;   // threadgroups per row: one is far too few for a whole expert
 +};
 +
-+kernel void tosh_moe_fetch(
-+        constant tosh_fetch_args & args        [[buffer(0)]],
++kernel void kestrel_moe_fetch(
++        constant kestrel_fetch_args & args        [[buffer(0)]],
 +        device       uint4       * slots       [[buffer(1)]],
 +        device const uint4       * host        [[buffer(2)]],
 +        device const int32_t     * evict_slots [[buffer(3)]],
@@ -7435,7 +7435,7 @@ index 000000000..3af62d3bf
 +
 +// Copies a whole bank from the host into the scratch in one contiguous pass, which is what a
 +// batch too wide for the cache needs: reading the experts scattered from host costs far more.
-+kernel void tosh_moe_stage(
++kernel void kestrel_moe_stage(
 +        constant uint32_t    & n_u4  [[buffer(0)]],
 +        device       uint4   * dst   [[buffer(1)]],
 +        device const uint4   * src   [[buffer(2)]],
@@ -7452,13 +7452,13 @@ index 000000000..3af62d3bf
 +// Reconstructs one logical full bank in private scratch without ever wrapping the complete
 +// CPU bank as a Metal resource. Hot rows come from private resident slots; cold rows arrive
 +// packed in a bounded shared buffer.
-+struct tosh_assemble_args {
++struct kestrel_assemble_args {
 +    uint32_t row_u4;
 +    uint32_t n_expert;
 +};
 +
-+kernel void tosh_moe_assemble(
-+        constant tosh_assemble_args & args        [[buffer(0)]],
++kernel void kestrel_moe_assemble(
++        constant kestrel_assemble_args & args        [[buffer(0)]],
 +        device       uint4          * dst         [[buffer(1)]],
 +        device const uint4          * cold        [[buffer(2)]],
 +        device const uint4          * slots       [[buffer(3)]],
