@@ -62,3 +62,17 @@
   defect. The two big-builder splits (SettingsTab settingsForm into per-destination views,
   DashboardTab serverCard into picker+disclosure) are kept as real refactors. Gates moved to
   the toolchains that matter: release build (what make-app ships) and CI's Xcode 26 Swift.
+- 2026-10-10 12:40 Resolution: with v6 mode the crash also hits release IRGen, so the mode
+  is staged — targets build as Swift 5 + StrictConcurrency (upcoming feature) with the full
+  v6 debt already paid; the flip to .v6 is two lines in Package.swift, documented there.
+  Release build completes (303 s) and make-app assembles the app through the Swift stage.
+  Local assembly then stops at "image-engine default.metallib is required": this machine has
+  no Metal shader toolchain (xcrun metal fails under CLT-only; it ships with Xcode), which is
+  the pre-existing reason dist/Kestrel.app was a dev-relic — full assembly belongs to CI's
+  macos-26 runners. Engine binaries are correct with embedded Metal source (slower first
+  model load only).
+- 2026-10-10 12:45 Branch swift6-engine-upgrade pushed, PR #5 opened to let CI's Xcode 26
+  toolchain arbitrate v6 mode. First CI round failed at startup — GitHub billing
+  ("recent account payments have failed or your spending limit needs to be increased"),
+  not code. With billing fixed the PR's Build job both arbitrates the crash and assembles
+  the app.
