@@ -1874,10 +1874,10 @@ final class ChatMessageTests: XCTestCase {
         let transport = try MCPStdioTransport(server: server)
         try await transport.start()
         let start = Date()
-        let result = try await transport.send(["jsonrpc": "2.0", "id": 1, "method": "initialize"], id: 1, timeout: 5)
+        let result = try await transport.send(MCPRequest(fields: ["jsonrpc": "2.0", "id": 1, "method": "initialize"]), id: 1, timeout: 5)
         let elapsed = Date().timeIntervalSince(start)
         await transport.stop()
-        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(result.fields["ok"] as? Bool, true)
         XCTAssertLessThan(elapsed, 2)
     }
 
