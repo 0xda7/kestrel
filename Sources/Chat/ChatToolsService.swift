@@ -218,8 +218,11 @@ enum ChatToolsService {
     /// single-quoted keys/values to double quotes. Returns nil when no repair
     /// produces parseable JSON, so the caller falls through to its error path.
     static func repairedJSONObject(from text: String) -> String? {
-        guard let trimmed = try? JSONSerialization.data(
-            withJSONObject: relaxedParse(text) ?? [:]) else { return nil }
+        // No `?? [:]` here: coalescing an unrepairable blob into an empty
+        // object would turn every invalid arguments payload into "no
+        // arguments" and the invalidResponse throw below would be dead code.
+        guard let relaxed = relaxedParse(text),
+              let trimmed = try? JSONSerialization.data(withJSONObject: relaxed) else { return nil }
         return String(decoding: trimmed, as: UTF8.self)
     }
 
