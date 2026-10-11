@@ -3,6 +3,18 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.89.1] - 2026-10-11
+
+### Fixed
+
+- **The pi sidecar knows what it is, and reasoning stays out of transcripts.** Asking the pi sidecar "model, one word" produced five turns of premise-lecturing, "Ready," "I honestly don't know," and a capabilities list: its system prompt never stated the serving identity, and the transcript fed reasoning blocks back as assistant text. The identity now rides the system prompt (answered by the configured provider/model through Kestrel), reasoning is stripped in both transcript builders, and the regression test answers "GLM" in one word.
+- **Strict-concurrency warning tail cleared: 63 → 2.** All 12 captured-var mutations in concurrent closures, 8 non-Sendable captures in Sendable closures, 4 main-actor mutations from nonisolated context and the sending risks are fixed with lock boxes, immutable snapshots and documented confinement; the 2 remaining warnings are macOS deprecation notices. All 16 `try!` sites are replaced with real error handling or proven-invariant traps, and the GitHub Actions pins are raised (checkout v7, setup-python v7, cache v6, download-artifact v8).
+
+### Changed
+
+- **v6 language mode stays staged — the toolchain crash reproduced in CI.** macos-26 / Xcode 26 hit the same IRGen SmallVector overflow under v6 mode (run 38093069969, IRGen for DashboardTab.swift), confirming the local Command Line Tools reproduction; both are recorded in `Package.swift` and the mission journal. The flip remains two documented lines for a fixed toolchain.
+- Security assessment of the audit wave (independent OWASP review): no findings introduced; one Low pre-existing note (CI actions pinned to major tags rather than commit SHAs).
+
 ## [0.89.0] - 2026-10-10
 
 ### Verified
