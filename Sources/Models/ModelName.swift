@@ -22,11 +22,11 @@ struct ModelName {
     }
 
     private static let sep = "[-_.\\s]"
-    private static let quantPattern = try! NSRegularExpression(
+    private static let quantPattern = NSRegularExpression.literal(
         pattern: "(?:^|\(sep))((?:UD-)?(?:IQ|Q)\\d+(?:_\\d+)?(?:_[KSMNLX]+)*|BF16|F16|F32|FP16|FP8|MXFP4|TQ\\d+_\\d+[A-Za-z]*)(?=$|\(sep))",
         options: [.caseInsensitive])
     // "E" prefix covers gemma effective-param labels (E2B); -A<n>B is MoE active params.
-    private static let sizePattern = try! NSRegularExpression(
+    private static let sizePattern = NSRegularExpression.literal(
         pattern: "(?:^|\(sep))((?:\\d+(?:\\.\\d+)?[BM]-\\d+(?:\\.\\d+)?[BM])|(?:\\d+x)?E?\\d+(?:\\.\\d+)?[BM](?:-A\\d+(?:\\.\\d+)?B)?)(?=$|\(sep))",
         options: [.caseInsensitive])
 
@@ -207,16 +207,18 @@ struct ModelName {
     ]
 
     /// Active parameters in billions from an A<n>B tag (e.g. "35B-A3B" → 3.0).
+    private static let activeTagPattern = NSRegularExpression.literal(
+        pattern: "(?i)[-_.]a(\\d+(?:\\.\\d+)?)b(?:[-_.]|$)")
+    private static let activeTotalPattern = NSRegularExpression.literal(
+        pattern: "(?i)(?:^|[-_.])(\\d+(?:\\.\\d+)?)([BM])-(\\d+(?:\\.\\d+)?)[BM](?:[-_.]|$)")
+
     static func activeParamsB(_ name: String) -> Double? {
         let ns = name as NSString
-        let re = try! NSRegularExpression(pattern: "(?i)[-_.]a(\\d+(?:\\.\\d+)?)b(?:[-_.]|$)")
-        if let m = re.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)),
+        if let m = activeTagPattern.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)),
            m.numberOfRanges > 1 {
             return Double(ns.substring(with: m.range(at: 1)))
         }
-        let activeTotal = try! NSRegularExpression(
-            pattern: "(?i)(?:^|[-_.])(\\d+(?:\\.\\d+)?)([BM])-(\\d+(?:\\.\\d+)?)[BM](?:[-_.]|$)")
-        guard let m = activeTotal.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)),
+        guard let m = activeTotalPattern.firstMatch(in: name, range: NSRange(location: 0, length: ns.length)),
               m.numberOfRanges > 2,
               let value = Double(ns.substring(with: m.range(at: 1))) else { return nil }
         return ns.substring(with: m.range(at: 2)).uppercased() == "M" ? value / 1000 : value

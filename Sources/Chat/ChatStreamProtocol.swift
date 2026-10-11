@@ -160,7 +160,7 @@ struct ChatStreamAccumulator {
             return event
 
         case "message_delta":
-            var event = ChatStreamEvent()
+            let event = ChatStreamEvent()
             if let delta = object["delta"] as? [String: Any],
                let stop = delta["stop_reason"] as? String, !stop.isEmpty {
                 finishReason = Self.anthropicFinish(stop)

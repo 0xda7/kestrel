@@ -180,8 +180,9 @@ actor MCPStdioTransport {
                 group.cancelAll()
                 // Whichever waiter lost the race must still be resumed, or
                 // the checked continuation leaks: detach the cleanup so it
-                // runs even though the group is cancelled.
-                Task { await self.abandonPending(id: id) }
+                // runs even though the group is cancelled. The Task inherits
+                // this actor's isolation, so no await (no hop) is involved.
+                Task { self.abandonPending(id: id) }
             }
             guard let first = try await group.next() else { throw MCPError.invalidResponse }
             return first

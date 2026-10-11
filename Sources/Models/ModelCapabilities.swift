@@ -89,14 +89,15 @@ struct ReasoningEffortSupport: Codable, Equatable, Sendable {
 enum ReasoningEffortDetector {
     // Only a membership test guarding a raise_exception is the accepted set:
     // templates also branch on the value to word the prompt, with partial lists.
-    private static let guardPattern = try! NSRegularExpression(
+    private static let guardPattern = NSRegularExpression.literal(
         pattern: "[\\w.]*reasoning_effort\\s+not\\s+in\\s*[\\[(]([^\\])]*)[\\])]")
-    private static let assignmentPattern = try! NSRegularExpression(
+    private static let assignmentPattern = NSRegularExpression.literal(
         pattern: "set\\s+[\\w.]*reasoning_effort\\s*=([^\\n]*)")
     // Some templates only name the default in the error they raise.
-    private static let defaultMarkerPattern = try! NSRegularExpression(
+    private static let defaultMarkerPattern = NSRegularExpression.literal(
         pattern: "([A-Za-z_][\\w-]*)\\s*\\(default\\)")
-    private static let literalPattern = try! NSRegularExpression(pattern: "['\"]([^'\"]+)['\"]")
+    private static let literalPattern = NSRegularExpression.literal(
+        pattern: "['\"]([^'\"]+)['\"]")
 
     /// Ladder of the levels llama.cpp names in --reasoning-effort, so the picker
     /// can order them and fall back to a lower one the model does accept.

@@ -898,7 +898,9 @@ final class ChatStore: ObservableObject {
             }
         }
         let store = self
-        task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump] in
+        // `store` already carries the strong reference; a `weak self` capture
+        // here would be dead weight (and a Swift 6 concurrency warning).
+        task = Task.detached(priority: .userInitiated) { [buffer, pump] in
             PiDelegateService.ensureSessionsDirectory()
             let outcome = await PiDelegateService.runStreaming(
                 argv: PiDelegateService.argv(prompt: prompt, thinking: thinking,
@@ -1094,7 +1096,9 @@ final class ChatStore: ObservableObject {
                 }
             }
             let store = self
-            task = Task.detached(priority: .userInitiated) { [weak self, buffer, pump] in
+            // `store` already carries the strong reference; a `weak self`
+            // capture here would be dead weight (and a Swift 6 warning).
+            task = Task.detached(priority: .userInitiated) { [buffer, pump] in
                 // Boxed: onOutput is @Sendable (the pipe-reader thread), so
                 // the accumulator is only touched through a lock — which also
                 // fixes the unfenced read below.
@@ -1529,13 +1533,13 @@ final class ChatStore: ObservableObject {
             let wasCancelled = cancelled
             let didReportError = reportedError
             let hadReasoning = !accumulator.reasoning.isEmpty
-            var finalToolCalls = accumulator.toolCalls.filter { !$0.name.isEmpty }
+            var rescuedToolCalls = accumulator.toolCalls.filter { !$0.name.isEmpty }
             let finalText = streamedText
             // Text-side rescue: small models often write the call as a fenced
             // JSON blob or a <tool_call> tag instead of using the engine's
             // function-calling channel, then claim the tool ran. Salvage those
             // into real pending calls so permissions still flow.
-            if finalToolCalls.isEmpty, !wasCancelled, !didReportError {
+            if rescuedToolCalls.isEmpty, !wasCancelled, !didReportError {
                 // Rescue from the visible answer only: a call the model merely
                 // reasoned about inside <think> must not fire a real tool.
                 let visible = hadReasoning
@@ -1543,8 +1547,12 @@ final class ChatStore: ObservableObject {
                                       omittingEmptySubsequences: false).last.map(String.init) ?? finalText
                     : finalText
                 let names = Set(availableTools.map(\.name))
-                finalToolCalls = ToolCallRescue.rescuedCalls(text: visible, toolNames: names)
+                rescuedToolCalls = ToolCallRescue.rescuedCalls(text: visible, toolNames: names)
             }
+            // Immutable snapshots: the MainActor.run closure below is @Sendable,
+            // so it must not reference vars this task has mutated.
+            let finalToolCalls = rescuedToolCalls
+            let finalModelID = remoteModelID
             let nextAgentRun = AgentRunContext(
                 port: port, temperature: temperature, maxTokens: maxTokens,
                 system: system, thinking: thinking, sampling: sampling,
@@ -1560,7 +1568,7 @@ final class ChatStore: ObservableObject {
                 if let finalUsage { store?.setContextUsed(finalUsage.prompt + finalUsage.completion, for: convID) }
                 store?.finish(conversation: convID, text: finalText, speed: finalSpeed,
                               mtpAccept: finalAccept, timings: finalTimings,
-                              toolCalls: finalToolCalls, model: remoteModelID)
+                              toolCalls: finalToolCalls, model: finalModelID)
                 let shouldDeliverQueued = store?.queuedMessage?.conversationID == convID
                 if shouldDeliverQueued {
                     if !finalToolCalls.isEmpty { store?.interruptPendingToolCalls(conversation: convID) }
@@ -1806,7 +1814,10 @@ final class ChatStore: ObservableObject {
                         name: request.name, arguments: arguments, port: context.port,
                         workingDirectory: context.workingDirectory
                     ) { [weak self] partial in
-                        await MainActor.run { self?.updateToolCallResult(request, result: partial) }
+                        // Immutable local: the weak capture is mutable storage,
+                        // which a nested @Sendable closure may not reference.
+                        let inner = self
+                        await MainActor.run { inner?.updateToolCallResult(request, result: partial) }
                     }
                 } else {
                     result = try await ChatToolsService.execute(

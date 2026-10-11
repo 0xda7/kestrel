@@ -35,7 +35,7 @@ enum ChatMemoryService {
     static let maximumRecallCharacters = 6_000
 
     static let tools: [BuiltinToolInfo] = [
-        try! BuiltinToolInfo(
+        BuiltinToolInfo(
             displayName: "List conversation memory",
             name: listName,
             writesData: false,
@@ -47,7 +47,7 @@ enum ChatMemoryService {
                     "parameters": ["type": "object", "properties": [:] as [String: Any]]
                 ]
             ]),
-        try! BuiltinToolInfo(
+        BuiltinToolInfo(
             displayName: "Archive part of the conversation",
             name: archiveName,
             writesData: false,
@@ -67,7 +67,7 @@ enum ChatMemoryService {
                     ]
                 ]
             ]),
-        try! BuiltinToolInfo(
+        BuiltinToolInfo(
             displayName: "Recall archived conversation",
             name: recallName,
             writesData: false,

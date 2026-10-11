@@ -186,8 +186,11 @@ struct RichWebView: NSViewRepresentable {
             height.wrappedValue = CGFloat(truncating: value) + 20
         }
 
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        // Isolation and handler attributes must match the WKNavigationDelegate
+        // requirement exactly, so it is satisfied (and registered with the ObjC
+        // runtime) instead of merely "nearly matching" it.
+        @MainActor func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                                decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             guard navigationAction.navigationType == .linkActivated,
                   let url = navigationAction.request.url else {
                 decisionHandler(.allow)

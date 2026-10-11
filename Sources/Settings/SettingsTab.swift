@@ -590,7 +590,10 @@ struct SettingsView: View {
                                 help: loc.t("Hace que el servidor escuche en la red local y lo anuncia con Bonjour como 'Kestrel API'. Actívalo solo en redes confiables; reinicia el servidor si está activo.",
                                             "Makes the server listen on the local network and advertises it with Bonjour as 'Kestrel API'. Enable only on trusted networks; restarts the server if it's running.")) {
                         SettingsToggle(isOn: Binding(get: { localNetworkDiscovery },
-                                                     set: setDiscoverable))
+                                                     // Trampolined through a closure: the
+                                                     // bare method value is not Sendable,
+                                                     // which the @Sendable `set` requires.
+                                                     set: { setDiscoverable($0) }))
                     }
                     SettingsRow(icon: "folder",
                                 title: loc.t("Carpeta de modelos", "Models folder"),

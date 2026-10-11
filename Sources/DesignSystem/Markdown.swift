@@ -97,8 +97,9 @@ struct RichText: View {
     }
 
     /// Re-parses only when the settled prefix changes, i.e. once per block
-    /// boundary instead of once per flush.
-    private final class BlockCache {
+    /// boundary instead of once per flush. Only ever touched from `body`, so
+    /// the cache is MainActor-confined, which is what `parse` requires.
+    @MainActor private final class BlockCache {
         private var key = "\u{0}"   // sentinel so an empty prefix parses once
         private var cached: [MDBlock] = []
         func blocks(for settled: String) -> [MDBlock] {
@@ -256,10 +257,13 @@ struct RichText: View {
             allowsExtendedAttributes: false,
             interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
         // Links parse but render as plain colored text otherwise; underline and
-        // tint the link runs so they read (and behave) as links.
-        for run in attr.runs where run.link != nil {
-            attr[run.range].underlineStyle = .single
-            attr[run.range].foregroundColor = .accentColor
+        // tint the link runs so they read (and behave) as links. Addressed via
+        // the key types, not dynamic member lookup: forming those key paths is
+        // a Swift 6 error (KeyPath is not Sendable).
+        for run in attr.runs
+        where run[AttributeScopes.FoundationAttributes.LinkAttribute.self] != nil {
+            attr[run.range][AttributeScopes.SwiftUIAttributes.UnderlineStyleAttribute.self] = .single
+            attr[run.range][AttributeScopes.SwiftUIAttributes.ForegroundColorAttribute.self] = .accentColor
         }
         return attr
     }

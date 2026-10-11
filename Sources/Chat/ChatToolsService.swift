@@ -49,13 +49,26 @@ struct BuiltinToolInfo: Identifiable, Sendable {
         self.remoteName = remoteName
     }
 
+    /// For definitions written as compile-time literals (the builtin tools):
+    /// string keys with string/bool/array/dictionary values, so the schema is
+    /// valid JSON by construction and serialization cannot fail — every
+    /// definition passed here was verified to serialize as written. A static
+    /// initializer has no caller that could receive an error, and a tool whose
+    /// schema cannot be serialized cannot be advertised, so a violated
+    /// invariant traps with the tool's name instead of failing silently.
+    /// Definitions built at runtime (MCP tools, server tool lists) must use the
+    /// throwing `init(displayName:name:definition:mcpServerID:remoteName:)`
+    /// or `init?(json:)` instead, which surface the error to their caller.
     init(displayName: String, name: String, writesData: Bool,
-         definition: [String: Any]) throws {
+         definition: [String: Any]) {
+        guard let definitionData = try? JSONSerialization.data(withJSONObject: definition) else {
+            preconditionFailure("\(name): builtin tool definition literal is not valid JSON")
+        }
         self.displayName = displayName
         self.name = name
         self.writesData = writesData
         usesCwd = false
-        definitionData = try JSONSerialization.data(withJSONObject: definition)
+        self.definitionData = definitionData
         mcpServerID = nil
         remoteName = nil
     }

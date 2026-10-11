@@ -42,7 +42,7 @@ enum EngineCheck {
         FileManager.default.isExecutableFile(atPath: binaryPath(serverBinary: serverBinary))
     }
 
-    private static let ansi = try! NSRegularExpression(pattern: "\u{1B}\\[[0-9;]*m")
+    private static let ansi = NSRegularExpression.literal(pattern: "\u{1B}\\[[0-9;]*m")
 
     static func stripANSI(_ text: String) -> String {
         let range = NSRange(text.startIndex..., in: text)
@@ -148,10 +148,11 @@ final class EngineChecker: ObservableObject {
     private var process: Process?
     private var buffer = ""
 
-    /// `onFinish` is MainActor-isolated: the only caller delivers into view
-    /// state, and an isolated closure is implicitly Sendable, so the
-    /// termination handler can carry it across safely.
-    func start(settings: ServerSettings, onFinish: @MainActor @escaping (EngineCheckResult) -> Void) {
+    /// `onFinish` is MainActor-isolated and marked `@Sendable`: the only
+    /// caller delivers into view state, so the termination handler can carry
+    /// it across the actor hop safely.
+    func start(settings: ServerSettings,
+               onFinish: @MainActor @Sendable @escaping (EngineCheckResult) -> Void) {
         guard !running else { return }
         let path = EngineCheck.binaryPath(serverBinary: settings.serverBinary)
         guard FileManager.default.isExecutableFile(atPath: path) else { return }

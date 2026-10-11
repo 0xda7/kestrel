@@ -307,7 +307,11 @@ struct DashboardView: View {
                     }
                     Spacer(minLength: 8)
                     Toggle(loc.t("Descubrible en red local", "Discoverable on local network"),
-                           isOn: Binding(get: { localNetworkDiscovery }, set: setDiscoverable))
+                           isOn: Binding(get: { localNetworkDiscovery },
+                                         // Trampolined through a closure: the bare
+                                         // method value is not Sendable, which the
+                                         // @Sendable `set` requires.
+                                         set: { setDiscoverable($0) }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small)
                 }
                 .help(loc.t("Hace que el servidor escuche en la red local y lo anuncia con Bonjour. Reinicia el servidor si está activo.",

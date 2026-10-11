@@ -11,7 +11,7 @@ enum JavaScriptSandboxService {
     static let maximumTimeoutMS = 30_000
     static let maximumOutputCharacters = 8_192
 
-    static let tool: BuiltinToolInfo = try! BuiltinToolInfo(
+    static let tool: BuiltinToolInfo = BuiltinToolInfo(
         displayName: "JavaScript sandbox",
         name: toolName,
         writesData: false,
@@ -126,7 +126,14 @@ private final class JavaScriptSandboxSession: NSObject, WKScriptMessageHandler {
     }
 
     private static func harness(code: String) -> String {
-        let codeData = try! JSONSerialization.data(withJSONObject: [code])
+        // `[code]` is an array of one String, so it is valid JSON by
+        // construction and serialization cannot fail (verified for a non-empty
+        // string when this was written). The bytes are interpolated into the
+        // harness page, which has no recovery path: a violated invariant traps
+        // here rather than silently shipping a worker that never sees the code.
+        guard let codeData = try? JSONSerialization.data(withJSONObject: [code]) else {
+            preconditionFailure("run_javascript: [String] code payload failed to serialize")
+        }
         let codeArray = String(decoding: codeData, as: UTF8.self)
         return """
         <!doctype html><html><head>

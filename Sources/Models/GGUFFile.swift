@@ -22,7 +22,7 @@ enum GGUFFile {
         let groupKey: String
     }
 
-    private static let shardRegex = try! NSRegularExpression(
+    private static let shardRegex = NSRegularExpression.literal(
         pattern: #"-(\d{5})-of-(\d{5})(?=\.gguf$)"#,
         options: [.caseInsensitive]
     )

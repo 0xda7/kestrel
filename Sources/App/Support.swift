@@ -699,7 +699,7 @@ enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ] as CFDictionary)
-        cache.withLock { $0.removeValue(forKey: account) }
+        _ = cache.withLock { $0.removeValue(forKey: account) }
     }
 
     /// Returns the local engine's API key, generating one on first use.

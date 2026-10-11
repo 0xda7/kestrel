@@ -813,7 +813,9 @@ private func reveal(_ result: GeneratedVideo) {
     if let first = result.frameURLs.first { NSWorkspace.shared.activateFileViewerSelecting([first]) }
 }
 
-private func exportMP4(_ result: GeneratedVideo) {
+/// Runs on the MainActor: NSSavePanel is MainActor-isolated, and the callers
+/// are Button actions in view bodies. Only the encode below is detached.
+@MainActor private func exportMP4(_ result: GeneratedVideo) {
     let panel = NSSavePanel(); panel.allowedContentTypes = [.mpeg4Movie]; panel.nameFieldStringValue = "kestrel-video.mp4"
     guard panel.runModal() == .OK, let destination = panel.url else { return }
     let urls = result.frameURLs; let fps = result.fps

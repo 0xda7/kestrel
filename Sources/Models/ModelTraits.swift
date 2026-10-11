@@ -52,7 +52,7 @@ enum ModelTraitsCache {
         entries.withLock { $0[path] }
     }
 
-    static func warm(paths: [String], then done: @escaping () -> Void) {
+    static func warm(paths: [String], then done: @escaping @Sendable () -> Void) {
         DispatchQueue.global(qos: .utility).async {
             for path in paths {
                 autoreleasepool {

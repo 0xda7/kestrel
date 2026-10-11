@@ -152,7 +152,7 @@ enum InferenceRoutes {
             Keychain.setThisDeviceOnly(trimmed, account: account)
         }
         if trimmed.isEmpty {
-            keyCache.withLock { $0.removeValue(forKey: account) }
+            _ = keyCache.withLock { $0.removeValue(forKey: account) }
         } else {
             keyCache.withLock { $0[account] = trimmed }
         }

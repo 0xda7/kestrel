@@ -747,7 +747,9 @@ private struct ServerConfigurationWorkspace: View {
 }
 
 private extension Binding {
-    func optionalValue<Wrapped>(default defaultValue: Wrapped) -> Binding<Wrapped> where Value == Wrapped? {
+    /// `Wrapped` must be Sendable: both closures of the produced Binding are
+    /// @Sendable and capture the value.
+    func optionalValue<Wrapped: Sendable>(default defaultValue: Wrapped) -> Binding<Wrapped> where Value == Wrapped? {
         Binding<Wrapped>(get: { wrappedValue ?? defaultValue }, set: { wrappedValue = $0 })
     }
 }

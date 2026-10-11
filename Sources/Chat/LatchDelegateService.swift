@@ -45,7 +45,7 @@ enum LatchDelegateService {
         return stored > 0 ? min(stored, maximumTimeoutSeconds) : defaultTimeoutSeconds
     }
 
-    static let tool: BuiltinToolInfo = try! BuiltinToolInfo(
+    static let tool: BuiltinToolInfo = BuiltinToolInfo(
         displayName: "Latch delegate",
         name: toolName,
         writesData: true,

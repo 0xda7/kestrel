@@ -10,3 +10,6 @@ icon-1024.png
 
 # Local-only operator backups (may carry pre-rebrand personal metadata)
 .agents/backups/
+
+# local analysis artifacts
+out/
