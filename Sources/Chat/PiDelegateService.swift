@@ -112,11 +112,17 @@ enum PiDelegateService {
         var argv = [binaryPath, "--mode", "json",
                     "--session-dir", sessionsDirectory]
         if !agentMode { argv += ["--no-tools"] }
+        // pi resolves custom (models.json) providers only through the
+        // combined "provider/model" form of --model; a bare --provider is
+        // ignored for them and the run silently falls back to pi's built-in
+        // default (openrouter) — the routing bug that sent runs to a dead key.
+        let provider = configuredProvider.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
         if let systemPrompt,
            !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             argv += ["--system-prompt", systemPrompt]
         } else {
-            argv += ["--system-prompt", piSystemPrompt]
+            argv += ["--system-prompt", piSystemPrompt(provider: provider, model: model)]
         }
         if !thinking {
             argv += ["--thinking", "off"]
@@ -124,12 +130,6 @@ enum PiDelegateService {
             let level = configuredThinkingLevel
             if !level.isEmpty { argv += ["--thinking", level] }
         }
-        // pi resolves custom (models.json) providers only through the
-        // combined "provider/model" form of --model; a bare --provider is
-        // ignored for them and the run silently falls back to pi's built-in
-        // default (openrouter) — the routing bug that sent runs to a dead key.
-        let provider = configuredProvider.trimmingCharacters(in: .whitespacesAndNewlines)
-        let model = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
         if !provider.isEmpty, !model.isEmpty {
             argv += ["--model", "\(provider)/\(model)"]
         } else if !model.isEmpty {
@@ -143,10 +143,21 @@ enum PiDelegateService {
 
     /// Fallback persona when the conversation carries no system prompt: this
     /// sidecar answers chat turns, it does not manage a repository.
-    static let piSystemPrompt =
-        "You are the Kestrel assistant, answering inside a conversation. "
-            + "Reply directly as the assistant; your reply becomes the next "
-            + "assistant message."
+    /// The sidecar cannot see its own provider or model, so the serving
+    /// identity rides in the system prompt: asked "what model are you", it
+    /// must answer in one word, not discover it has no introspection after
+    /// five turns. The uncertainty rule is one line on purpose: name the
+    /// missing input and ask — never lecture, never pivot to a résumé.
+    static func piSystemPrompt(provider: String, model: String) -> String {
+        let identity = provider.isEmpty || model.isEmpty
+            ? "a model served through Kestrel on this Mac"
+            : "\(model), served by \(provider) through Kestrel on this Mac"
+        return "You are the Kestrel assistant, answered by \(identity). "
+            + "Reply directly as the assistant; your reply becomes the next assistant message. "
+            + "When asked what you are, answer from this identity in exactly the form the user requested. "
+            + "When you lack information, say in one sentence what is missing and ask for it — "
+            + "never lecture about premises and never answer a direct question with a capabilities list."
+    }
 
     enum RunOutcome {
         case completed(output: String)

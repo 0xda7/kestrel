@@ -823,7 +823,15 @@ final class ChatStore: ObservableObject {
         for message in conversations[i].messages.reversed() {
             guard message.role == "user" || message.role == "assistant" else { continue }
             if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            let body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Reasoning must never re-enter the transcript as assistant text:
+            // a leaked <think> block reads as a broken assistant turn.
+            if message.role == "assistant" {
+                body = body.replacingOccurrences(
+                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
+                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
+                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             guard !body.isEmpty else { continue }
             let line = (message.role == "user" ? "User: " : "Assistant: ") + body
             if line.count > budget {
@@ -976,7 +984,15 @@ final class ChatStore: ObservableObject {
         for message in conversations[i].messages.reversed() {
             guard message.role == "user" || message.role == "assistant" else { continue }
             if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            let body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Reasoning must never re-enter the transcript as assistant text:
+            // a leaked <think> block reads as a broken assistant turn.
+            if message.role == "assistant" {
+                body = body.replacingOccurrences(
+                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
+                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
+                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             guard !body.isEmpty else { continue }
             let line = (message.role == "user" ? "User: " : "Assistant: ") + body
             if line.count > budget {
