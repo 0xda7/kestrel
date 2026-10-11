@@ -124,10 +124,19 @@ enum PiDelegateService {
             let level = configuredThinkingLevel
             if !level.isEmpty { argv += ["--thinking", level] }
         }
+        // pi resolves custom (models.json) providers only through the
+        // combined "provider/model" form of --model; a bare --provider is
+        // ignored for them and the run silently falls back to pi's built-in
+        // default (openrouter) — the routing bug that sent runs to a dead key.
         let provider = configuredProvider.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !provider.isEmpty { argv += ["--provider", provider] }
         let model = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !model.isEmpty { argv += ["--model", model] }
+        if !provider.isEmpty, !model.isEmpty {
+            argv += ["--model", "\(provider)/\(model)"]
+        } else if !model.isEmpty {
+            argv += ["--model", model]
+        } else if !provider.isEmpty {
+            argv += ["--provider", provider]
+        }
         argv += ["-p", prompt]
         return argv
     }

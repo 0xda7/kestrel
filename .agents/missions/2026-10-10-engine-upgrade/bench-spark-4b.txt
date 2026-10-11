@@ -1,0 +1,6 @@
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| spark2_5 ?B Q4_K - Medium      |   2.42 GiB |     4.11 B | MTL,BLAS   |       8 |           pp512 |        395.91 ± 0.40 |
+| spark2_5 ?B Q4_K - Medium      |   2.42 GiB |     4.11 B | MTL,BLAS   |       8 |           tg128 |         33.02 ± 0.12 |
+
+build: cdc06426e (11172), Kestrel engine 0.88.0
