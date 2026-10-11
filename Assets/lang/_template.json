@@ -1052,6 +1052,7 @@
   "Next image": "",
   "No GPU usage data": "",
   "No MCP servers": "",
+  "No active route: chat answers with the local engine even though providers are configured.": "",
   "No activity yet": "",
   "No bridge is detected between these GPUs, so there is nothing to turn on. Metal would put them in the same peer group if there were one.": "",
   "No chat content": "",

@@ -1052,6 +1052,7 @@
   "Next image": "次の画像",
   "No GPU usage data": "GPUの使用データがありません",
   "No MCP servers": "MCPサーバーがありません",
+  "No active route: chat answers with the local engine even though providers are configured.": "",
   "No activity yet": "まだアクティビティはありません",
   "No bridge is detected between these GPUs, so there is nothing to turn on. Metal would put them in the same peer group if there were one.": "これらのGPUの間にブリッジが見つからないため、有効にできるものがありません。あればMetalが同じピアグループに入れるはずです。",
   "No chat content": "チャットの内容がありません",

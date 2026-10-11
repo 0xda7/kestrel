@@ -1052,6 +1052,7 @@
   "Next image": "下一张图像",
   "No GPU usage data": "没有 GPU 使用数据",
   "No MCP servers": "没有 MCP 服务器",
+  "No active route: chat answers with the local engine even though providers are configured.": "",
   "No activity yet": "暂无活动",
   "No bridge is detected between these GPUs, so there is nothing to turn on. Metal would put them in the same peer group if there were one.": "未检测到这些 GPU 之间有桥接，因此没有可启用的内容。如果存在桥接，Metal 会把它们归入同一个对等组。",
   "No chat content": "没有聊天内容",
