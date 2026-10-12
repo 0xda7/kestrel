@@ -343,6 +343,7 @@ struct ChecksMain {
         for (suiteName, set) in registry {
             for check in set.checks {
                 let label = "\(suiteName).\(check.name)"
+                FileHandle.standardError.write(Data("start \(label)\n".utf8))
                 CheckRecorder.shared.currentCheck = label
                 CheckRecorder.shared.begin()
                 watchdog.arm(label)
