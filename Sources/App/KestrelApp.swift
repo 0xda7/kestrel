@@ -53,11 +53,12 @@ struct KestrelApp: App {
         // Release VRAM held by an engine orphaned by a previous force-quit.
         EngineLock.reapOrphans()
 
-        // pi's provider config is generated from Kestrel's own settings: the
-        // one-time import absorbs any hand-authored sidecar config, then the
-        // file is refreshed so the sidecar can never silently disagree with
-        // what the app says.
+        // The sidecars' provider configs are generated from Kestrel's own
+        // settings: the one-time import absorbs any hand-authored sidecar
+        // config, then the files are refreshed so neither sidecar can
+        // silently disagree with what the app says.
         PiBridge.migrateLegacySidecarConfigIfNeeded()
+        LatchBridge.migrateLegacySidecarConfigIfNeeded()
 
         // Remove the legacy raw flag; MTP is selected automatically per model.
         if var extra = defaultsMigrationExtraArgs(), extra.contains("--spec-type draft-mtp") {

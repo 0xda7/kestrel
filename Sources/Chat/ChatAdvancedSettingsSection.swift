@@ -553,6 +553,7 @@ struct ChatAdvancedSettingsSection: View {
 
     private func refreshBridgePairs() {
         PiBridge.migrateLegacySidecarConfigIfNeeded()
+        LatchBridge.migrateLegacySidecarConfigIfNeeded()
         bridgePairs = PiBridge.configuredPairs()
     }
 

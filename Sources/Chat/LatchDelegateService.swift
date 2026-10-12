@@ -9,8 +9,10 @@ import os
 /// Delegates a self-contained task to the latch harness as an app-side tool.
 /// The model never talks to latch's model directly; it hands off a task string
 /// and receives latch's finished report. The binary path and timeout live in
-/// settings — nothing about the delegate's model is hardcoded here; latch uses
-/// whatever account and model its own configuration selects.
+/// settings. Latch's provider config is owned by Kestrel (LatchBridge): it is
+/// generated from Settings → Providers with the local engine as the default,
+/// so delegation stays on this machine unless an active remote route says
+/// otherwise.
 enum LatchDelegateService {
     static let toolName = "latch_delegate"
     static let defaultTimeoutSeconds = 300
@@ -53,7 +55,7 @@ enum LatchDelegateService {
             "type": "function",
             "function": [
                 "name": toolName,
-                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. IMPORTANT: the model and provider latch uses come from latch's OWN configuration, not from Kestrel — depending on that configuration the delegate may run on the local engine or on REMOTE cloud endpoints, and Kestrel does not route or constrain it. Check latch's provider configuration before delegating anything that must stay on this machine.",
+                "description": "Delegate one self-contained task to the latch agent harness and wait for its final report. Use for work that needs its own multi-step agent run (research, a long refactor sweep, a repo-wide audit) while you keep the main conversation. This is a real agent loop that typically runs for minutes; give it a realistic timeout_seconds (120 or more) or it will be stopped mid-work. The task must be fully self-contained: include every path, constraint, and expected output, because latch cannot ask you questions. Routing: Kestrel maintains latch's provider configuration from Settings → Providers — by default the delegate runs on THIS machine's local engine, and only an active remote route sends it to that cloud endpoint. If you hand-replaced ~/.latch/v2/provider_config.json, that file applies instead and may point elsewhere.",
                 "parameters": [
                     "type": "object",
                     "properties": [
