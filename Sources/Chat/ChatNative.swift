@@ -1861,7 +1861,8 @@ final class ChatStore: ObservableObject {
                 } else {
                     result = try await ChatToolsService.execute(
                         name: request.name, arguments: arguments, port: context.port,
-                        workingDirectory: context.workingDirectory)
+                        workingDirectory: context.workingDirectory,
+                        writesData: request.writesData)
                 }
                 guard !Task.isCancelled else { return }
                 self?.completeToolCall(request, result: result.content,
@@ -2097,6 +2098,24 @@ final class ChatStore: ObservableObject {
             return ["role": m.role, "content": text]
         }
         return history
+    }
+
+    /// Per-conversation usage rollup (roadmap item 6). Prompt tokens are
+    /// re-read from the window every turn, so honest totals are: generated
+    /// tokens summed, turns counted, and the peak window occupancy seen —
+    /// the basis for "what has this conversation cost" that was previously
+    /// only visible one message at a time.
+    nonisolated static func usageRollup(messages: [ChatMessage])
+        -> (generatedTokens: Int, turns: Int, peakWindow: Int)? {
+        var generated = 0, turns = 0, peak = 0
+        for message in messages {
+            guard let timings = message.timings else { continue }
+            turns += 1
+            generated += timings.generatedTokens ?? 0
+            peak = max(peak, (timings.promptTokens ?? 0) + (timings.generatedTokens ?? 0))
+        }
+        guard turns > 0 else { return nil }
+        return (generated, turns, peak)
     }
 
     /// Plain text of a message's content, whether it's a string or the
@@ -5080,6 +5099,19 @@ struct NativeChatView: View {
                     }
                     .help(loc.t("Tokens usados por el historial y la última respuesta. Al superar 70%, la app intenta resumir los turnos antiguos.",
                                 "Tokens used by history and the latest response. Past 70%, the app attempts to summarize older turns."))
+                }
+
+                if server.state == .running,
+                   let rollup = ChatStore.usageRollup(messages: chat.current?.messages ?? []) {
+                    HStack(spacing: 5) {
+                        Label(loc.t("Uso", "Usage"), systemImage: "chart.bar.doc.horizontal")
+                            .foregroundStyle(.secondary)
+                        Text("\(rollup.turns) \(loc.t("turnos", "turns")) · \(rollup.generatedTokens) \(loc.t("tokens generados", "tokens generated"))")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    .help(loc.t("Total de la conversación: tokens generados sumados y picos de ocupación de la ventana. Los tokens del prompt se releen cada turno, así que el pico — no la suma — representa el coste real.",
+                                "Conversation totals: generated tokens summed and window-occupancy peaks. Prompt tokens are re-read every turn, so the peak — not the sum — is the real cost."))
                 }
 
                 if server.state == .running && contextMaySlowGeneration && chat.canCompactCurrent {

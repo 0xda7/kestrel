@@ -151,8 +151,46 @@ enum ChatToolsService {
         return rows.compactMap(BuiltinToolInfo.init(json:))
     }
 
+    /// Transient-failure retry, read-only tools only. A write/exec tool whose
+    /// request timed out may already have taken effect — replaying side
+    /// effects is the model's decision on the next turn, never the harness's.
+    /// Read-only tools (writesData false) retry twice with backoff on the
+    /// transient classes below.
     static func execute(name: String, arguments: [String: Any], port: Int,
-                        workingDirectory: String? = nil) async throws -> ToolExecutionResult {
+                        workingDirectory: String? = nil, writesData: Bool = true,
+                        attempt: Int = 0) async throws -> ToolExecutionResult {
+        do {
+            return try await executeOnce(name: name, arguments: arguments, port: port,
+                                         workingDirectory: workingDirectory)
+        } catch {
+            guard writesData == false, attempt < 2, isTransient(error) else { throw error }
+            try? await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 1_200))
+            return try await execute(name: name, arguments: arguments, port: port,
+                                     workingDirectory: workingDirectory, writesData: writesData,
+                                     attempt: attempt + 1)
+        }
+    }
+
+    /// Whether a tool failure is worth retrying: transport-level hiccups and
+    /// server-side 5xx. Anything else (4xx refusals, invalid payloads, a tool
+    /// that ran and reported an error) is deterministic.
+    nonisolated static func isTransient(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost:
+                return true
+            default:
+                return false
+            }
+        }
+        if let server = error as? ChatToolsError, case let .server(status, _) = server {
+            return status >= 500
+        }
+        return false
+    }
+
+    private static func executeOnce(name: String, arguments: [String: Any], port: Int,
+                                    workingDirectory: String?) async throws -> ToolExecutionResult {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/tools")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
