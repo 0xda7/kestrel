@@ -88,3 +88,19 @@
   budget, (d) tool-call visualization upgrades. Step 7 (engines re-authoring) unstarted; begin
   from patches/README.md's frontier notes + scripts/check-patch-series.sh.
 - Xcode still absent locally (operator step); all verification remains CI-arbitrated.
+
+- 2026-10-12 22:30 SESSION BOUNDARY (Xlaunch session 3). Step 6 slice 2 SHIPPED as 474d4ba,
+  CI green (Build & Release incl. LatchBridgeTests, Translations): LatchBridge owns
+  ~/.latch/v2/provider_config.json — generated from Settings → Providers (kestrel-local always
+  present and the default selection), synced at launch + route/key changes + engine start
+  (same hooks as PiBridge), write-when-different, 0600/0700, ownership marker; one-time import
+  turns a hand-authored config into real routes (loopback recognized as the engine, keys to the
+  local secret store); latch_delegate tool description states the routing truth now. Routing
+  note: the bridge was T1 (pattern proven by PiBridge); the default-selection semantics
+  (local-by-default) was the one T2 call, recorded in the tool description + CHANGELOG.
+  Session-3 net: steps 5, 6(a: retries+rollup, b: latch ownership) complete and CI-verified.
+- Step 6 remaining (next session): structured tool schemas, dynamic tool-context budgeting,
+  tool-call visualization upgrades. Step 7 (engine patch-series re-authoring): unstarted; begin
+  from patches/README.md frontier notes; the kernels/-layout port collapses shared-metal into
+  the llama series — budget it as its own multi-session arc.
+- Local unit tests remain CI-arbitrated (no Xcode yet).
