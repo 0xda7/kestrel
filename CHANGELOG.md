@@ -3,6 +3,19 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.89.2] - 2026-10-12
+
+### Fixed
+
+- **The chat's assistant selection works again, and Kestrel owns pi's provider configuration.** The sidecar's provider file (`~/.pi/agent/models.json`) was hand-authored outside the app — a z.ai hardcode with an embedded key and one model — while Kestrel's own pi setting held a stale model name (`Glm-5.2`). pi resolved the mismatch by falling back to its built-in default provider, whose dead key answered with an empty reply, exit status 0 and nothing in stderr: the empty bubble with no diagnostic. Kestrel now generates the sidecar config from its own Settings → Providers (plus `kestrel-local` from the engine defaults) at launch and on every route or key change; the hand-authored file is imported once into real settings and then owned, and a send whose provider/model pair is missing from the generated config stops with an actionable bilingual message instead of silence.
+- **Provider keys left the system Keychain.** Every ad-hoc rebuild changes the app's signing identity, so macOS re-evaluated each keychain item's ACL and raised the Mac-password prompt after practically every update — a design the operator never asked for. Keys now live in Kestrel's local secret store (0600 files in a 0700 folder; the same trade the engine's own key already made); legacy Keychain items migrate on first read and are then deleted, so no future read can prompt.
+- **The pi settings applied while hidden.** The pi model/provider/timeout rows only rendered when "pi as primary" was on, yet per-conversation pi (picked from the header chip) still read them — invisible config is how the assistant selection drifted. The rows are always visible now, model/provider is a picker over pairs the generated config actually contains (a model that cannot run is not selectable), and the sidecar's provider list is re-checked when the pane opens.
+
+### Changed
+
+- **The per-turn transcript budget for pi is operator-tunable** (Chat → Agents → "pi context"): default 12,000 characters, oldest messages drop first, the newest user message always rides whole. It was a fixed 24,000-character resend on every turn — the token-weight complaint.
+- **`scripts/release.sh` stamps the About page version from `VERSION`** — v0.89.1 shipped with the About page reading 0.89.0 because the constant was a hand edit.
+
 ## [0.89.1] - 2026-10-11
 
 ### Fixed
