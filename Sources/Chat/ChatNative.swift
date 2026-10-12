@@ -1898,8 +1898,13 @@ final class ChatStore: ObservableObject {
         conversations[i].messages[j].toolCalls?[k].finishedAt = Date()
         let serverID = conversations[i].messages[j].toolCalls?[k].serverID ?? request.callID.uuidString
         // Cap what re-enters the context: a giant dump starves small models
-        // and eats the KV budget the rest of the run still needs.
-        let contextResult = ChatToolsService.clampedToolResult(result)
+        // and eats the KV budget the rest of the run still needs. The cap
+        // scales with the window's remaining headroom, not a fixed number.
+        let window = ServerSettings.fromDefaults().resolvedCtx
+        let used = conversations[i].contextUsed ?? 0
+        let contextResult = ChatToolsService.clampedToolResult(
+            result, cap: ChatToolsService.dynamicToolResultCap(windowTokens: window,
+                                                               usedTokens: used))
         conversations[i].messages.append(ChatMessage(role: "tool", content: contextResult, toolCallID: serverID))
         conversations[i].updated = Date()
         save()
@@ -4583,6 +4588,14 @@ struct NativeChatView: View {
         tools += await KestrelMCPService.shared.discoverTools()
         var seen = Set<String>()
         availableTools = tools.filter { seen.insert($0.name).inserted }
+            .filter { info in
+                let problems = ChatToolsService.schemaProblems(for: info)
+                guard problems.isEmpty else {
+                    AppLog.chat.error("dropping tool \(info.name, privacy: .public): \(problems.joined(separator: "; "), privacy: .public)")
+                    return false
+                }
+                return true
+            }
         loadingTools = false
     }
 

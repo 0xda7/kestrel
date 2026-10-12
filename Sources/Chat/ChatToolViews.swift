@@ -35,6 +35,11 @@ struct ToolCallCard: View {
                         .lineLimit(1)
                 }
                 if call.state == .running { ProgressView().controlSize(.mini) }
+                if let started = call.startedAt, let finished = call.finishedAt {
+                    Text(String(format: "%.1fs", finished.timeIntervalSince(started)))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .font(.callout.weight(.medium))
             .foregroundStyle(call.state == .failed || call.state == .denied ? .red : .secondary)
@@ -99,6 +104,9 @@ private struct ToolCallDetailView: View {
                 } else { emptyState("Waiting…") }
             case .search:
                 SearchResultPanel(result: presentation.result)
+            case .delegate:
+                codePanel(presentation.code ?? "", language: "text")
+                consolePanel(title: "Report")
             case .generic:
                 codePanel(call.arguments.isEmpty ? "{}" : call.arguments, language: "json")
                 resultText()

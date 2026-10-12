@@ -396,10 +396,49 @@ enum ChatToolsService {
     /// blow the KV budget. The marker tells the model more existed.
     static let toolResultContextLimit = 12_000
 
-    static func clampedToolResult(_ result: String) -> String {
-        guard result.count > toolResultContextLimit else { return result }
-        let head = String(result.prefix(toolResultContextLimit))
-        return head + "\n\n[truncated — output exceeded \(toolResultContextLimit) characters; narrow the query or read the file in sections]"
+    static func clampedToolResult(_ result: String, cap: Int = toolResultContextLimit) -> String {
+        guard result.count > cap else { return result }
+        let head = String(result.prefix(cap))
+        return head + "\n\n[truncated — output exceeded \(cap) characters; narrow the query or read the file in sections]"
+    }
+
+    /// Dynamic cap for a tool result entering the context: a quarter of the
+    /// window's remaining headroom (≈4 chars/token), floored at 2,000 and
+    /// never above the static limit. Near a full window, tool dumps shrink
+    /// instead of evicting the conversation itself.
+    nonisolated static func dynamicToolResultCap(windowTokens: Int, usedTokens: Int) -> Int {
+        let remaining = max(windowTokens - max(usedTokens, 0), 0)
+        return min(max(remaining / 4 * 4, 2_000), toolResultContextLimit)
+    }
+
+    /// Structural validation of a tool's JSON Schema before it is offered to
+    /// the engine. A malformed schema (empty name or description, a
+    /// `required` entry with no property behind it) surfaces later as cryptic
+    /// engine-side tool-call failures; registration drops the tool with a
+    /// logged reason instead of shipping a broken definition.
+    nonisolated static func schemaProblems(for info: BuiltinToolInfo) -> [String] {
+        var problems: [String] = []
+        if info.name.trimmingCharacters(in: .whitespaces).isEmpty {
+            problems.append("name is empty")
+        }
+        guard let object = info.openAIDefinition else {
+            return problems + ["definition is not valid JSON"]
+        }
+        let function = object["function"] as? [String: Any] ?? object
+        if (function["description"] as? String ?? "").isEmpty {
+            problems.append("description is empty")
+        }
+        if let parameters = function["parameters"] as? [String: Any] {
+            if (parameters["type"] as? String) != "object" {
+                problems.append("parameters.type is not \"object\"")
+            }
+            let properties = parameters["properties"] as? [String: Any] ?? [:]
+            for required in (parameters["required"] as? [String]) ?? []
+            where properties[required] == nil {
+                problems.append("required property \"\(required)\" has no schema")
+            }
+        }
+        return problems
     }
     private static func authorize(_ request: inout URLRequest) {
         if let key = ServerSettings.activeAPIKey() {

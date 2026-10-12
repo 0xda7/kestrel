@@ -31,13 +31,58 @@ final class AgentLoopTests: XCTestCase {
         first.timings = ChatTimings(promptTokens: 100, generatedTokens: 50)
         var second = ChatMessage(role: "assistant", content: "b")
         second.timings = ChatTimings(promptTokens: 300, generatedTokens: 120)
-        let plain = ChatMessage(role: "user", content: "hi")
 
+        let plain = ChatMessage(role: "user", content: "hi")
         let rollup = ChatStore.usageRollup(messages: [first, second, plain])
         XCTAssertEqual(rollup?.turns, 2)
         XCTAssertEqual(rollup?.generatedTokens, 170)
         XCTAssertEqual(rollup?.peakWindow, 420)
     }
+
+    func testDynamicToolResultCapShrinksNearAFullWindow() {
+        // Roomy window: the static ceiling applies.
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 32_768, usedTokens: 0),
+                       ChatToolsService.toolResultContextLimit)
+        // Half full: a quarter of the remaining headroom, in characters.
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 16_384, usedTokens: 8_192),
+                       (16_384 - 8_192) / 4 * 4)
+        // Nearly full: floored so a tool result is never uselessly tiny.
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 16_384, usedTokens: 16_000), 2_000)
+        // Over the line (estimate drift): still the floor, never zero or negative.
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 16_384, usedTokens: 20_000), 2_000)
+    }
+
+    /// Every statically shipped tool must pass schema validation — a broken
+    /// definition would be dropped at registration, silently disabling the
+    /// tool; this pins the definitions themselves.
+    func testAllShippedToolSchemasValidate() {
+        for info in [LatchDelegateService.tool, JavaScriptSandboxService.tool] + ChatMemoryService.tools {
+            XCTAssertEqual(ChatToolsService.schemaProblems(for: info), [],
+                           "\(info.name): \(ChatToolsService.schemaProblems(for: info).joined(separator: "; "))")
+        }
+    }
+
+    func testSchemaValidationCatchesBrokenDefinitions() {
+        let broken = BuiltinToolInfo(
+            displayName: "Broken", name: "", writesData: false,
+            definition: [
+                "type": "function",
+                "function": [
+                    "name": "broken",
+                    "description": "",
+                    "parameters": [
+                        "type": "object",
+                        "properties": ["task": ["type": "string"]],
+                        "required": ["missing"],
+                    ],
+                ],
+            ])
+        let problems = ChatToolsService.schemaProblems(for: broken)
+        XCTAssertTrue(problems.contains { $0.contains("name is empty") })
+        XCTAssertTrue(problems.contains { $0.contains("description is empty") })
+        XCTAssertTrue(problems.contains { $0.contains("required property \"missing\"") })
+    }
+
 
     func testUsageRollupNilWithoutTimings() {
         XCTAssertNil(ChatStore.usageRollup(messages: [ChatMessage(role: "user", content: "hi")]))
