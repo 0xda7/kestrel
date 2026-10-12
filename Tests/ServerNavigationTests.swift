@@ -1,7 +1,7 @@
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class ServerNavigationTests: XCTestCase {
+final class ServerNavigationTests: CheckCase {
     @MainActor func testSelectedInstanceIsTheOnlyVisibleServer() {
         let navigation = ControlPanelState()
         let primary = ServerController()
@@ -23,4 +23,15 @@ final class ServerNavigationTests: XCTestCase {
         buffer.append("two\n", limit: 12, retained: 8)
         XCTAssertEqual(buffer.text, String("start\none\ntwo\n".suffix(8)))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ServerNavigationTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ServerNavigationTests",
+        instance: { ServerNavigationTests() },
+        checks: [
+            .init(name: "testSelectedInstanceIsTheOnlyVisibleServer") { $0.testSelectedInstanceIsTheOnlyVisibleServer() },
+            .init(name: "testServerLogBufferKeepsLatestOutputWhileCoalescingUIRefreshes") { $0.testServerLogBufferKeepsLatestOutputWhileCoalescingUIRefreshes() },
+        ])
 }

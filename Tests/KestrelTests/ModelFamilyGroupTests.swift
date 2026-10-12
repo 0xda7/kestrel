@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
-final class FamilyGroupTests: XCTestCase {
+import Foundation
+@testable import KestrelCore
+final class FamilyGroupTests: CheckCase {
     func testFamilyAndSize() {
         let cases: [(String, String, Double?)] = [
             ("Qwen3-8B-Q4_K_M.gguf", "Qwen", 8),
@@ -44,4 +44,14 @@ final class FamilyGroupTests: XCTestCase {
             }
         }
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension FamilyGroupTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "FamilyGroupTests",
+        instance: { FamilyGroupTests() },
+        checks: [
+            .init(name: "testFamilyAndSize") { $0.testFamilyAndSize() },
+        ])
 }

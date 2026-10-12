@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class GPUPeerGroupTests: XCTestCase {
+final class GPUPeerGroupTests: CheckCase {
     /// Measured on a Mac Pro with nine GPUs: a Vega II Duo, two bridged W6800X Duo
     /// modules and three unlinked cards.
     private let ninePack: [GPUDevice] = [
@@ -92,4 +92,21 @@ final class GPUPeerGroupTests: XCTestCase {
         XCTAssertEqual(GPUDevice(index: 0, name: "RX 6700 XT", vramMB: 12_272).vramGB, 12)
         XCTAssertEqual(GPUDevice(index: 0, name: "Vega II Duo", vramMB: 32_736).vramGB, 32)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension GPUPeerGroupTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "GPUPeerGroupTests",
+        instance: { GPUPeerGroupTests() },
+        checks: [
+            .init(name: "testLinkedGPUsGroupTogetherAndUnlinkedOnesStayOut") { $0.testLinkedGPUsGroupTogetherAndUnlinkedOnesStayOut() },
+            .init(name: "testNoGroupsWithoutALink") { $0.testNoGroupsWithoutALink() },
+            .init(name: "testLoneMemberIsNotAGroup") { $0.testLoneMemberIsNotAGroup() },
+            .init(name: "testDuoCardsCountAsOneCardEach") { $0.testDuoCardsCountAsOneCardEach() },
+            .init(name: "testNonDuoCardsAreOneGPUEach") { $0.testNonDuoCardsAreOneGPUEach() },
+            .init(name: "testModelGroupsKeepEnumerationOrder") { $0.testModelGroupsKeepEnumerationOrder() },
+            .init(name: "testOddDieCountRoundsUpToAWholeCard") { $0.testOddDieCountRoundsUpToAWholeCard() },
+            .init(name: "testVramRoundsToTheNearestGigabyte") { $0.testVramRoundsToTheNearestGigabyte() },
+        ])
 }

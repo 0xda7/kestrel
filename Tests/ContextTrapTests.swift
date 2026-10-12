@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 /// Context-trap regression tests: `contextAutomatic` must compute a window
 /// that fits (never a silent 16384 alias), and the pre-send guard's estimator
 /// must catch requests that cannot fit before the engine answers send_error.
-final class ContextTrapTests: XCTestCase {
+final class ContextTrapTests: CheckCase {
     private func makeSettings(ctx: Int, automatic: Bool) -> ServerSettings {
         var s = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 8080,
                                ngl: 99, ncmoe: 24, ctx: ctx, threads: 6, flashAttn: "auto",
@@ -46,4 +46,17 @@ final class ContextTrapTests: XCTestCase {
         XCTAssertTrue(notice.contains("context window"))
         XCTAssertTrue(notice.contains("ventana de contexto"))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ContextTrapTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ContextTrapTests",
+        instance: { ContextTrapTests() },
+        checks: [
+            .init(name: "testManualContextPassesThrough") { $0.testManualContextPassesThrough() },
+            .init(name: "testAutomaticContextNeverExceedsTheCeiling") { $0.testAutomaticContextNeverExceedsTheCeiling() },
+            .init(name: "testEstimatedRequestTokensCountsTextAndSystem") { $0.testEstimatedRequestTokensCountsTextAndSystem() },
+            .init(name: "testOverflowNoticeNamesBothLanguagesAndNumbers") { $0.testOverflowNoticeNamesBothLanguagesAndNumbers() },
+        ])
 }

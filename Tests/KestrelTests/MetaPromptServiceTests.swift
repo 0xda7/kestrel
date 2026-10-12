@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class MetaPromptServiceTests: XCTestCase {
+final class MetaPromptServiceTests: CheckCase {
     /// Package root, derived from this file's compile-time path
     /// (Tests/KestrelTests/MetaPromptServiceTests.swift).
     static var repoRoot: String {
@@ -131,4 +131,18 @@ final class MetaPromptServiceTests: XCTestCase {
         XCTAssertFalse(trimmed.contains("pi excedió su presupuesto"),
                        "live run hit the budget guard")
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension MetaPromptServiceTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "MetaPromptServiceTests",
+        instance: { MetaPromptServiceTests() },
+        checks: [
+            .init(name: "testSystemPromptMatchesStagedFileByteForByte") { try $0.testSystemPromptMatchesStagedFileByteForByte() },
+            .init(name: "testArgvShapeIsConfined") { $0.testArgvShapeIsConfined() },
+            .init(name: "testAssembledPromptFeedsVariablesLikeLLMSpace") { $0.testAssembledPromptFeedsVariablesLikeLLMSpace() },
+            .init(name: "testEmptyTaskDescriptionReturnsFailureText") { await $0.testEmptyTaskDescriptionReturnsFailureText() },
+            .init(name: "testLivePromptAuthoringRun") { await try $0.testLivePromptAuthoringRun() },
+        ])
 }

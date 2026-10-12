@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class MTPHeadDiscoveryTests: XCTestCase {
+final class MTPHeadDiscoveryTests: CheckCase {
     func testHeadAndModelShareAStem() {
         let model = ServerSettings.mtpStem("Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf")
         for head in ["mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf",
@@ -41,7 +41,7 @@ final class MTPHeadDiscoveryTests: XCTestCase {
 }
 
 /// The launch environment for a split, written straight from the settings the UI exposes.
-final class SplitEnvironmentTests: XCTestCase {
+final class SplitEnvironmentTests: CheckCase {
     private func settings(devices: Int, mode: String, group: Int) -> ServerSettings {
         var s = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 8080,
                                ngl: 99, ncmoe: 0, ctx: 8192, threads: 6, flashAttn: "auto",
@@ -93,4 +93,30 @@ final class SplitEnvironmentTests: XCTestCase {
         XCTAssertNil(s.environment["KESTREL_MGPU_PEER"])
         XCTAssertNil(s.environment["KESTREL_MGPU_TENSOR_GROUP"])
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension MTPHeadDiscoveryTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "MTPHeadDiscoveryTests",
+        instance: { MTPHeadDiscoveryTests() },
+        checks: [
+            .init(name: "testHeadAndModelShareAStem") { $0.testHeadAndModelShareAStem() },
+            .init(name: "testADifferentModelDoesNotMatch") { $0.testADifferentModelDoesNotMatch() },
+            .init(name: "testHeadsAreNotOfferedAsModels") { $0.testHeadsAreNotOfferedAsModels() },
+            .init(name: "testFlashNextTakesItsOwnDraftWidth") { $0.testFlashNextTakesItsOwnDraftWidth() },
+            .init(name: "testDraftWidthFollowsTheCardLaneWidth") { $0.testDraftWidthFollowsTheCardLaneWidth() },
+        ])
+}
+
+extension SplitEnvironmentTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SplitEnvironmentTests",
+        instance: { SplitEnvironmentTests() },
+        checks: [
+            .init(name: "testTensorSplitCarriesTheBridgeAndTheFastHandover") { $0.testTensorSplitCarriesTheBridgeAndTheFastHandover() },
+            .init(name: "testGroupsOnlyApplyWhenTheyDivideTheSplit") { $0.testGroupsOnlyApplyWhenTheyDivideTheSplit() },
+            .init(name: "testEachArrangementReachesTheEngineWhole") { $0.testEachArrangementReachesTheEngineWhole() },
+            .init(name: "testALayerSplitLeavesTheBridgeOut") { $0.testALayerSplitLeavesTheBridgeOut() },
+        ])
 }

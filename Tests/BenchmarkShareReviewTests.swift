@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class BenchmarkShareReviewTests: XCTestCase {
+final class BenchmarkShareReviewTests: CheckCase {
     func testReviewExtractsReadableBenchmarkSummaryWithoutChangingExactJSON() throws {
         let object: [String: Any] = [
             "model": [
@@ -42,4 +42,14 @@ final class BenchmarkShareReviewTests: XCTestCase {
         XCTAssertEqual(review.exactJSON, String(data: payload, encoding: .utf8))
         XCTAssertFalse(review.formattedJSON.contains("benchmark output"))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension BenchmarkShareReviewTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "BenchmarkShareReviewTests",
+        instance: { BenchmarkShareReviewTests() },
+        checks: [
+            .init(name: "testReviewExtractsReadableBenchmarkSummaryWithoutChangingExactJSON") { try $0.testReviewExtractsReadableBenchmarkSummaryWithoutChangingExactJSON() },
+        ])
 }

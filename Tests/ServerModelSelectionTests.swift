@@ -1,7 +1,7 @@
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class ServerModelSelectionTests: XCTestCase {
+final class ServerModelSelectionTests: CheckCase {
     @MainActor func testInstanceSelectionDoesNotChangeOtherServerOrGlobals() {
         let global = ServerSettings.fromDefaults()
         let first = ServerController()
@@ -82,4 +82,18 @@ final class ServerModelSelectionTests: XCTestCase {
         XCTAssertEqual(settings.flashAttn, "on")
         XCTAssertFalse(settings.faAmd)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ServerModelSelectionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ServerModelSelectionTests",
+        instance: { ServerModelSelectionTests() },
+        checks: [
+            .init(name: "testInstanceSelectionDoesNotChangeOtherServerOrGlobals") { $0.testInstanceSelectionDoesNotChangeOtherServerOrGlobals() },
+            .init(name: "testPinnedModelSurvivesGlobalChangesAndPersistence") { try $0.testPinnedModelSurvivesGlobalChangesAndPersistence() },
+            .init(name: "testRunningAndStartingInstancesRejectModelChanges") { $0.testRunningAndStartingInstancesRejectModelChanges() },
+            .init(name: "testLegacyFullProfileKeepsItsOverrides") { $0.testLegacyFullProfileKeepsItsOverrides() },
+            .init(name: "testPinnedBasicSettingsPreserveAutomaticContextAndFlashAttention") { try $0.testPinnedBasicSettingsPreserveAutomaticContextAndFlashAttention() },
+        ])
 }

@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class SpecMetricsTests: XCTestCase {
+final class SpecMetricsTests: CheckCase {
     /// Verbatim from llama-server 84e908c62 running a 4B with an MTP head.
     private let sample = """
     # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
@@ -78,4 +78,18 @@ final class SpecMetricsTests: XCTestCase {
         XCTAssertEqual(m.drafts, 0)
         XCTAssertFalse(m.ran)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension SpecMetricsTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SpecMetricsTests",
+        instance: { SpecMetricsTests() },
+        checks: [
+            .init(name: "testParsesCountersAndPerPositionBreakdown") { $0.testParsesCountersAndPerPositionBreakdown() },
+            .init(name: "testCountersAtZeroDoNotCountAsRun") { $0.testCountersAtZeroDoNotCountAsRun() },
+            .init(name: "testSkipsCommentsAndUnrelatedMetrics") { $0.testSkipsCommentsAndUnrelatedMetrics() },
+            .init(name: "testMissingPositionKeepsIndexAlignment") { $0.testMissingPositionKeepsIndexAlignment() },
+            .init(name: "testGarbageIsIgnoredRatherThanCrashing") { $0.testGarbageIsIgnoredRatherThanCrashing() },
+        ])
 }

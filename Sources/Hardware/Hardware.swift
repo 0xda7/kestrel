@@ -147,7 +147,10 @@ struct ModelSpec {
     }
 
     /// For local models without catalog metadata
-    static func estimated(fileBytes: Int64, isMoE: Bool, name: String = "", path: String = "") -> ModelSpec {
+    /// Defaults are deliberately absent: both call sites pass every argument,
+    /// and a defaulted parameter generates a default-argument accessor that
+    /// -enable-testing does not emit for cross-module testable imports.
+    static func estimated(fileBytes: Int64, isMoE: Bool, name: String, path: String) -> ModelSpec {
         let gb = Double(fileBytes) / 1_073_741_824
         // Q4 is roughly 0.57 GB per billion parameters
         let params = gb / 0.57

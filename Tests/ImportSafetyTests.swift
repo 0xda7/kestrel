@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 /// KES-06/KES-07 regression tests: imports never adopt process-spawning
 /// configuration or tool working directories without the operator seeing them.
-final class ImportSafetyTests: XCTestCase {
+final class ImportSafetyTests: CheckCase {
     private var suite: UserDefaults!
 
     override func setUp() {
@@ -61,4 +61,17 @@ final class ImportSafetyTests: XCTestCase {
                      "a transcript must not aim the agent tools at an arbitrary directory (KES-07)")
         XCTAssertNil(result[1].workingDirectory)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ImportSafetyTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ImportSafetyTests",
+        instance: { ImportSafetyTests() },
+        checks: [
+            .init(name: "testProcessSpawningSummaryListsBinaryOverride") { try $0.testProcessSpawningSummaryListsBinaryOverride() },
+            .init(name: "testProcessSpawningSummaryListsMCPCommands") { try $0.testProcessSpawningSummaryListsMCPCommands() },
+            .init(name: "testProcessSpawningSummaryEmptyForBenignConfig") { $0.testProcessSpawningSummaryEmptyForBenignConfig() },
+            .init(name: "testImportedWorkingDirectoryIsNeutralized") { $0.testImportedWorkingDirectoryIsNeutralized() },
+        ])
 }

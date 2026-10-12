@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 /// LatchBridge pure logic: the generated config's internal consistency (every
 /// id in providerOrder has a rule; the default selection names a real
 /// provider), the local-engine default, and the one-time import that turns a
 /// hand-authored latch config into real Kestrel routes — without importing
 /// the loopback engine endpoint as a route.
-final class LatchBridgeTests: XCTestCase {
+final class LatchBridgeTests: CheckCase {
     private func entries() -> [LatchBridge.ProviderEntry] {
         [
             LatchBridge.ProviderEntry(id: "z-ai", baseURL: "https://api.z.ai/v1",
@@ -89,4 +89,18 @@ final class LatchBridgeTests: XCTestCase {
     func testImportIgnoresGarbage() {
         XCTAssertTrue(LatchBridge.importableRoutes(from: Data("not json".utf8)).isEmpty)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension LatchBridgeTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "LatchBridgeTests",
+        instance: { LatchBridgeTests() },
+        checks: [
+            .init(name: "testGeneratedJSONIsInternallyConsistent") { try $0.testGeneratedJSONIsInternallyConsistent() },
+            .init(name: "testDefaultSelectionFallsBackToFirstEntry") { try $0.testDefaultSelectionFallsBackToFirstEntry() },
+            .init(name: "testUnknownDefaultIDFallsBack") { try $0.testUnknownDefaultIDFallsBack() },
+            .init(name: "testImportSkipsLoopbackAndKeepsRemote") { try $0.testImportSkipsLoopbackAndKeepsRemote() },
+            .init(name: "testImportIgnoresGarbage") { $0.testImportIgnoresGarbage() },
+        ])
 }

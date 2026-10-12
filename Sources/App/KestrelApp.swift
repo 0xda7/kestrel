@@ -42,14 +42,16 @@ private func defaultsMigrationExtraArgs() -> String? {
     UserDefaults.standard.string(forKey: SettingsKeys.extraArgs)
 }
 
-@main
-struct KestrelApp: App {
+// Not @main: the executable target is a two-line launcher (Sources/Main)
+// that calls KestrelApp.main(), so the app compiles as a library the check
+// suite can @testable-import. Public so the launcher can name it.
+public struct KestrelApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let obj = AppObjects.shared
     @ObservedObject private var loc = AppObjects.shared.loc
     @AppStorage(SettingsKeys.menuBarIcon) private var menuBarIcon = true
 
-    init() {
+    public init() {
         // Release VRAM held by an engine orphaned by a previous force-quit.
         EngineLock.reapOrphans()
 
@@ -114,7 +116,7 @@ struct KestrelApp: App {
         chatFontScale = ChatFont.clamp(value)
     }
 
-    var body: some Scene {
+    public var body: some Scene {
         // Main window: the chat. A single Window (not WindowGroup) keeps ⌘N
         // for "new conversation" instead of "new window".
         Window("Kestrel", id: "chat") {

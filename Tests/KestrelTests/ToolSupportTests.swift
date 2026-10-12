@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class ToolSupportTests: XCTestCase {
+final class ToolSupportTests: CheckCase {
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: SettingsKeys.toolsUnsupportedModels)
@@ -47,4 +47,17 @@ final class ToolSupportTests: XCTestCase {
         XCTAssertFalse(ToolSupport.isBlocked(nil))
         XCTAssertFalse(ToolSupport.isBlocked(""))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ToolSupportTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ToolSupportTests",
+        instance: { ToolSupportTests() },
+        checks: [
+            .init(name: "testBlocksOnlyTheModelThatFailed") { $0.testBlocksOnlyTheModelThatFailed() },
+            .init(name: "testBlockingTwiceKeepsOneEntry") { $0.testBlockingTwiceKeepsOneEntry() },
+            .init(name: "testUnblockRestoresTools") { $0.testUnblockRestoresTools() },
+            .init(name: "testMissingModelIsNeverBlocked") { $0.testMissingModelIsNeverBlocked() },
+        ])
 }

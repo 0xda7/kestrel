@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class WhisperTranscriptTests: XCTestCase {
+final class WhisperTranscriptTests: CheckCase {
     func testWhisperRuntimeForcesAMDFlashAttentionAndSafeMetalPolicy() {
         let environment = SpeechDictationController.runtimeEnvironment(base: [:])
         XCTAssertEqual(environment["KESTREL_FA_AMD"], "1")
@@ -342,7 +342,7 @@ final class WhisperTranscriptTests: XCTestCase {
     }
 }
 
-final class DynamicMoeOptimizationTests: XCTestCase {
+final class DynamicMoeOptimizationTests: CheckCase {
     func testCandidateSlotsFollowEachModelsExpertCount() {
         let qwen = DynamicMoeModelInfo(layerCount: 40, expertCount: 256, activeExpertCount: 8)
         XCTAssertEqual(BenchmarkController.dynamicMoeCandidateSlots(model: qwen, maximum: 75),
@@ -373,7 +373,7 @@ final class DynamicMoeOptimizationTests: XCTestCase {
 
 // MARK: - Memory estimator
 
-final class EstimatorTests: XCTestCase {
+final class EstimatorTests: CheckCase {
     /// Reference hardware: the development machine (RX 6700 XT 12 GB + 32 GB RAM).
     private let referenceHW = HardwareInfo(
         cpuBrand: "Test CPU", physicalCores: 6, logicalCores: 12,
@@ -437,7 +437,7 @@ final class EstimatorTests: XCTestCase {
 
     func testDenseModelThatFitsIsIdeal() {
         // Qwen3-8B Q4: fits entirely in 12 GB
-        let spec = ModelSpec(fileGB: 4.7, paramsB: 8.2, layers: 36, isMoE: false)
+        let spec = ModelSpec(fileGB: 4.7, paramsB: 8.2, layers: 36, isMoE: false, activeParamsB: 0, kvBytesPerToken: 0)
         let est = Estimator.estimate(spec: spec, hw: referenceHW)
         XCTAssertEqual(est.level, .ideal)
         XCTAssertEqual(est.suggestedNcmoe, 0)
@@ -446,14 +446,14 @@ final class EstimatorTests: XCTestCase {
 
     func testLargeDenseModelDoesNotFit() {
         // 27B dense (14.7 GB Q4) on 12 GB VRAM: never "ideal"
-        let spec = ModelSpec(fileGB: 14.7, paramsB: 27, layers: 64, isMoE: false)
+        let spec = ModelSpec(fileGB: 14.7, paramsB: 27, layers: 64, isMoE: false, activeParamsB: 0, kvBytesPerToken: 0)
         let est = Estimator.estimate(spec: spec, hw: referenceHW)
         XCTAssertNotEqual(est.level, .ideal)
     }
 
     func testMoEModelMatchesEmpiricalNcmoe() {
         // Qwen3.6-35B-A3B: the measured stable value on this hardware is ncmoe in the low-to-mid 20s
-        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true)
+        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true, activeParamsB: 0, kvBytesPerToken: 0)
         let est = Estimator.estimate(spec: spec, hw: referenceHW)
         XCTAssertEqual(est.level, .good)
         XCTAssertTrue((20...28).contains(est.suggestedNcmoe),
@@ -464,7 +464,7 @@ final class EstimatorTests: XCTestCase {
     func testNcmoeOverrideDrivesEstimate() {
         // A user-set offload must be mirrored in the estimate: more layers on CPU
         // means a lower suggested ncmoe reflected back and a slower expected speed.
-        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true)
+        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true, activeParamsB: 0, kvBytesPerToken: 0)
         let auto = Estimator.estimate(spec: spec, hw: referenceHW)
         let forced = Estimator.estimate(spec: spec, hw: referenceHW, ncmoeOverride: 36)
         XCTAssertEqual(forced.suggestedNcmoe, 36)
@@ -478,7 +478,7 @@ final class EstimatorTests: XCTestCase {
             cpuBrand: "Test", physicalCores: 4, logicalCores: 8,
             ramGB: 8, arch: "x86_64", model: "", osVersion: "",
             gpus: [GPUDevice(index: 0, name: "GPU", vramMB: 8192)])
-        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true)
+        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true, activeParamsB: 0, kvBytesPerToken: 0)
         XCTAssertEqual(Estimator.estimate(spec: spec, hw: smallRAM).level, .no)
     }
 
@@ -490,7 +490,7 @@ final class EstimatorTests: XCTestCase {
             ramGB: 96, arch: "x86_64", model: "", osVersion: "",
             gpus: [GPUDevice(index: 0, name: "GPU0", vramMB: 16368),
                    GPUDevice(index: 1, name: "GPU1", vramMB: 16368)])
-        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true)
+        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true, activeParamsB: 0, kvBytesPerToken: 0)
         XCTAssertNotEqual(Estimator.estimate(spec: spec, hw: dualGPU).level, .ideal)
         let split = Estimator.estimate(spec: spec, hw: dualGPU, multiGPU: true)
         XCTAssertEqual(split.level, .ideal)
@@ -507,7 +507,7 @@ final class EstimatorTests: XCTestCase {
                    GPUDevice(index: 1, name: "GPU1", vramMB: 16368),
                    GPUDevice(index: 2, name: "Intel UHD 630", vramMB: 1024, isIntegrated: true)])
         XCTAssertEqual(withIGPU.combinedVramGB, 2 * 16368.0 / 1024, accuracy: 0.01)
-        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true)
+        let spec = ModelSpec(fileGB: 19.5, paramsB: 35.4, layers: 40, isMoE: true, activeParamsB: 0, kvBytesPerToken: 0)
         let split = Estimator.estimate(spec: spec, hw: withIGPU, multiGPU: true)
         XCTAssertEqual(split.level, .ideal)
         XCTAssertEqual(split.suggestedNcmoe, 0)
@@ -520,13 +520,13 @@ final class EstimatorTests: XCTestCase {
     }
 
     func testEstimatedSpecFromFileSize() {
-        let spec = ModelSpec.estimated(fileBytes: 5_000_000_000, isMoE: false)
+        let spec = ModelSpec.estimated(fileBytes: 5_000_000_000, isMoE: false, name: "", path: "")
         XCTAssertEqual(spec.fileGB, 4.66, accuracy: 0.05)
         XCTAssertGreaterThan(spec.paramsB, 5)
     }
 
     func testKVQuantizationShrinksTheEstimate() {
-        let spec = ModelSpec(fileGB: 4.7, paramsB: 8.2, layers: 36, isMoE: false)
+        let spec = ModelSpec(fileGB: 4.7, paramsB: 8.2, layers: 36, isMoE: false, activeParamsB: 0, kvBytesPerToken: 0)
         let f16 = Estimator.estimate(spec: spec, hw: referenceHW, ctx: 32768)
         let quant = Estimator.estimate(spec: spec, hw: referenceHW, ctx: 32768,
                                        kvScale: Estimator.kvTypeScale("q8_0"))
@@ -536,7 +536,7 @@ final class EstimatorTests: XCTestCase {
     }
 }
 
-final class ResumableDownloadTests: XCTestCase {
+final class ResumableDownloadTests: CheckCase {
     private final class RangeProtocol: URLProtocol, @unchecked Sendable {
         static let payload = Data((0..<(256 * 1024)).map { UInt8($0 % 251) })
         static let lock = NSLock()
@@ -674,7 +674,7 @@ final class ResumableDownloadTests: XCTestCase {
     }
 }
 
-final class DflashPolicyTests: XCTestCase {
+final class DflashPolicyTests: CheckCase {
     func testAutoAllowsDenseAndFullGPUModels() {
         XCTAssertTrue(DflashPolicy.autoEligible(isMoE: true, ncmoe: 1))
         XCTAssertTrue(DflashPolicy.autoEligible(isMoE: true, ncmoe: 0))
@@ -689,7 +689,7 @@ final class DflashPolicyTests: XCTestCase {
 
 // MARK: - Image generation
 
-final class ImageGenTests: XCTestCase {
+final class ImageGenTests: CheckCase {
     private func hw(vramMB: Int) -> HardwareInfo {
         HardwareInfo(cpuBrand: "CPU", physicalCores: 6, logicalCores: 12,
                      ramGB: 32, arch: "x86_64", model: "", osVersion: "",
@@ -942,7 +942,7 @@ final class ImageGenTests: XCTestCase {
 
 // MARK: - Server configuration
 
-final class ServerSettingsTests: XCTestCase {
+final class ServerSettingsTests: CheckCase {
     private func makeSettings() -> ServerSettings {
         ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 8080,
                        ngl: 99, ncmoe: 24, ctx: 16384, threads: 6, flashAttn: "auto",
@@ -1641,7 +1641,7 @@ final class ServerSettingsTests: XCTestCase {
 
 // MARK: - Chat
 
-final class ChatMessageTests: XCTestCase {
+final class ChatMessageTests: CheckCase {
     func testInlineMathDetectionSupportsDollarAndParenthesizedForms() {
         XCTAssertTrue(RichText.containsInlineMath("Energy is $E = mc^2$."))
         XCTAssertTrue(RichText.containsInlineMath(#"Energy is \(E = mc^2\)."#))
@@ -1992,7 +1992,7 @@ final class ChatMessageTests: XCTestCase {
 }
 
 @MainActor
-final class LiveStreamTests: XCTestCase {
+final class LiveStreamTests: CheckCase {
     func testCollapsedReasoningDoesNotPublishGrowingText() {
         let live = LiveStream()
 
@@ -2056,7 +2056,7 @@ final class LiveStreamTests: XCTestCase {
 
 // MARK: - Auto-compaction
 
-final class CompactionTests: XCTestCase {
+final class CompactionTests: CheckCase {
     private func makeMessages(_ turns: Int) -> [ChatMessage] {
         (0..<turns).flatMap { i in
             [ChatMessage(role: "user", content: "pregunta \(i)"),
@@ -2208,7 +2208,7 @@ final class CompactionTests: XCTestCase {
 
 // MARK: - Benchmarks and profiles
 
-final class BenchAndProfileTests: XCTestCase {
+final class BenchAndProfileTests: CheckCase {
     func testBenchmarkVRAMFractionUsesBufferSizeInsteadOfDeviceIndex() throws {
         let log = """
         ggml_metal_device_init: 12271 MiB free
@@ -2357,7 +2357,7 @@ final class BenchAndProfileTests: XCTestCase {
 // MARK: - Documentation and localization
 
 @MainActor
-final class LocalizationTests: XCTestCase {
+final class LocalizationTests: CheckCase {
     func testDocsHaveSameSectionsInBothLanguages() {
         XCTAssertEqual(DocsContent.es.count, DocsContent.en.count)
         XCTAssertGreaterThanOrEqual(DocsContent.es.count, 10)
@@ -2403,7 +2403,7 @@ final class LocalizationTests: XCTestCase {
 
 // MARK: - Shell-words parsing
 
-final class ShellWordsTests: XCTestCase {
+final class ShellWordsTests: CheckCase {
     func testPlainSplit() {
         XCTAssertEqual(ShellWords.split("-a 1  -b 2"), ["-a", "1", "-b", "2"])
     }
@@ -2426,7 +2426,7 @@ final class ShellWordsTests: XCTestCase {
 
 // MARK: - Updates
 
-final class UpdateCheckerTests: XCTestCase {
+final class UpdateCheckerTests: CheckCase {
     func testVersionComparison() {
         XCTAssertTrue(UpdateChecker.isVersion("0.82", newerThan: "0.81.1"))
         XCTAssertTrue(UpdateChecker.isVersion("1.0", newerThan: "0.81.1"))
@@ -2440,7 +2440,7 @@ final class UpdateCheckerTests: XCTestCase {
 // MARK: - Catalog
 
 @MainActor
-final class CatalogTests: XCTestCase {
+final class CatalogTests: CheckCase {
     private let referenceHW = HardwareInfo(
         cpuBrand: "Test", physicalCores: 6, logicalCores: 12,
         ramGB: 32, arch: "x86_64", model: "", osVersion: "",
@@ -2473,7 +2473,7 @@ final class CatalogTests: XCTestCase {
 
 // MARK: - Router mode
 
-final class RouterModeTests: XCTestCase {
+final class RouterModeTests: CheckCase {
     private func makeSettings(routerMode: Bool = true) -> ServerSettings {
         var s = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/unused.gguf", port: 8099,
                                 ngl: 99, ncmoe: 0, ctx: 8192, threads: 6, flashAttn: "auto",
@@ -2528,7 +2528,7 @@ final class RouterModeTests: XCTestCase {
     }
 }
 
-final class ConversationDecodingTests: XCTestCase {
+final class ConversationDecodingTests: CheckCase {
     // New Conversation fields must be `Type?`, not just `= default`: the
     // synthesized decoder still requires the key otherwise.
     func testDecodesConversationSavedBeforePinnedExisted() throws {
@@ -2544,7 +2544,7 @@ final class ConversationDecodingTests: XCTestCase {
     }
 }
 
-final class SystemPromptResolutionTests: XCTestCase {
+final class SystemPromptResolutionTests: CheckCase {
     func testChatPromptWinsOverProjectAndGlobal() {
         XCTAssertEqual(ChatStore.resolvePrompt(chat: "chat", project: "proj", global: "glob"), "chat")
     }
@@ -2560,7 +2560,7 @@ final class SystemPromptResolutionTests: XCTestCase {
     }
 }
 
-final class ReleaseNotesRangeTests: XCTestCase {
+final class ReleaseNotesRangeTests: CheckCase {
     let all = [("0.81.66", "c"), ("0.81.65", "b"), ("0.81.64", "a"), ("0.81.63", "z")]
 
     func testShowsEverythingNewerThanCurrentNewestFirst() {
@@ -2574,7 +2574,7 @@ final class ReleaseNotesRangeTests: XCTestCase {
     }
 }
 
-final class SmartTitleTests: XCTestCase {
+final class SmartTitleTests: CheckCase {
     func testStripsMarkdownAndCutsAtWordBoundary() {
         XCTAssertEqual(ChatStore.smartTitle(from: "## Hola mundo"), "Hola mundo")
         let long = "Explícame paso a paso cómo funciona el prefill descompuesto en tarjetas AMD"
@@ -2589,7 +2589,7 @@ final class SmartTitleTests: XCTestCase {
     }
 }
 
-final class SpeedEstimateTests: XCTestCase {
+final class SpeedEstimateTests: CheckCase {
     // 12 GB VRAM / 32 GB RAM, like the dev machine.
     private let hw = HardwareInfo(
         cpuBrand: "Test CPU", physicalCores: 6, logicalCores: 12,
@@ -2602,22 +2602,22 @@ final class SpeedEstimateTests: XCTestCase {
     }
 
     func testSmallerQuantEstimatesFaster() {
-        let big = ModelSpec(fileGB: 19.5, paramsB: 35, layers: 48, isMoE: true, activeParamsB: 3)
-        let small = ModelSpec(fileGB: 10.0, paramsB: 35, layers: 48, isMoE: true, activeParamsB: 3)
+        let big = ModelSpec(fileGB: 19.5, paramsB: 35, layers: 48, isMoE: true, activeParamsB: 3, kvBytesPerToken: 0)
+        let small = ModelSpec(fileGB: 10.0, paramsB: 35, layers: 48, isMoE: true, activeParamsB: 3, kvBytesPerToken: 0)
         let sBig = Estimator.estimate(spec: big, hw: hw).expectedSpeed
         let sSmall = Estimator.estimate(spec: small, hw: hw).expectedSpeed
         XCTAssertGreaterThan(tgHi(sSmall), tgHi(sBig))
     }
 
     func testMoreActiveParamsEstimatesSlower() {
-        let a3 = ModelSpec(fileGB: 17.0, paramsB: 30, layers: 48, isMoE: true, activeParamsB: 3)
-        let a4 = ModelSpec(fileGB: 17.0, paramsB: 30, layers: 48, isMoE: true, activeParamsB: 4)
+        let a3 = ModelSpec(fileGB: 17.0, paramsB: 30, layers: 48, isMoE: true, activeParamsB: 3, kvBytesPerToken: 0)
+        let a4 = ModelSpec(fileGB: 17.0, paramsB: 30, layers: 48, isMoE: true, activeParamsB: 4, kvBytesPerToken: 0)
         XCTAssertGreaterThan(tgHi(Estimator.estimate(spec: a3, hw: hw).expectedSpeed),
                              tgHi(Estimator.estimate(spec: a4, hw: hw).expectedSpeed))
     }
 }
 
-final class ModelNameTests: XCTestCase {
+final class ModelNameTests: CheckCase {
     func testDenseWithFinetune() {
         let m = ModelName("Qwen3-8B-Q4_K_M.gguf")
         XCTAssertEqual(m.title, "Qwen3 8B")
@@ -2750,4 +2750,386 @@ extension ServerSettingsTests {
         XCTAssertTrue(hint.contains("por capas"), hint)
         XCTAssertTrue(hint.contains("by layers"), hint)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension WhisperTranscriptTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "WhisperTranscriptTests",
+        instance: { WhisperTranscriptTests() },
+        checks: [
+            .init(name: "testWhisperRuntimeForcesAMDFlashAttentionAndSafeMetalPolicy") { $0.testWhisperRuntimeForcesAMDFlashAttentionAndSafeMetalPolicy() },
+            .init(name: "testWhisperCatalogDefaultsToTurboAndHasUniqueFiles") { $0.testWhisperCatalogDefaultsToTurboAndHasUniqueFiles() },
+            .init(name: "testNormalizesWhisperTextOutput") { $0.testNormalizesWhisperTextOutput() },
+            .init(name: "testMicrophoneTranscriptCollapsesInternalLineBreaks") { $0.testMicrophoneTranscriptCollapsesInternalLineBreaks() },
+            .init(name: "testBlankAudioMarkerProducesNoTranscript") { $0.testBlankAudioMarkerProducesNoTranscript() },
+            .init(name: "testTimestampedJSONBecomesChatReadyText") { try $0.testTimestampedJSONBecomesChatReadyText() },
+            .init(name: "testPersistentServerJSONBecomesChatReadyText") { $0.testPersistentServerJSONBecomesChatReadyText() },
+            .init(name: "testSpeechPreferencesHaveStablePersistedValues") { $0.testSpeechPreferencesHaveStablePersistedValues() },
+            .init(name: "testSubtitleRoundTripPreservesTimingAndSingleLineText") { $0.testSubtitleRoundTripPreservesTimingAndSingleLineText() },
+            .init(name: "testAudioStudioPreferencesHaveStableValues") { $0.testAudioStudioPreferencesHaveStableValues() },
+            .init(name: "testAudioStudioRunsWhisperThroughCalibratedSileroVAD") { $0.testAudioStudioRunsWhisperThroughCalibratedSileroVAD() },
+            .init(name: "testAudioStudioCanUseNativeVADDefaultsWithoutCalibration") { $0.testAudioStudioCanUseNativeVADDefaultsWithoutCalibration() },
+            .init(name: "testAudioStudioCanDisableVAD") { $0.testAudioStudioCanDisableVAD() },
+            .init(name: "testCurrentSubtitleFollowsPlaybackPositionAndRespectsGaps") { $0.testCurrentSubtitleFollowsPlaybackPositionAndRespectsGaps() },
+            .init(name: "testSubtitleTranslationUsesAuthenticationAndStructuredJSON") { try $0.testSubtitleTranslationUsesAuthenticationAndStructuredJSON() },
+            .init(name: "testSubtitleTranslationCreatesOneRequestPerSegment") { $0.testSubtitleTranslationCreatesOneRequestPerSegment() },
+            .init(name: "testTranslationContextCarriesNeighboringSourceAndPriorTerminology") { $0.testTranslationContextCarriesNeighboringSourceAndPriorTerminology() },
+            .init(name: "testPlainTextCreatesParagraphsFromLongPauses") { $0.testPlainTextCreatesParagraphsFromLongPauses() },
+            .init(name: "testAudioProjectRoundTripPreservesBothTracksAndTranslationSettings") { try $0.testAudioProjectRoundTripPreservesBothTracksAndTranslationSettings() },
+            .init(name: "testSubtitleTranslationParsesEveryExpectedSegment") { try $0.testSubtitleTranslationParsesEveryExpectedSegment() },
+            .init(name: "testSubtitleTranslationRejectsMissingSegmentsWithSpecificError") { try $0.testSubtitleTranslationRejectsMissingSegmentsWithSpecificError() },
+            .init(name: "testSubtitleTranslationRejectsGrosslyExpandedSegment") { try $0.testSubtitleTranslationRejectsGrosslyExpandedSegment() },
+            .init(name: "testAudioVADProfilesBecomeProgressivelyStricter") { $0.testAudioVADProfilesBecomeProgressivelyStricter() },
+            .init(name: "testCustomVADCalibrationIsClampedBeforeLaunchingWhisper") { $0.testCustomVADCalibrationIsClampedBeforeLaunchingWhisper() },
+            .init(name: "testCustomVADPreferencesPersistThroughSettingsKeys") { $0.testCustomVADPreferencesPersistThroughSettingsKeys() },
+            .init(name: "testAudioVADDefaultsToNativeWhisperValues") { $0.testAudioVADDefaultsToNativeWhisperValues() },
+            .init(name: "testWhisperVADModelMatchesUpstreamArtifact") { $0.testWhisperVADModelMatchesUpstreamArtifact() },
+        ])
+}
+
+extension DynamicMoeOptimizationTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "DynamicMoeOptimizationTests",
+        instance: { DynamicMoeOptimizationTests() },
+        checks: [
+            .init(name: "testCandidateSlotsFollowEachModelsExpertCount") { $0.testCandidateSlotsFollowEachModelsExpertCount() },
+            .init(name: "testHotMapValidatorAcceptsLegacyAndAdaptiveCounts") { try $0.testHotMapValidatorAcceptsLegacyAndAdaptiveCounts() },
+        ])
+}
+
+extension EstimatorTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "EstimatorTests",
+        instance: { EstimatorTests() },
+        checks: [
+            .init(name: "testDflashPlannerUsesNcmoeToProtectVRAM") { $0.testDflashPlannerUsesNcmoeToProtectVRAM() },
+            .init(name: "testDflashPlannerRejectsContextWhoseFixedBuffersDoNotFit") { $0.testDflashPlannerRejectsContextWhoseFixedBuffersDoNotFit() },
+            .init(name: "testDflashPlannerAccountsForEightKContext") { $0.testDflashPlannerAccountsForEightKContext() },
+            .init(name: "testDflashPlannerAllowsThirtyTwoKWhenVRAMIsLargeEnough") { $0.testDflashPlannerAllowsThirtyTwoKWhenVRAMIsLargeEnough() },
+            .init(name: "testDflashPlannerCanSelectPartialDraftOffload") { $0.testDflashPlannerCanSelectPartialDraftOffload() },
+            .init(name: "testDenseModelThatFitsIsIdeal") { $0.testDenseModelThatFitsIsIdeal() },
+            .init(name: "testLargeDenseModelDoesNotFit") { $0.testLargeDenseModelDoesNotFit() },
+            .init(name: "testMoEModelMatchesEmpiricalNcmoe") { $0.testMoEModelMatchesEmpiricalNcmoe() },
+            .init(name: "testNcmoeOverrideDrivesEstimate") { $0.testNcmoeOverrideDrivesEstimate() },
+            .init(name: "testMoETooBigForRAMIsRejected") { $0.testMoETooBigForRAMIsRejected() },
+            .init(name: "testMoEFitsFullyAcrossMultiGPU") { $0.testMoEFitsFullyAcrossMultiGPU() },
+            .init(name: "testIntegratedGPUExcludedFromSplitBudget") { $0.testIntegratedGPUExcludedFromSplitBudget() },
+            .init(name: "testEstimatedSpecFromFileSize") { $0.testEstimatedSpecFromFileSize() },
+            .init(name: "testKVQuantizationShrinksTheEstimate") { $0.testKVQuantizationShrinksTheEstimate() },
+        ])
+}
+
+extension ResumableDownloadTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ResumableDownloadTests",
+        instance: { ResumableDownloadTests() },
+        checks: [
+            .init(name: "testResumeAlwaysUsesStableURLAndByteRange") { $0.testResumeAlwaysUsesStableURLAndByteRange() },
+            .init(name: "testResumeAppendsOnlyAResponseForTheRequestedOffset") { $0.testResumeAppendsOnlyAResponseForTheRequestedOffset() },
+            .init(name: "testServerIgnoringRangeRestartsInsteadOfCorruptingPartialFile") { $0.testServerIgnoringRangeRestartsInsteadOfCorruptingPartialFile() },
+            .init(name: "testDownloadItemPausesAndResumesFromPartialFile") { await try $0.testDownloadItemPausesAndResumesFromPartialFile() },
+        ])
+}
+
+extension DflashPolicyTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "DflashPolicyTests",
+        instance: { DflashPolicyTests() },
+        checks: [
+            .init(name: "testAutoAllowsDenseAndFullGPUModels") { $0.testAutoAllowsDenseAndFullGPUModels() },
+            .init(name: "testRuntimeWarningRequiresThreeCriticalSamples") { $0.testRuntimeWarningRequiresThreeCriticalSamples() },
+        ])
+}
+
+extension ImageGenTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ImageGenTests",
+        instance: { ImageGenTests() },
+        checks: [
+            .init(name: "testAspectDimensionsSnapToLatentGrid") { $0.testAspectDimensionsSnapToLatentGrid() },
+            .init(name: "testFastModeOnlyReachesModelsThatTakeIt") { $0.testFastModeOnlyReachesModelsThatTakeIt() },
+            .init(name: "testReferenceImagesShareAPixelBudget") { $0.testReferenceImagesShareAPixelBudget() },
+            .init(name: "testRecommendationScalesWithVRAM") { $0.testRecommendationScalesWithVRAM() },
+            .init(name: "testResolutionLimitsScaleWithVRAM") { $0.testResolutionLimitsScaleWithVRAM() },
+            .init(name: "testVideoVRAMEstimateSeparatesSamplingAndDecode") { $0.testVideoVRAMEstimateSeparatesSamplingAndDecode() },
+            .init(name: "testWan22VideoStageWeightsMatchCatalog") { $0.testWan22VideoStageWeightsMatchCatalog() },
+            .init(name: "testWan22LongFrameSettingsRecommend16GB") { $0.testWan22LongFrameSettingsRecommend16GB() },
+            .init(name: "testWan22UsesOfficialInferenceValuesRepresentableByEngine") { $0.testWan22UsesOfficialInferenceValuesRepresentableByEngine() },
+            .init(name: "testWan21UsesOfficialInferenceValuesRepresentableByEngine") { $0.testWan21UsesOfficialInferenceValuesRepresentableByEngine() },
+            .init(name: "testHunyuan15UsesOfficialRecipeAndCompleteConditioning") { $0.testHunyuan15UsesOfficialRecipeAndCompleteConditioning() },
+            .init(name: "testCommandBufferSplitClearsWatchdog") { $0.testCommandBufferSplitClearsWatchdog() },
+            .init(name: "testQueueTargetingRunsOnlyOnItsOwnInstance") { $0.testQueueTargetingRunsOnlyOnItsOwnInstance() },
+            .init(name: "testSplitBackendSpec") { $0.testSplitBackendSpec() },
+            .init(name: "testAuxGPUResolution") { $0.testAuxGPUResolution() },
+        ])
+}
+
+extension ServerSettingsTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ServerSettingsTests",
+        instance: { ServerSettingsTests() },
+        checks: [
+            .init(name: "testDiagnoseExplainsAnArchitectureWithoutTensorSplit") { await $0.testDiagnoseExplainsAnArchitectureWithoutTensorSplit() },
+            .init(name: "testBaseArguments") { $0.testBaseArguments() },
+            .init(name: "testDynamicMoeIsCompiledButRequiresPrivateUIFlagAndToggle") { try $0.testDynamicMoeIsCompiledButRequiresPrivateUIFlagAndToggle() },
+            .init(name: "testDynamicMoeAutoSelectsCacheOnlyWhenItProvidesAUsefulFit") { $0.testDynamicMoeAutoSelectsCacheOnlyWhenItProvidesAUsefulFit() },
+            .init(name: "testDynamicMoeSlotsFollowEachModelsMetadataAndVRAMBudget") { try $0.testDynamicMoeSlotsFollowEachModelsMetadataAndVRAMBudget() },
+            .init(name: "testDynamicMoeAutoRejectsAWorkingSetSmallerThanTopK") { $0.testDynamicMoeAutoRejectsAWorkingSetSmallerThanTopK() },
+            .init(name: "testDynamicMoeAutoKeepsDirectMetalBankInsideSystemRAM") { $0.testDynamicMoeAutoKeepsDirectMetalBankInsideSystemRAM() },
+            .init(name: "testAgentToolsArgumentsAreEmittedExactlyOnce") { $0.testAgentToolsArgumentsAreEmittedExactlyOnce() },
+            .init(name: "testAgentToolsArgumentsStayAbsentWhenDisabled") { $0.testAgentToolsArgumentsStayAbsentWhenDisabled() },
+            .init(name: "testBenchmarkWorkloadArguments") { $0.testBenchmarkWorkloadArguments() },
+            .init(name: "testSlotSavePathFollowsLoadedVision") { $0.testSlotSavePathFollowsLoadedVision() },
+            .init(name: "testBenchmarkDepthArgument") { $0.testBenchmarkDepthArgument() },
+            .init(name: "testBenchResultLabels") { $0.testBenchResultLabels() },
+            .init(name: "testChatMessageDecodesWithoutMtpAccept") { try $0.testChatMessageDecodesWithoutMtpAccept() },
+            .init(name: "testPromptCacheAndReasoningArguments") { $0.testPromptCacheAndReasoningArguments() },
+            .init(name: "testVisionModelDisablesCacheReuseAndDetectsMultimodal") { try $0.testVisionModelDisablesCacheReuseAndDetectsMultimodal() },
+            .init(name: "testProjectorNotMispairedAcrossModels") { try $0.testProjectorNotMispairedAcrossModels() },
+            .init(name: "testRenamedProjectorsPairUnambiguouslyInSharedFolder") { try $0.testRenamedProjectorsPairUnambiguouslyInSharedFolder() },
+            .init(name: "testExtraArgsSplitEnvFromCliTokens") { $0.testExtraArgsSplitEnvFromCliTokens() },
+            .init(name: "testBenchmarkUsesTheServerLoadMode") { $0.testBenchmarkUsesTheServerLoadMode() },
+            .init(name: "testChatFontScaleStaysInRange") { $0.testChatFontScaleStaysInRange() },
+            .init(name: "testMlockKeepsMmapWhenAsked") { $0.testMlockKeepsMmapWhenAsked() },
+            .init(name: "testKVQuantAndMlockArguments") { $0.testKVQuantAndMlockArguments() },
+            .init(name: "testExtraArgsAreAppended") { $0.testExtraArgsAreAppended() },
+            .init(name: "testMTPIsSkippedForModelsWithoutTheHead") { $0.testMTPIsSkippedForModelsWithoutTheHead() },
+            .init(name: "testMTPAppliesAutomaticallyWithExpertOffload") { $0.testMTPAppliesAutomaticallyWithExpertOffload() },
+            .init(name: "testMTPAppliesAutomaticallyWithoutExpertOffload") { $0.testMTPAppliesAutomaticallyWithoutExpertOffload() },
+            .init(name: "testStabilityEnvironment") { $0.testStabilityEnvironment() },
+            .init(name: "testSingleGPUSelectionPinsDeviceUnlessMultiGPUIsEnabled") { $0.testSingleGPUSelectionPinsDeviceUnlessMultiGPUIsEnabled() },
+            .init(name: "testServerAndBenchmarkEnableMultiGPUSplitMode") { $0.testServerAndBenchmarkEnableMultiGPUSplitMode() },
+            .init(name: "testTensorSplitModeReachesServerAndBenchmark") { $0.testTensorSplitModeReachesServerAndBenchmark() },
+            .init(name: "testFastHandOffOnlyTravelsWithASplit") { $0.testFastHandOffOnlyTravelsWithASplit() },
+            .init(name: "testMultiGPUDefaultsReachTheEngine") { $0.testMultiGPUDefaultsReachTheEngine() },
+            .init(name: "testLocalNetworkDiscoveryBindsServerToAllInterfaces") { $0.testLocalNetworkDiscoveryBindsServerToAllInterfaces() },
+            .init(name: "testMTPDetectionReadsKeyValueAndTensors") { $0.testMTPDetectionReadsKeyValueAndTensors() },
+            .init(name: "testSeparateMTPAssistantIsHiddenPairedAndPassedAsDraft") { try $0.testSeparateMTPAssistantIsHiddenPairedAndPassedAsDraft() },
+            .init(name: "testSeparateMTPAssistantDoesNotPairWithAnotherModel") { try $0.testSeparateMTPAssistantDoesNotPairWithAnotherModel() },
+            .init(name: "testFlashAttentionPolicy") { $0.testFlashAttentionPolicy() },
+            .init(name: "testAmdFlashAttentionDefaultsOnWhenUnset") { $0.testAmdFlashAttentionDefaultsOnWhenUnset() },
+            .init(name: "testQuantizedKVForcesFlashAttentionButNotAmdKernel") { $0.testQuantizedKVForcesFlashAttentionButNotAmdKernel() },
+            .init(name: "testAmdFlashAttentionIsOnlyUserToggle") { $0.testAmdFlashAttentionIsOnlyUserToggle() },
+            .init(name: "testMicroBatchOnlyAppliesToMoEModels") { try $0.testMicroBatchOnlyAppliesToMoEModels() },
+            .init(name: "testMicroBatchSurvivesAProfileRoundTrip") { $0.testMicroBatchSurvivesAProfileRoundTrip() },
+        ])
+}
+
+extension ChatMessageTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ChatMessageTests",
+        instance: { ChatMessageTests() },
+        checks: [
+            .init(name: "testInlineMathDetectionSupportsDollarAndParenthesizedForms") { $0.testInlineMathDetectionSupportsDollarAndParenthesizedForms() },
+            .init(name: "testCachedInlineFormattingMatchesAFreshOneAndKeepsParagraphsApart") { $0.testCachedInlineFormattingMatchesAFreshOneAndKeepsParagraphsApart() },
+            .init(name: "testSVGIsEncodedAsAnIsolatedImageResource") { $0.testSVGIsEncodedAsAnIsolatedImageResource() },
+            .init(name: "testThinkingBlockIsSeparated") { $0.testThinkingBlockIsSeparated() },
+            .init(name: "testUnclosedThinkingIsAllThinking") { $0.testUnclosedThinkingIsAllThinking() },
+            .init(name: "testUserMessageHasNoThinking") { $0.testUserMessageHasNoThinking() },
+            .init(name: "testConversationRoundTripsThroughJSON") { try $0.testConversationRoundTripsThroughJSON() },
+            .init(name: "testServerTimingsAreParsedAndRatesCalculated") { try $0.testServerTimingsAreParsedAndRatesCalculated() },
+            .init(name: "testStreamAccumulatorCombinesReasoningContentAndFinalMetadata") { try $0.testStreamAccumulatorCombinesReasoningContentAndFinalMetadata() },
+            .init(name: "testStreamAccumulatorMergesFragmentedToolCallsByIndex") { try $0.testStreamAccumulatorMergesFragmentedToolCallsByIndex() },
+            .init(name: "testToolArgumentsRequireAJSONObject") { try $0.testToolArgumentsRequireAJSONObject() },
+            .init(name: "testToolMessagesRoundTripThroughOpenAIHistory") { try $0.testToolMessagesRoundTripThroughOpenAIHistory() },
+            .init(name: "testBuiltinToolMetadataPreservesDefinition") { try $0.testBuiltinToolMetadataPreservesDefinition() },
+            .init(name: "testJavaScriptSandboxToolMatchesLlamaContract") { try $0.testJavaScriptSandboxToolMatchesLlamaContract() },
+            .init(name: "testJavaScriptSandboxReplyFormattingAndTruncation") { $0.testJavaScriptSandboxReplyFormattingAndTruncation() },
+            .init(name: "testJavaScriptSandboxExecutesAwaitAndCapturesConsole") { await $0.testJavaScriptSandboxExecutesAwaitAndCapturesConsole() },
+            .init(name: "testSpecializedToolPresentationAcceptsArgumentAliases") { $0.testSpecializedToolPresentationAcceptsArgumentAliases() },
+            .init(name: "testSettingsArchiveRoundTripFiltersRuntimeAndUnknownKeys") { try $0.testSettingsArchiveRoundTripFiltersRuntimeAndUnknownKeys() },
+            .init(name: "testMCPResourceTemplateExpandsPathAndQueryExpressions") { $0.testMCPResourceTemplateExpandsPathAndQueryExpressions() },
+            .init(name: "testMCPStdioDeliversShortReplyWhileOutputStaysOpen") { await try $0.testMCPStdioDeliversShortReplyWhileOutputStaysOpen() },
+            .init(name: "testConversationBranchesPreserveAndSwitchCompletePaths") { try $0.testConversationBranchesPreserveAndSwitchCompletePaths() },
+            .init(name: "testLlamaJSONLRoundTripPreservesBranchesReasoningAndAttachments") { try $0.testLlamaJSONLRoundTripPreservesBranchesReasoningAndAttachments() },
+            .init(name: "testAudioAndVideoAttachmentsUseOpenAIMultimodalParts") { try $0.testAudioAndVideoAttachmentsUseOpenAIMultimodalParts() },
+            .init(name: "testMultimediaFormatsMatchLlamaWebUICompatibilityRules") { $0.testMultimediaFormatsMatchLlamaWebUICompatibilityRules() },
+            .init(name: "testUnsupportedHistoricalMediaIsFilteredForSelectedModel") { try $0.testUnsupportedHistoricalMediaIsFilteredForSelectedModel() },
+            .init(name: "testResumableStreamIdentityIncludesRouterModelAndEscapesURL") { try $0.testResumableStreamIdentityIncludesRouterModelAndEscapesURL() },
+            .init(name: "testLegacyConversationWithoutCompactionFieldsDecodes") { try $0.testLegacyConversationWithoutCompactionFieldsDecodes() },
+        ])
+}
+
+extension LiveStreamTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "LiveStreamTests",
+        instance: { LiveStreamTests() },
+        checks: [
+            .init(name: "testCollapsedReasoningDoesNotPublishGrowingText") { $0.testCollapsedReasoningDoesNotPublishGrowingText() },
+            .init(name: "testVisibleAnswerStillStreamsWhileReasoningIsCollapsed") { $0.testVisibleAnswerStillStreamsWhileReasoningIsCollapsed() },
+            .init(name: "testExpandedReasoningPublishesAtMostTwicePerSecond") { $0.testExpandedReasoningPublishesAtMostTwicePerSecond() },
+            .init(name: "testSnapshotKeepsTheAnswerAsItStoodWhileGenerationContinues") { $0.testSnapshotKeepsTheAnswerAsItStoodWhileGenerationContinues() },
+        ])
+}
+
+extension CompactionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "CompactionTests",
+        instance: { CompactionTests() },
+        checks: [
+            .init(name: "testCutoffLandsOnUserMessageAndKeepsRecentTurns") { $0.testCutoffLandsOnUserMessageAndKeepsRecentTurns() },
+            .init(name: "testCutoffKeepsATailWorthTheTokenBudget") { $0.testCutoffKeepsATailWorthTheTokenBudget() },
+            .init(name: "testSummaryIsClampedWhenTheTranscriptShrinks") { $0.testSummaryIsClampedWhenTheTranscriptShrinks() },
+            .init(name: "testArchivedRangesAreLeftOutOfTheHistoryAndClampedOnTruncation") { $0.testArchivedRangesAreLeftOutOfTheHistoryAndClampedOnTruncation() },
+            .init(name: "testArchiveRangeIsClippedToWhatCanBeArchived") { $0.testArchiveRangeIsClippedToWhatCanBeArchived() },
+            .init(name: "testRecallMatchesIgnoringCaseAndAccents") { $0.testRecallMatchesIgnoringCaseAndAccents() },
+            .init(name: "testCutoffNilWhenTooLittleWouldBeGained") { $0.testCutoffNilWhenTooLittleWouldBeGained() },
+            .init(name: "testRequestHistoryFoldsSummaryIntoSystemAndSkipsCompactedMessages") { $0.testRequestHistoryFoldsSummaryIntoSystemAndSkipsCompactedMessages() },
+            .init(name: "testRequestHistoryWithoutSummaryOrSystemHasNoSystemMessage") { $0.testRequestHistoryWithoutSummaryOrSystemHasNoSystemMessage() },
+            .init(name: "testRequestHistoryDropsReasoningOnlyAssistantMessage") { $0.testRequestHistoryDropsReasoningOnlyAssistantMessage() },
+            .init(name: "testAttachmentsAreFoldedIntoTheWireHistory") { $0.testAttachmentsAreFoldedIntoTheWireHistory() },
+            .init(name: "testMessageWithoutAttachmentsKeepsItsPlainContentDecodable") { try $0.testMessageWithoutAttachmentsKeepsItsPlainContentDecodable() },
+            .init(name: "testStreamingErrorIsExtractedFromSuccessfulHTTPStream") { $0.testStreamingErrorIsExtractedFromSuccessfulHTTPStream() },
+            .init(name: "testReasoningOnlyLengthMessageExplainsTokenLimit") { $0.testReasoningOnlyLengthMessageExplainsTokenLimit() },
+        ])
+}
+
+extension BenchAndProfileTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "BenchAndProfileTests",
+        instance: { BenchAndProfileTests() },
+        checks: [
+            .init(name: "testBenchmarkVRAMFractionUsesBufferSizeInsteadOfDeviceIndex") { try $0.testBenchmarkVRAMFractionUsesBufferSizeInsteadOfDeviceIndex() },
+            .init(name: "testSweepChoosesBestMeasuredSafeCandidateWithoutCliff") { $0.testSweepChoosesBestMeasuredSafeCandidateWithoutCliff() },
+            .init(name: "testSweepAddsThreeStepsOfVRAMHeadroom") { $0.testSweepAddsThreeStepsOfVRAMHeadroom() },
+            .init(name: "testBenchConfigLabel") { $0.testBenchConfigLabel() },
+            .init(name: "testBenchmarkFlashAttentionRouteLabelsCPUAndGPU") { $0.testBenchmarkFlashAttentionRouteLabelsCPUAndGPU() },
+            .init(name: "testLegacyBenchResultsDecode") { try $0.testLegacyBenchResultsDecode() },
+            .init(name: "testProfileRoundTrip") { try $0.testProfileRoundTrip() },
+            .init(name: "testLegacyProfileDecodesWithNilPinned") { try $0.testLegacyProfileDecodesWithNilPinned() },
+            .init(name: "testSplitKnobsSurviveAProfileRoundTrip") { try $0.testSplitKnobsSurviveAProfileRoundTrip() },
+            .init(name: "testBenchmarkBase64URLIsUnpadded") { $0.testBenchmarkBase64URLIsUnpadded() },
+            .init(name: "testBenchmarkSignatureMessageFormat") { $0.testBenchmarkSignatureMessageFormat() },
+            .init(name: "testApplyPinnedOnlyOverlaysPinnedFields") { $0.testApplyPinnedOnlyOverlaysPinnedFields() },
+        ])
+}
+
+extension LocalizationTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "LocalizationTests",
+        instance: { LocalizationTests() },
+        checks: [
+            .init(name: "testDocsHaveSameSectionsInBothLanguages") { $0.testDocsHaveSameSectionsInBothLanguages() },
+            .init(name: "testDocsNeverMentionForbiddenNames") { $0.testDocsNeverMentionForbiddenNames() },
+            .init(name: "testLocalizerSwitchesLanguage") { $0.testLocalizerSwitchesLanguage() },
+            .init(name: "testDynamicMoeOptimizationStatesUseActiveLanguage") { $0.testDynamicMoeOptimizationStatesUseActiveLanguage() },
+        ])
+}
+
+extension ShellWordsTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ShellWordsTests",
+        instance: { ShellWordsTests() },
+        checks: [
+            .init(name: "testPlainSplit") { $0.testPlainSplit() },
+            .init(name: "testQuotedArgumentsStayTogether") { $0.testQuotedArgumentsStayTogether() },
+            .init(name: "testEmptyQuotesProduceEmptyArgument") { $0.testEmptyQuotesProduceEmptyArgument() },
+            .init(name: "testEmptyInput") { $0.testEmptyInput() },
+        ])
+}
+
+extension UpdateCheckerTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "UpdateCheckerTests",
+        instance: { UpdateCheckerTests() },
+        checks: [
+            .init(name: "testVersionComparison") { $0.testVersionComparison() },
+        ])
+}
+
+extension CatalogTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "CatalogTests",
+        instance: { CatalogTests() },
+        checks: [
+            .init(name: "testCatalogURLsAreWellFormed") { $0.testCatalogURLsAreWellFormed() },
+            .init(name: "testGPTOSS20BUsesHuggingFaceFilename") { $0.testGPTOSS20BUsesHuggingFaceFilename() },
+            .init(name: "testRecommendationExistsForReferenceHardware") { $0.testRecommendationExistsForReferenceHardware() },
+        ])
+}
+
+extension RouterModeTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "RouterModeTests",
+        instance: { RouterModeTests() },
+        checks: [
+            .init(name: "testRouterArgumentsHaveNoFixedModel") { $0.testRouterArgumentsHaveNoFixedModel() },
+            .init(name: "testNonRouterArgumentsUnaffected") { $0.testNonRouterArgumentsUnaffected() },
+            .init(name: "testRouterAliasIsSlugAndStable") { $0.testRouterAliasIsSlugAndStable() },
+            .init(name: "testRouterPresetINIHasOneSectionPerModelWithNcmoe") { $0.testRouterPresetINIHasOneSectionPerModelWithNcmoe() },
+            .init(name: "testRouterPresetAliasCollisionIsDisambiguated") { $0.testRouterPresetAliasCollisionIsDisambiguated() },
+        ])
+}
+
+extension ConversationDecodingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ConversationDecodingTests",
+        instance: { ConversationDecodingTests() },
+        checks: [
+            .init(name: "testDecodesConversationSavedBeforePinnedExisted") { try $0.testDecodesConversationSavedBeforePinnedExisted() },
+        ])
+}
+
+extension SystemPromptResolutionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SystemPromptResolutionTests",
+        instance: { SystemPromptResolutionTests() },
+        checks: [
+            .init(name: "testChatPromptWinsOverProjectAndGlobal") { $0.testChatPromptWinsOverProjectAndGlobal() },
+            .init(name: "testProjectPromptWinsWhenChatIsEmptyOrNil") { $0.testProjectPromptWinsWhenChatIsEmptyOrNil() },
+            .init(name: "testGlobalIsTheFallback") { $0.testGlobalIsTheFallback() },
+        ])
+}
+
+extension ReleaseNotesRangeTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ReleaseNotesRangeTests",
+        instance: { ReleaseNotesRangeTests() },
+        checks: [
+            .init(name: "testShowsEverythingNewerThanCurrentNewestFirst") { $0.testShowsEverythingNewerThanCurrentNewestFirst() },
+            .init(name: "testUpToDateShowsOnlyTheCurrentVersion") { $0.testUpToDateShowsOnlyTheCurrentVersion() },
+        ])
+}
+
+extension SmartTitleTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SmartTitleTests",
+        instance: { SmartTitleTests() },
+        checks: [
+            .init(name: "testStripsMarkdownAndCutsAtWordBoundary") { $0.testStripsMarkdownAndCutsAtWordBoundary() },
+            .init(name: "testUsesFirstMeaningfulLine") { $0.testUsesFirstMeaningfulLine() },
+        ])
+}
+
+extension SpeedEstimateTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SpeedEstimateTests",
+        instance: { SpeedEstimateTests() },
+        checks: [
+            .init(name: "testSmallerQuantEstimatesFaster") { $0.testSmallerQuantEstimatesFaster() },
+            .init(name: "testMoreActiveParamsEstimatesSlower") { $0.testMoreActiveParamsEstimatesSlower() },
+        ])
+}
+
+extension ModelNameTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ModelNameTests",
+        instance: { ModelNameTests() },
+        checks: [
+            .init(name: "testDenseWithFinetune") { $0.testDenseWithFinetune() },
+            .init(name: "testMoEActiveParams") { $0.testMoEActiveParams() },
+            .init(name: "testAttributeBeforeSize") { $0.testAttributeBeforeSize() },
+            .init(name: "testUncensoredWithNickname") { $0.testUncensoredWithNickname() },
+            .init(name: "testVisionAndVersionAndDotQuant") { $0.testVisionAndVersionAndDotQuant() },
+            .init(name: "testGemmaEffectiveSizeAndIt") { $0.testGemmaEffectiveSizeAndIt() },
+            .init(name: "testAcronymCapitalization") { $0.testAcronymCapitalization() },
+            .init(name: "testMetadataNameWithSpaces") { $0.testMetadataNameWithSpaces() },
+            .init(name: "testLooksMoEAcrossActiveParamCounts") { $0.testLooksMoEAcrossActiveParamCounts() },
+            .init(name: "testBF16AndUnslothDynamic") { $0.testBF16AndUnslothDynamic() },
+            .init(name: "testEngineCheckParsesDeviceAndCounts") { $0.testEngineCheckParsesDeviceAndCounts() },
+            .init(name: "testEngineCheckSeparatesKnownUpstreamFailure") { $0.testEngineCheckSeparatesKnownUpstreamFailure() },
+            .init(name: "testEngineCheckCleanRunHasNoFailures") { $0.testEngineCheckCleanRunHasNoFailures() },
+            .init(name: "testEngineCheckBinarySitsNextToTheEngine") { $0.testEngineCheckBinarySitsNextToTheEngine() },
+        ])
 }

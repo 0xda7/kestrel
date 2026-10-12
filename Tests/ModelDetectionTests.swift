@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class ModelDetectionTests: XCTestCase {
+final class ModelDetectionTests: CheckCase {
     func testGGUFMetadataIsTheMoESourceOfTruth() throws {
         let dir = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -725,4 +725,47 @@ final class ModelDetectionTests: XCTestCase {
         }
         try data.write(to: url)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ModelDetectionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ModelDetectionTests",
+        instance: { ModelDetectionTests() },
+        checks: [
+            .init(name: "testGGUFMetadataIsTheMoESourceOfTruth") { try $0.testGGUFMetadataIsTheMoESourceOfTruth() },
+            .init(name: "testOfficialOLMoEAndDeepSeekArchitecturesAreDetected") { try $0.testOfficialOLMoEAndDeepSeekArchitecturesAreDetected() },
+            .init(name: "testExpertCountAcceptsOfficialGGUFIntegerEncodings") { try $0.testExpertCountAcceptsOfficialGGUFIntegerEncodings() },
+            .init(name: "testTraitWarmPublishesAfterDetectingAllModels") { try $0.testTraitWarmPublishesAfterDetectingAllModels() },
+            .init(name: "testDynamicMoeReadsLayerTotalAndActiveExpertCounts") { try $0.testDynamicMoeReadsLayerTotalAndActiveExpertCounts() },
+            .init(name: "testBenchmarkFamilyTreatsValidArchitectureWithoutExpertsAsDense") { try $0.testBenchmarkFamilyTreatsValidArchitectureWithoutExpertsAsDense() },
+            .init(name: "testBenchmarkGPUArchitectureUsesTheReportedDeviceName") { $0.testBenchmarkGPUArchitectureUsesTheReportedDeviceName() },
+            .init(name: "testMetadataCacheInvalidatesWhenFileChanges") { try $0.testMetadataCacheInvalidatesWhenFileChanges() },
+            .init(name: "testMetadataCacheSupportsConcurrentReaders") { try $0.testMetadataCacheSupportsConcurrentReaders() },
+            .init(name: "testCompleteShardsAreGroupedAndIncompleteSetsAreHidden") { try $0.testCompleteShardsAreGroupedAndIncompleteSetsAreHidden() },
+            .init(name: "testLocalScanUsesWholeShardSize") { try $0.testLocalScanUsesWholeShardSize() },
+            .init(name: "testLocalScanFindsNestedModelsAndSkipsManagedMediaFolders") { try $0.testLocalScanFindsNestedModelsAndSkipsManagedMediaFolders() },
+            .init(name: "testRecursiveFileIndexReusesMediaComponentsOutsideManagedFolder") { try $0.testRecursiveFileIndexReusesMediaComponentsOutsideManagedFolder() },
+            .init(name: "testRecursiveFileIndexReusesSafePunctuationVariant") { try $0.testRecursiveFileIndexReusesSafePunctuationVariant() },
+            .init(name: "testRecursiveFileIndexFallsBackToOriginalDownloadName") { try $0.testRecursiveFileIndexFallsBackToOriginalDownloadName() },
+            .init(name: "testRecursiveFileIndexPrefersManagedMediaCopyWhenNamesCollide") { try $0.testRecursiveFileIndexPrefersManagedMediaCopyWhenNamesCollide() },
+            .init(name: "testEmbeddedNameKeepsFilenameSizeAndDropsRepositoryOwner") { try $0.testEmbeddedNameKeepsFilenameSizeAndDropsRepositoryOwner() },
+            .init(name: "testGGUFFileTypeOverridesStaleBF16MetadataName") { try $0.testGGUFFileTypeOverridesStaleBF16MetadataName() },
+            .init(name: "testMetadataAfterTokenizerIsStillRead") { try $0.testMetadataAfterTokenizerIsStillRead() },
+            .init(name: "testIQ4NLFilenameFallbackKeepsFullQuantizationName") { $0.testIQ4NLFilenameFallbackKeepsFullQuantizationName() },
+            .init(name: "testDetailedUDQuantizationFromFilenameWinsOverGenericHeaderType") { try $0.testDetailedUDQuantizationFromFilenameWinsOverGenericHeaderType() },
+            .init(name: "testGenericEmbeddedNameFallsBackToFilename") { try $0.testGenericEmbeddedNameFallsBackToFilename() },
+            .init(name: "testFilenameKeepsMoEActiveParameterSizeMissingFromMetadata") { try $0.testFilenameKeepsMoEActiveParameterSizeMissingFromMetadata() },
+            .init(name: "testActiveTotalMoESizeUsesTotalParametersAndActivePrefix") { $0.testActiveTotalMoESizeUsesTotalParametersAndActivePrefix() },
+            .init(name: "testLegacyProjectorFallbackRequiresUniqueFamilyAndDimension") { try $0.testLegacyProjectorFallbackRequiresUniqueFamilyAndDimension() },
+            .init(name: "testDecimalActiveParameterNameLooksMoE") { $0.testDecimalActiveParameterNameLooksMoE() },
+            .init(name: "testParsesHeaderFromDataAndRejectsTruncated") { try $0.testParsesHeaderFromDataAndRejectsTruncated() },
+            .init(name: "testHeaderBeatsFilenameForRenamedMoE") { try $0.testHeaderBeatsFilenameForRenamedMoE() },
+            .init(name: "testTurboKVCompatibilityUsesGGUFHeadDimensions") { try $0.testTurboKVCompatibilityUsesGGUFHeadDimensions() },
+            .init(name: "testTensorSplitIsRefusedOnlyForExpertsWithASeparateScale") { try $0.testTensorSplitIsRefusedOnlyForExpertsWithASeparateScale() },
+            .init(name: "testTensorSplitFallsBackToLayersWhenTheModelCannotTakeIt") { try $0.testTensorSplitFallsBackToLayersWhenTheModelCannotTakeIt() },
+            .init(name: "testLayerSplitIsBalancedByBytesWhenExpertsGoToTheCPU") { try $0.testLayerSplitIsBalancedByBytesWhenExpertsGoToTheCPU() },
+            .init(name: "testLayerSplitIsBalancedOnASplitGGUF") { try $0.testLayerSplitIsBalancedOnASplitGGUF() },
+            .init(name: "testDraftsAreKeptOutOfThePickerByArchitecture") { try $0.testDraftsAreKeptOutOfThePickerByArchitecture() },
+        ])
 }

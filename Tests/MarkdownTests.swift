@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class InlineMathDetectionTests: XCTestCase {
+final class InlineMathDetectionTests: CheckCase {
     func testProseWithShellVariablesIsNotMath() {
         for prose in [
             "Set $HOME and then export $PATH before running the script.",
@@ -43,4 +43,18 @@ final class InlineMathDetectionTests: XCTestCase {
     func testSpanDoesNotCrossLines() {
         XCTAssertFalse(RichText.containsInlineMath("Primero $HOME\ny luego $PATH del sistema."))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension InlineMathDetectionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "InlineMathDetectionTests",
+        instance: { InlineMathDetectionTests() },
+        checks: [
+            .init(name: "testProseWithShellVariablesIsNotMath") { $0.testProseWithShellVariablesIsNotMath() },
+            .init(name: "testPricesAreNotMath") { $0.testPricesAreNotMath() },
+            .init(name: "testFormulasAreStillDetected") { $0.testFormulasAreStillDetected() },
+            .init(name: "testUnpairedDelimiterIsNotMath") { $0.testUnpairedDelimiterIsNotMath() },
+            .init(name: "testSpanDoesNotCrossLines") { $0.testSpanDoesNotCrossLines() },
+        ])
 }

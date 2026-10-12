@@ -802,7 +802,7 @@ private struct FileRow: View {
     var body: some View {
         let est = Estimator.estimateCurrent(
             spec: .estimated(fileBytes: file.sizeBytes, isMoE: search.isMoE(repo: repo, file: file),
-                             name: URL(fileURLWithPath: file.path).lastPathComponent), hw: hardware)
+                             name: URL(fileURLWithPath: file.path).lastPathComponent, path: file.path), hw: hardware)
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 ModelTitleLabel(ModelName.forPath(file.path), titleFont: .caption)

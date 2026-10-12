@@ -21,6 +21,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **Kestrel owns latch's provider configuration** (`~/.latch/v2/provider_config.json`), closing the last multi-owner config surface the way 0.89.2 did for pi. The file is generated from Settings → Providers at launch, on every route or key change, and alongside every engine start: the local engine is always present as `kestrel-local` and is the default — delegation stays on this machine unless an active remote route says otherwise, where before the tool description had to warn that "Kestrel does not route or constrain" where latch runs. A hand-authored config is imported once into real settings (loopback endpoints are recognized as the engine and never become duplicate routes; keys land in the local secret store), then the marker file records ownership. The delegate's tool description now states the actual routing truth, including the one residual case: a hand-replaced file applies as-is.
 
+### Changed
+
+- **The test suite runs anywhere, and the package is fully Swift 6.** The 26-suite XCTest target is now `kestrel-checks`, a zero-dependency check harness (`Tests/Checks`): XCTest names and signatures preserved at every call site, typed registrations so a missing check is a compile error, a per-check 120 s watchdog, skips with reasons, exit codes CI understands — and `swift run kestrel-checks` needs no Xcode at all. First local run on this machine: **350 checks, 0 failures** (two fixture-gated integration tests skip with instructions). To make the module importable, the app compiles as the `KestrelCore` library behind a two-line `Kestrel` launcher (packaging unchanged: the executable keeps its name and path), CI and `scripts/test.sh` run the harness, and release builds select `--product Kestrel` so shipping artifacts carry no testing instrumentation. With Xcode 26.5 installed, the long-staged Swift 6 v6 language-mode flip was arbitrated and landed: the IRGen SmallVector crash that blocked it on 6.3.3.1/26.0 is gone — the whole package builds in v6 mode, the suite is green under it, and the release product builds clean.
+
 ## [0.89.2] - 2026-10-12
 
 ### Fixed

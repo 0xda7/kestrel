@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class AudioVideoExportIntegrationTests: XCTestCase {
+final class AudioVideoExportIntegrationTests: CheckCase {
     @MainActor
     func testCaptionedVideoExportWhenFixtureIsProvided() async throws {
         guard let path = ProcessInfo.processInfo.environment["KESTREL_AUDIO_VIDEO_FIXTURE"] else {
@@ -28,4 +28,14 @@ final class AudioVideoExportIntegrationTests: XCTestCase {
         let size = try output.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         XCTAssertGreaterThan(size, 1_000)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension AudioVideoExportIntegrationTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "AudioVideoExportIntegrationTests",
+        instance: { AudioVideoExportIntegrationTests() },
+        checks: [
+            .init(name: "testCaptionedVideoExportWhenFixtureIsProvided") { await try $0.testCaptionedVideoExportWhenFixtureIsProvided() },
+        ])
 }

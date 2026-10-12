@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class LogPresentationTests: XCTestCase {
+final class LogPresentationTests: CheckCase {
     func testParsesRealLlamaCppPrefix() {
         let line = "0.00.112.264 I srv    load_model: loading model '/models/Qwen.gguf'"
         let parsed = LogPresentationParser.parse(line, fallbackSource: "Engine")
@@ -23,4 +23,15 @@ final class LogPresentationTests: XCTestCase {
         XCTAssertEqual(parsed.first?.source, "Metal")
         XCTAssertEqual(parsed.first?.message, line)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension LogPresentationTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "LogPresentationTests",
+        instance: { LogPresentationTests() },
+        checks: [
+            .init(name: "testParsesRealLlamaCppPrefix") { $0.testParsesRealLlamaCppPrefix() },
+            .init(name: "testKeepsUnprefixedMetalDiagnostics") { $0.testKeepsUnprefixedMetalDiagnostics() },
+        ])
 }

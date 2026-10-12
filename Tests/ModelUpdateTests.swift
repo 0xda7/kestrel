@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 @MainActor
-final class ModelUpdateTests: XCTestCase {
+final class ModelUpdateTests: CheckCase {
     private func compare(digest: String?, size: Int64?, remoteSHA: String?, remoteSize: Int64?) -> ModelUpdateState {
         ModelUpdateChecker.compare(localDigest: digest, localSize: size,
                                    remote: HFFileMetadata(sha256: remoteSHA, sizeBytes: remoteSize))
@@ -47,4 +47,18 @@ final class ModelUpdateTests: XCTestCase {
         map[file] = nil
         UserDefaults.standard.set(map, forKey: SettingsKeys.modelDigest)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ModelUpdateTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ModelUpdateTests",
+        instance: { ModelUpdateTests() },
+        checks: [
+            .init(name: "testDigestDecidesWhenBothSidesHaveOne") { $0.testDigestDecidesWhenBothSidesHaveOne() },
+            .init(name: "testSizeIsTheFallbackWithoutARecordedDigest") { $0.testSizeIsTheFallbackWithoutARecordedDigest() },
+            .init(name: "testUnknownRatherThanFalseAlarmWhenSizesCannotBeCompared") { $0.testUnknownRatherThanFalseAlarmWhenSizesCannotBeCompared() },
+            .init(name: "testNonHuggingFaceSourcesAreSkipped") { await $0.testNonHuggingFaceSourcesAreSkipped() },
+            .init(name: "testDigestSurvivesARoundTripThroughDefaults") { $0.testDigestSurvivesARoundTripThroughDefaults() },
+        ])
 }

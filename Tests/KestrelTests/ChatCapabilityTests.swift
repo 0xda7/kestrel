@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class ChatCapabilityTests: XCTestCase {
+final class ChatCapabilityTests: CheckCase {
     func testThinkingSupportRecognizesTemplateControls() {
         XCTAssertTrue(ThinkingSupportDetector.supportsThinking("{% if enable_thinking %}<think>{% endif %}"))
         XCTAssertTrue(ThinkingSupportDetector.supportsThinking("{{ reasoning_effort }}"))
@@ -97,4 +97,21 @@ final class ChatCapabilityTests: XCTestCase {
         XCTAssertEqual(ReasoningEffortDetector.closest(to: "minimal", in: ridge), "low")
         XCTAssertNil(ReasoningEffortDetector.closest(to: "brisk", in: ridge))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension ChatCapabilityTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ChatCapabilityTests",
+        instance: { ChatCapabilityTests() },
+        checks: [
+            .init(name: "testThinkingSupportRecognizesTemplateControls") { $0.testThinkingSupportRecognizesTemplateControls() },
+            .init(name: "testReasoningEffortBudgetsMatchLlamaUILevels") { $0.testReasoningEffortBudgetsMatchLlamaUILevels() },
+            .init(name: "testReasoningEffortDetectorReadsTheValidatedSet") { $0.testReasoningEffortDetectorReadsTheValidatedSet() },
+            .init(name: "testReasoningEffortDetectorReadsTheDefaultAssignment") { $0.testReasoningEffortDetectorReadsTheDefaultAssignment() },
+            .init(name: "testReasoningEffortDetectorIgnoresBranchesAndPlainTemplates") { $0.testReasoningEffortDetectorIgnoresBranchesAndPlainTemplates() },
+            .init(name: "testModelDefaultEffortSendsNoBudget") { $0.testModelDefaultEffortSendsNoBudget() },
+            .init(name: "testReasoningBudgetsRiseWithTheLevel") { $0.testReasoningBudgetsRiseWithTheLevel() },
+            .init(name: "testUnsupportedEffortFallsBackWithoutLiftingTheBudget") { $0.testUnsupportedEffortFallsBackWithoutLiftingTheBudget() },
+        ])
 }

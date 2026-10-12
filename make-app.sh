@@ -33,13 +33,13 @@ NOAVX2=$([ "$KESTREL_NO_AVX2" = "1" ] && echo true || echo false)
 echo "no-AVX2 variant: $NOAVX2"
 
 if [ "$KESTREL_ARCH" = "universal" ]; then
-    swift build -c release --arch x86_64 --arch arm64
+    swift build -c release --product Kestrel --arch x86_64 --arch arm64
     SWIFT_BIN=".build/apple/Products/Release/Kestrel"
 elif [ -n "$KESTREL_ARCH" ]; then
-    swift build -c release --arch "$KESTREL_ARCH"
+    swift build -c release --product Kestrel --arch "$KESTREL_ARCH"
     SWIFT_BIN=".build/$KESTREL_ARCH-apple-macosx/release/Kestrel"
 else
-    swift build -c release
+    swift build -c release --product Kestrel
     SWIFT_BIN=".build/release/Kestrel"
 fi
 

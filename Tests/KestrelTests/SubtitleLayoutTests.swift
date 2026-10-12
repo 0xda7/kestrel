@@ -2,10 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
-final class SubtitleLayoutTests: XCTestCase {
+final class SubtitleLayoutTests: CheckCase {
     private let frame = CGSize(width: 1920, height: 1080)
 
     /// The old exporter used a fixed box, so a long caption was clipped. The box
@@ -80,4 +80,19 @@ extension SubtitleLayoutTests {
             previous = size
         }
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension SubtitleLayoutTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SubtitleLayoutTests",
+        instance: { SubtitleLayoutTests() },
+        checks: [
+            .init(name: "testLongCaptionGetsATallerBoxThanAShortOne") { $0.testLongCaptionGetsATallerBoxThanAShortOne() },
+            .init(name: "testTextAlwaysFitsInsideItsBox") { $0.testTextAlwaysFitsInsideItsBox() },
+            .init(name: "testVeryLongCaptionShrinksRatherThanOverflow") { $0.testVeryLongCaptionShrinksRatherThanOverflow() },
+            .init(name: "testPositionAndMarginAreHonoured") { $0.testPositionAndMarginAreHonoured() },
+            .init(name: "testStyleRoundTripsThroughItsPersistence") { try $0.testStyleRoundTripsThroughItsPersistence() },
+            .init(name: "testSizeSliderKeepsWorkingOnASmallStill") { $0.testSizeSliderKeepsWorkingOnASmallStill() },
+        ])
 }

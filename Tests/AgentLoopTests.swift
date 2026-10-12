@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 /// Agentic-core slice: transient-only retry classification (read-only tools
 /// retry; deterministic failures and side-effecting tools never do) and the
 /// per-conversation usage rollup.
-final class AgentLoopTests: XCTestCase {
+final class AgentLoopTests: CheckCase {
     func testTransportHiccupsAreTransient() {
         XCTAssertTrue(ChatToolsService.isTransient(URLError(.timedOut)))
         XCTAssertTrue(ChatToolsService.isTransient(URLError(.networkConnectionLost)))
@@ -87,4 +87,21 @@ final class AgentLoopTests: XCTestCase {
     func testUsageRollupNilWithoutTimings() {
         XCTAssertNil(ChatStore.usageRollup(messages: [ChatMessage(role: "user", content: "hi")]))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension AgentLoopTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "AgentLoopTests",
+        instance: { AgentLoopTests() },
+        checks: [
+            .init(name: "testTransportHiccupsAreTransient") { $0.testTransportHiccupsAreTransient() },
+            .init(name: "testDeterministicFailuresAreNotTransient") { $0.testDeterministicFailuresAreNotTransient() },
+            .init(name: "testServerSide5xxIsTransient") { $0.testServerSide5xxIsTransient() },
+            .init(name: "testUsageRollupSumsGeneratedAndCountsTurns") { $0.testUsageRollupSumsGeneratedAndCountsTurns() },
+            .init(name: "testDynamicToolResultCapShrinksNearAFullWindow") { $0.testDynamicToolResultCapShrinksNearAFullWindow() },
+            .init(name: "testAllShippedToolSchemasValidate") { $0.testAllShippedToolSchemasValidate() },
+            .init(name: "testSchemaValidationCatchesBrokenDefinitions") { $0.testSchemaValidationCatchesBrokenDefinitions() },
+            .init(name: "testUsageRollupNilWithoutTimings") { $0.testUsageRollupNilWithoutTimings() },
+        ])
 }

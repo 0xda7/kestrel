@@ -2,15 +2,15 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
+import Foundation
 
-@testable import Kestrel
+@testable import KestrelCore
 
 /// PiBridge pure logic: provider slugs, generated config shape, and the
 /// send-time validation that keeps a missing provider/model pair from
 /// silently stranding a chat turn (pi would fall back to a dead default and
 /// answer with an empty reply, exit 0).
-final class PiBridgeTests: XCTestCase {
+final class PiBridgeTests: CheckCase {
     func testSlugIsKeySafe() {
         XCTAssertEqual(PiBridge.slug("z.ai"), "z-ai")
         XCTAssertEqual(PiBridge.slug("OpenRouter"), "openrouter")
@@ -91,4 +91,21 @@ final class PiBridgeTests: XCTestCase {
         XCTAssertEqual(parts.first, "openrouter")
         XCTAssertEqual(parts.last, "moonshotai/kimi-k2.6")
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension PiBridgeTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "PiBridgeTests",
+        instance: { PiBridgeTests() },
+        checks: [
+            .init(name: "testSlugIsKeySafe") { $0.testSlugIsKeySafe() },
+            .init(name: "testGeneratedJSONShape") { try $0.testGeneratedJSONShape() },
+            .init(name: "testValidateAcceptsConfiguredPair") { $0.testValidateAcceptsConfiguredPair() },
+            .init(name: "testValidateNamesUnknownProvider") { $0.testValidateNamesUnknownProvider() },
+            .init(name: "testValidateNamesUnknownModelWithValidAlternatives") { $0.testValidateNamesUnknownModelWithValidAlternatives() },
+            .init(name: "testValidateSkipsWhenProviderEmpty") { $0.testValidateSkipsWhenProviderEmpty() },
+            .init(name: "testValidateSkipsUnparseableOrForeignConfig") { $0.testValidateSkipsUnparseableOrForeignConfig() },
+            .init(name: "testModelIDsWithSlashesSurvivePairRoundTrip") { $0.testModelIDsWithSlashesSurvivePairRoundTrip() },
+        ])
 }

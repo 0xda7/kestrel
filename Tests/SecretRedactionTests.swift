@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
+import Foundation
+@testable import KestrelCore
 
 /// KES-01/KES-03/KES-04 regression tests: the engine key must never appear in
 /// argv, logs, or diagnostics, and a keyless LAN bind must be refused.
-final class SecretRedactionTests: XCTestCase {
+final class SecretRedactionTests: CheckCase {
     private func makeSettings(apiKeyEnabled: Bool = false) -> ServerSettings {
         var s = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 8080,
                                ngl: 99, ncmoe: 24, ctx: 16384, threads: 6, flashAttn: "auto",
@@ -71,4 +71,19 @@ final class SecretRedactionTests: XCTestCase {
         XCTAssertTrue(ServerController.lanWithoutKeyRefusalMessage(language: "es")
             .localizedCaseInsensitiveContains("clave"))
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension SecretRedactionTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SecretRedactionTests",
+        instance: { SecretRedactionTests() },
+        checks: [
+            .init(name: "testRedactArgumentsMasksEveryAPIKey") { $0.testRedactArgumentsMasksEveryAPIKey() },
+            .init(name: "testRedactArgumentsKeepsTrailingFlagIntact") { $0.testRedactArgumentsKeepsTrailingFlagIntact() },
+            .init(name: "testAPIKeyNeverRidesArgvWhenEnabled") { try $0.testAPIKeyNeverRidesArgvWhenEnabled() },
+            .init(name: "testDiagnosticsReportOmitsTheKey") { $0.testDiagnosticsReportOmitsTheKey() },
+            .init(name: "testStartupBannerOmitsTheKey") { $0.testStartupBannerOmitsTheKey() },
+            .init(name: "testLANRefusalNamesTheKeyRequirement") { $0.testLANRefusalNamesTheKeyRequirement() },
+        ])
 }

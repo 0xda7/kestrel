@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import XCTest
-@testable import Kestrel
-final class MaskEditorTests: XCTestCase {
+import AppKit
+import Foundation
+@testable import KestrelCore
+final class MaskEditorTests: CheckCase {
     func testFitRectCentersAndPreservesAspect() {
         let r = MaskEditorView.fitRect(CGSize(width: 1024, height: 512), in: CGSize(width: 400, height: 400))
         XCTAssertEqual(r.width, 400, accuracy: 0.01)
@@ -41,4 +42,17 @@ final class MaskEditorTests: XCTestCase {
         XCTAssertLessThan(try XCTUnwrap(rep.colorAt(x: 64, y: 64)).whiteComponent, 0.1)
         XCTAssertGreaterThan(try XCTUnwrap(rep.colorAt(x: 64, y: 36)).whiteComponent, 0.9)
     }
+}
+
+// MARK: - Generated registration (port from XCTest)
+extension MaskEditorTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "MaskEditorTests",
+        instance: { MaskEditorTests() },
+        checks: [
+            .init(name: "testFitRectCentersAndPreservesAspect") { $0.testFitRectCentersAndPreservesAspect() },
+            .init(name: "testNormaliseMapsCorners") { $0.testNormaliseMapsCorners() },
+            .init(name: "testRenderPolarityAndOrientation") { try $0.testRenderPolarityAndOrientation() },
+            .init(name: "testEraserCutsBackToBlack") { try $0.testEraserCutsBackToBlack() },
+        ])
 }
