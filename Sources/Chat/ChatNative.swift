@@ -2590,7 +2590,7 @@ final class ChatStore: ObservableObject {
     /// directory via its stored working directory; an import never adopts it
     /// silently. The directory is dropped and the operator re-picks one
     /// deliberately in conversation settings if they want one.
-    static func neutralizedWorkingDirectories(_ conversations: [Conversation]) -> [Conversation] {
+    nonisolated static func neutralizedWorkingDirectories(_ conversations: [Conversation]) -> [Conversation] {
         conversations.map { conversation in
             guard let cwd = conversation.workingDirectory, !cwd.isEmpty else { return conversation }
             var copy = conversation
