@@ -104,3 +104,17 @@
   from patches/README.md frontier notes; the kernels/-layout port collapses shared-metal into
   the llama series — budget it as its own multi-session arc.
 - Local unit tests remain CI-arbitrated (no Xcode yet).
+
+- 2026-10-12 23:00 SESSION BOUNDARY (Xlaunch session 4). Step 6 COMPLETE: slice 3 shipped as
+  fe847d8, CI green — schema-gated tool registration (every shipped tool pinned by
+  AgentLoopTests), dynamic tool-result budget (quarter of remaining window headroom, floored
+  2k, ceiling 12k), latch_delegate first-class presentation + duration badges on tool cards.
+  Step 7 OPENED: frontier refreshed against current master cbe28bb3c (40/92 clean, 52 fail,
+  124 rejected hunks — drifting ~3 patches/day unpinned); report saved as frontier-cbe28bb3c.md;
+  the executable re-authoring map written as engines-reaauthoring-plan.md (Groups A–E, gates,
+  working rules; Group A = the kernels/ layout port is the keystone that makes B mechanical
+  and collapses whisper+sd shared-metal into the llama series). Routing: the plan is T2
+  output; Group A execution is T1-with-review per patch; Group D is an operator-visible
+  decision (which MoE cache wins) needing bench evidence.
+- Next session begins Group A: new port-adapt patch against cbe28bb3c's split tree,
+  0001+0002 re-authored on top, strict-apply-check.sh as the landing tool.
