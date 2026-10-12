@@ -91,7 +91,7 @@ jobs:
 
       - name: Run app unit tests
         if: steps.upstream.outputs.sha != steps.upstream.outputs.current
-        run: swift run kestrel-checks
+        run: swift run --disable-sandbox kestrel-checks
 
       - name: Open pull request
         if: steps.upstream.outputs.sha != steps.upstream.outputs.current

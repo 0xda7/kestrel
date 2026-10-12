@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - run: swift run kestrel-checks
+      - run: swift run --disable-sandbox kestrel-checks
 
   build:
     # PRs validate a single variant; tags and manual runs build BOTH CPU variants
@@ -84,7 +84,7 @@ jobs:
 
       - name: Run unit tests
         if: github.event_name == 'pull_request' && steps.scope.outputs.build == 'true'
-        run: swift run kestrel-checks
+        run: swift run --disable-sandbox kestrel-checks
 
       - name: Build inference engines (x86_64)
         if: github.event_name != 'pull_request' || steps.scope.outputs.build == 'true'
