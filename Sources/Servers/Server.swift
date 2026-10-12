@@ -379,7 +379,13 @@ struct ServerSettings {
             args += ["--slot-save-path", Self.slotCacheDir(port: port).path]
         }
         if reasoningInline { args += ["--reasoning-format", "none"] }
-        if apiKeyEnabled { args += ["--api-key", Keychain.apiKey()] }
+        if apiKeyEnabled {
+            // KES-04: argv is world-readable via ps(1) for the server's whole
+            // lifetime; this engine reads keys from a file just as well, and
+            // the 0600 local secret store is where the key already lives.
+            _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+            args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
+        }
         // A compatible downloaded DFlash draft takes precedence over embedded MTP.
         // Speculation decodes several tokens at once and the expert cache only has slots
         // for one token's experts, so the two cannot run together.
@@ -442,7 +448,11 @@ struct ServerSettings {
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
         if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
-        if apiKeyEnabled { args += ["--api-key", Keychain.apiKey()] }
+        if apiKeyEnabled {
+            // KES-04, router path: same file-backed key as the main launch path.
+            _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+            args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
+        }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
         args += extraArgTokens.cli
         return args
@@ -1888,17 +1898,14 @@ final class ServerController: ObservableObject {
             state = .failed(msg)
             return
         }
-        if settings.localNetworkDiscovery && settings.agentToolsEnabled
-            && !settings.apiKeyEnabled {
-            // Refusal, not a warning: a LAN-exposed engine with agent tools
-            // enabled would serve exec/write tools unauthenticated (any LAN
-            // host becomes code execution on this machine). The key
-            // requirement is already the recommended pairing in Settings;
-            // this makes it non-negotiable when tools are in play.
-            let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-            state = .failed(lang == "es"
-                ? "No se puede iniciar en la red local: las herramientas del agente exigen proteger la API con clave. Activa «Proteger la API con clave» en Ajustes o desactiva las herramientas del agente."
-                : "Cannot start on the local network: agent tools require the API key. Enable \"Protect the API with a key\" in Settings or turn agent tools off.")
+        if settings.localNetworkDiscovery && !settings.apiKeyEnabled {
+            // Refusal, not a warning (KES-01): a LAN bind serves the engine —
+            // and with agent tools on, exec/write tools — to every host that
+            // can reach this Mac, over plaintext HTTP where the key is the
+            // only gate. Agent tools previously triggered this refusal; the
+            // key is now required for ANY non-loopback bind, tools or not.
+            state = .failed(Self.lanWithoutKeyRefusalMessage(
+                language: UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"))
             return
         }
         if settings.routerMode {
@@ -1986,14 +1993,35 @@ final class ServerController: ObservableObject {
             : "TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
     }
 
+    /// Masks every `--api-key <secret>` pair in an argv list so logs and
+    /// diagnostics can carry the full launch line without leaking the key
+    /// (KES-03). Static and pure so the masking contract is unit-testable.
+    nonisolated static func redactArguments(_ items: [String]) -> [String] {
+        var out = items
+        var i = 0
+        while i < out.count {
+            if out[i] == "--api-key", i + 1 < out.count {
+                out[i + 1] = "***"
+                i += 1
+            }
+            i += 1
+        }
+        return out
+    }
+
+    /// KES-01: any non-loopback bind without an API key is refused — LAN
+    /// mode is plaintext HTTP, so the key is the only gate between the LAN
+    /// and this machine's engine (and its agent tools). Pure and static so
+    /// the refusal contract is unit-testable.
+    nonisolated static func lanWithoutKeyRefusalMessage(language: String) -> String {
+        language == "es"
+            ? "No se puede iniciar en la red local: el servidor HTTP sin cifrar exige «Proteger la API con clave». Activa la clave en Ajustes o desactiva el descubrimiento local."
+            : "Cannot start on the local network: the plaintext HTTP server requires \"Protect the API with a key\". Enable the key in Settings or turn local discovery off."
+    }
+
     /// Header at the top of the server log: version, engine, model, GPUs and the
     /// resolved settings, so a pasted log is debuggable without round-trips.
     nonisolated static func startupBanner(settings: ServerSettings) -> String {
-        func redact(_ items: [String]) -> [String] {
-            var out = items
-            if let i = out.firstIndex(of: "--api-key"), i + 1 < out.count { out[i + 1] = "***" }
-            return out
-        }
         let engine: String
         engine = settings.serverBinary == ServerSettings.defaultBinary ? "bundled (official)" : "external"
         // Device order changes between boots, so an index alone does not identify a
@@ -2039,7 +2067,7 @@ final class ServerController: ObservableObject {
          settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.ctx) fa=\(settings.flashAttn) ctk=\(settings.cacheTypeK) ctv=\(settings.cacheTypeV) cacheRAM=\(settings.cacheRAM)
          dflash : \(settings.routerMode ? "per-model router plan" : settings.dflashPlanSummary)
          env: \(envLine)
-         args: \(redact(settings.arguments).joined(separator: " "))
+         args: \(redactArguments(settings.arguments).joined(separator: " "))
         ========================================================
 
         """
@@ -2476,11 +2504,15 @@ final class ServerController: ObservableObject {
         guard discoveryEnabled else { return }
         stopDiscovery()
         let service = NetService(domain: "local.", type: "_http._tcp.", name: "Kestrel API", port: Int32(port))
-        let txt: [String: Data] = [
+        var txt: [String: Data] = [
             "path": Data("/v1".utf8),
             "protocol": Data("openai-compatible".utf8),
-            "auth": Data((UserDefaults.standard.bool(forKey: SettingsKeys.apiKeyEnabled) ? "bearer" : "none").utf8),
         ]
+        // Advertise protection only when it exists; never broadcast
+        // "auth: none" to the LAN (KES-02).
+        if UserDefaults.standard.bool(forKey: SettingsKeys.apiKeyEnabled) {
+            txt["auth"] = Data("bearer".utf8)
+        }
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
         service.publish()
         discoveryService = service

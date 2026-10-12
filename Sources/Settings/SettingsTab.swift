@@ -581,14 +581,14 @@ struct SettingsView: View {
                     }
                     SettingsRow(icon: "key",
                                 title: loc.t("Proteger la API con clave", "Protect the API with a key"),
-                                help: loc.t("Genera una clave (guardada en el Llavero) que el servidor exige a cada petición. El chat de la app la usa automáticamente; útil en Macs compartidas.",
-                                            "Generates a key (stored in the Keychain) required on every request. The in-app chat uses it automatically; useful on shared Macs.")) {
+                                help: loc.t("Genera una clave (guardada en el almacén local de secretos de la app: archivo 0600 en una carpeta privada) que el servidor exige a cada petición. El chat de la app la usa automáticamente; útil en Macs compartidas.",
+                                            "Generates a key (stored in the app's local secret store: a 0600 file in a private folder) required on every request. The in-app chat uses it automatically; useful on shared Macs.")) {
                         SettingsToggle(isOn: $apiKeyEnabled)
                     }
                     SettingsRow(icon: "network",
                                 title: loc.t("Descubrible en red local", "Discoverable on local network"),
-                                help: loc.t("Hace que el servidor escuche en la red local y lo anuncia con Bonjour como 'Kestrel API'. Actívalo solo en redes confiables; reinicia el servidor si está activo.",
-                                            "Makes the server listen on the local network and advertises it with Bonjour as 'Kestrel API'. Enable only on trusted networks; restarts the server if it's running.")) {
+                                help: loc.t("Hace que el servidor escuche en la red local por HTTP sin cifrar y lo anuncia con Bonjour como 'Kestrel API'. Exige clave de API: sin ella el servidor no arranca. La clave viaja sin cifrar, así que úsalo solo en redes de confianza. Reinicia el servidor si está activo.",
+                                            "Makes the server listen on the local network over plaintext HTTP and advertises it with Bonjour as 'Kestrel API'. An API key is required — the server refuses to start without one. The key itself travels unencrypted, so use trusted networks only. Restarts the server if it's running.")) {
                         SettingsToggle(isOn: Binding(get: { localNetworkDiscovery },
                                                      // Trampolined through a closure: the
                                                      // bare method value is not Sendable,
@@ -615,8 +615,8 @@ struct SettingsView: View {
                 }
 
                 if localNetworkDiscovery && !apiKeyEnabled {
-                    Label(loc.t("Recomendado: activa 'Proteger la API con clave' antes de exponer el servidor en la red local.",
-                                "Recommended: enable 'Protect the API with a key' before exposing the server on the local network."),
+                    Label(loc.t("Obligatorio: el servidor no arranca en la red local sin 'Proteger la API con clave'. Actívala para usar el descubrimiento local.",
+                                "Required: the server will not start on the local network without 'Protect the API with a key'. Enable it to use local discovery."),
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)

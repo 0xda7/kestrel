@@ -451,8 +451,24 @@ struct ServerLogView: View {
     private func saveDiagnostics(extra: String?, name: String) {
         let currentSettings = ServerSettings.fromDefaults()
         let logTail = LogFileTail.read(server.logFileURL, maxBytes: 256 * 1024)
+        let report = DiagnosticsExport.report(settings: currentSettings, hardware: hardware,
+                                              logText: logTail.isEmpty ? server.log : logTail,
+                                              extra: extra)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = name
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        if panel.runModal() == .OK, let url = panel.url { try? report.write(to: url, atomically: true, encoding: .utf8) }
+    }
+}
+
+/// Pure builder for the shareable diagnostics report (KES-03): the report is
+/// what users paste into issues, so secrets must be masked at the source —
+/// the same `redactArguments` contract the startup banner uses. Kept free of
+/// UI dependencies so the masking is unit-testable.
+enum DiagnosticsExport {
+    static func report(settings: ServerSettings, hardware: HardwareInfo, logText: String, extra: String?) -> String {
         let gpu = hardware.bestGPU.map { "\($0.name) (\($0.vramMB) MB VRAM)" } ?? "—"
-        let report = """
+        return """
         Kestrel \(AppInfo.version) — diagnostics
         Date: \(Date().formatted(.iso8601))
 
@@ -463,17 +479,13 @@ struct ServerLogView: View {
         Arch: \(hardware.arch)
 
         ## Configuration
-        model: \(URL(fileURLWithPath: currentSettings.modelPath).lastPathComponent)
-        engine: \(currentSettings.serverBinary)
-        args: \(currentSettings.arguments.joined(separator: " "))
+        model: \(URL(fileURLWithPath: settings.modelPath).lastPathComponent)
+        engine: \(settings.serverBinary)
+        args: \(ServerController.redactArguments(settings.arguments).joined(separator: " "))
         \(extra.map { "\n\($0)\n" } ?? "")
         ## Recent log
-        \(logTail.isEmpty ? server.log : logTail)
+        \(logText)
         """
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = name
-        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-        if panel.runModal() == .OK, let url = panel.url { try? report.write(to: url, atomically: true, encoding: .utf8) }
     }
 }
 
