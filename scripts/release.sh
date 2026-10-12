@@ -20,6 +20,11 @@ if ! grep -q "^## \[$V\]" CHANGELOG.md; then
     exit 1
 fi
 
+# The in-app About page reads AppInfo.version. Stamp it from VERSION here so
+# a release can never ship mislabeled (v0.89.1 shipped with "0.89.0" on the
+# About page because the constant was edited by hand).
+sed -i '' "s/static let version = \"[^\"]*\"/static let version = \"$V\"/" Sources/App/AboutTab.swift
+
 git add CHANGELOG.md VERSION Sources/App/AboutTab.swift
 git diff --cached --quiet || git commit -m "release: $V"
 

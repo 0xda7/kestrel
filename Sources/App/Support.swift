@@ -111,6 +111,10 @@ enum SettingsKeys {
     static let piModel = "piModel"
     static let piProvider = "piProvider"
     static let piTimeout = "piTimeout"
+    /// Char budget of the transcript pi sees per turn (oldest messages drop
+    /// first; the newest user message is always kept whole). Bounds the
+    /// per-turn token cost of the one-shot sidecar.
+    static let piContextCharacters = "piContextCharacters"
     /// Thinking level passed to `pi --thinking` when thinking is on
     /// (off|minimal|low|medium|high|xhigh|max; empty = pi's own default).
     static let piThinkingLevel = "piThinkingLevel"
@@ -728,12 +732,15 @@ enum Keychain {
 
 // MARK: - Local secret store (machine-generated, machine-local secrets)
 
-/// File-backed storage for secrets this app generates for itself — currently
-/// the local engine's API key. Unlike the Keychain, reading a 0600 file in a
-/// 0700 Application Support folder never involves an ACL evaluation, so no
-/// access dialog can ever appear for it, and an ad-hoc rebuild keeps access
-/// for free. Secrets the USER brings (remote provider keys) stay in the
-/// Keychain, where OS-level protection belongs.
+/// File-backed storage for machine- and operator-local secrets — the local
+/// engine's API key and the remote provider keys. Unlike the Keychain,
+/// reading a 0600 file in a 0700 Application Support folder never involves an
+/// ACL evaluation, so no access dialog can ever appear for it, and an ad-hoc
+/// rebuild keeps access for free. Provider keys moved here from the Keychain
+/// by operator decision: on ad-hoc builds the Keychain's per-signature ACL
+/// raised the macOS password dialog after every rebuild, a cost that was
+/// never requested. Legacy Keychain items migrate on first read and are then
+/// deleted (see InferenceRoutes).
 enum LocalSecretStore {
     /// In-process cache, same pattern as Keychain's: reads happen on hot paths
     /// (every chat send resolves the engine key via ServerSettings.activeAPIKey)
@@ -775,6 +782,11 @@ enum LocalSecretStore {
         } catch {
             return false
         }
+    }
+
+    static func delete(_ name: String) {
+        try? FileManager.default.removeItem(at: url(name))
+        _ = cache.withLock { $0.removeValue(forKey: name) }
     }
 }
 

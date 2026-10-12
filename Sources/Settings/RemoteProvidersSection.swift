@@ -2,7 +2,9 @@ import SwiftUI
 
 /// Settings section for optional remote inference providers. Lives under
 /// Settings → Inference. Routes persist via `InferenceRoutes`; the API key
-/// goes to the Keychain, never to UserDefaults or logs.
+/// goes to the local 0600 secret store (never UserDefaults or logs, and no
+/// longer the Keychain — its ad-hoc ACL prompted for the Mac password after
+/// every rebuild).
 struct RemoteProvidersSection: View {
     @EnvironmentObject var loc: Localizer
 
@@ -131,8 +133,9 @@ struct RemoteProvidersSection: View {
         .padding(.vertical, 2)
     }
 
-    /// One credential per provider, stored under its own Keychain account.
-    /// Empty input + an existing key = clear the key (Save acts as Delete).
+    /// One credential per provider, stored under its own file in the local
+    /// secret store. Empty input + an existing key = clear the key (Save acts
+    /// as Delete).
     @ViewBuilder private func routeKeyRow(_ route: InferenceRoute) -> some View {
         let id = route.id.uuidString
         let hasKey = routesWithKeys.contains(id)
@@ -150,21 +153,26 @@ struct RemoteProvidersSection: View {
                 if trimmed.isEmpty { routesWithKeys.remove(id) }
                 else { routesWithKeys.insert(id) }
                 routeKeyDrafts[id] = ""
+                PiBridge.sync()
             }
             .buttonStyle(.borderless)
             .disabled((routeKeyDrafts[id] ?? "").isEmpty && !hasKey)
             if hasKey {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                    .accessibilityLabel(loc.t("Clave guardada en el llavero", "Key stored in Keychain"))
+                    .accessibilityLabel(loc.t("Clave guardada", "Key stored"))
             }
         }
-        .infoTip(loc.t("La clave se guarda en el llavero del sistema, asociada solo a este proveedor, y se envía únicamente a él. No se registra ni se sincroniza.",
-                       "The key is stored in the system Keychain, scoped to this provider only, and sent only to it. It is never logged or synced."))
+        .infoTip(loc.t("La clave se guarda cifrada solo en este Mac (almacén local de secretos de Kestrel), asociada solo a este proveedor, y se envía únicamente a él. No se registra ni se sincroniza.",
+                       "The key is stored on this Mac only (Kestrel's local secret store), scoped to this provider only, and sent only to it. It is never logged or synced."))
     }
 
     private func persist() {
         InferenceRoutes.save(routes)
+        // The sidecar's provider config follows Kestrel's routes; a stale
+        // entry there is how chat ended up answering through a provider the
+        // user never picked.
+        PiBridge.sync()
     }
 
     private func test(_ route: InferenceRoute) async {

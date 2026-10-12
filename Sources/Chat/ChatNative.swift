@@ -817,7 +817,11 @@ final class ChatStore: ObservableObject {
     /// context here is exactly the conversation.
     private func piPrompt(for i: Int,
                           continuationInstruction: String?) -> String {
-        let maximumContextCharacters = 24_000
+        // Char budget is operator-tunable: a long chat re-sends this much
+        // every turn, so the default (12k chars ≈ 3k tokens) weighs cost
+        // against continuity; the newest user message always rides whole.
+        let storedBudget = UserDefaults.standard.integer(forKey: SettingsKeys.piContextCharacters)
+        let maximumContextCharacters = storedBudget >= 2_000 ? min(storedBudget, 48_000) : 12_000
         var budget = maximumContextCharacters
         var lines: [String] = []
         for message in conversations[i].messages.reversed() {
@@ -871,6 +875,16 @@ final class ChatStore: ObservableObject {
 
     private func sendPiMode(i: Int, port: Int, system: String, thinking: Bool,
                             continuationInstruction: String?) {
+        // Silent-strand guard: pi falls back to its built-in default provider
+        // when the requested provider/model pair is missing from its config,
+        // and a dead fallback key produces an empty reply with exit 0 and no
+        // stderr. Refuse the turn here, with the fix in the message, instead
+        // of publishing an empty bubble.
+        if let problem = PiBridge.validate(provider: PiDelegateService.configuredProvider,
+                                           model: PiDelegateService.configuredModel) {
+            conversations[i].messages.append(ChatMessage(role: "assistant", content: problem))
+            return
+        }
         conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
         let convID = conversations[i].id
         let toolCwd = effectiveWorkingDirectory(for: convID)

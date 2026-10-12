@@ -97,64 +97,88 @@ enum InferenceRoutes {
         return route
     }
 
-    // MARK: Per-provider credentials (Keychain, one item per route)
+    // MARK: Per-provider credentials (local 0600 store, one file per route)
 
-    /// Session cache of resolved credentials. Every uncached Keychain READ
-    /// decrypts the secret and evaluates the item's ACL — on ad-hoc local
-    /// builds that raises the password dialog once per item per launch. The
-    /// chat send path resolves the active route's key on EVERY message, so
-    /// this cache is what turns a per-message prompt into at most one per
-    /// launch. setAPIKey/delete keep it coherent.
+    /// Provider keys live in the local secret store, NOT the system Keychain:
+    /// this app is ad-hoc signed, so every rebuild changes the signing
+    /// identity and every uncached Keychain read of an older item raises the
+    /// macOS password dialog — a cost the operator explicitly declined
+    /// ("never asked for this"). Reading a 0600 file in a 0700 folder never
+    /// prompts, survives rebuilds, and is the same trade the engine's own
+    /// key already made. Keychain items from older builds are migrated on
+    /// first read (that one read may prompt, and it is the last time) and
+    /// then deleted, so no future reader can trip the dialog.
+
+    /// Session cache of resolved credentials. The chat send path resolves the
+    /// active route's key on every message; this cache keeps that at file-read
+    /// cost (in-process, cannot go stale — setAPIKey/delete are the only
+    /// writers).
     private static let keyCache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
+
+    private static func secretName(for routeID: UUID) -> String {
+        "route-key-\(routeID.uuidString)"
+    }
 
     private static func keychainAccount(for routeID: UUID) -> String {
         "remote-api-key-\(routeID.uuidString)"
     }
 
-    /// The credential for one route: its own Keychain item when set, else the
-    /// legacy shared item (migration happens when the user saves a new key).
-    /// Cached in-process after the first successful read.
+    /// The credential for one route: its own stored key when set, else the
+    /// legacy shared Keychain item (migrated off on read). Cached in-process
+    /// after the first successful read.
     static func apiKey(for route: InferenceRoute) -> String {
-        let account = keychainAccount(for: route.id)
-        if let cached = keyCache.withLock({ $0[account] }) {
+        let name = secretName(for: route.id)
+        if let cached = keyCache.withLock({ $0[name] }) {
             return cached
         }
-        let scoped = Keychain.get(account) ?? ""
-        if !scoped.isEmpty {
-            keyCache.withLock { $0[account] = scoped }
-            return scoped
+        if let stored = LocalSecretStore.value(name), !stored.isEmpty {
+            keyCache.withLock { $0[name] = stored }
+            return stored
         }
-        let legacy = Keychain.get(legacyKeychainAccount) ?? ""
-        if !legacy.isEmpty {
-            keyCache.withLock { $0[account] = legacy }
+        // Legacy Keychain migration: scoped item first, then the pre-route
+        // shared one. The read may raise the access dialog once — after it,
+        // the key moves to the file store and the Keychain item is deleted so
+        // no later read can prompt again.
+        let account = keychainAccount(for: route.id)
+        for source in [account, legacyKeychainAccount] {
+            if let legacy = Keychain.get(source), !legacy.isEmpty {
+                LocalSecretStore.store(name, legacy)
+                Keychain.delete(source)
+                keyCache.withLock { $0[name] = legacy }
+                return legacy
+            }
         }
-        return legacy
+        return ""
     }
 
-    /// Existence check WITHOUT decrypting: settings UI and migration logic
-    /// only need to know whether a key is present, and a metadata probe never
-    /// evaluates the item's ACL, so this never raises the access dialog.
+    /// Existence check WITHOUT decrypting any Keychain item: settings UI only
+    /// needs to know whether a key is present, and a metadata probe never
+    /// evaluates an item's ACL, so this never raises the access dialog.
     static func hasAPIKey(for route: InferenceRoute) -> Bool {
-        let account = keychainAccount(for: route.id)
-        if keyCache.withLock({ $0[account] }) != nil { return true }
-        return Keychain.exists(account) || Keychain.exists(legacyKeychainAccount)
+        let name = secretName(for: route.id)
+        if keyCache.withLock({ $0[name] }) != nil { return true }
+        if LocalSecretStore.value(name) != nil { return true }
+        return Keychain.exists(keychainAccount(for: route.id))
+            || Keychain.exists(legacyKeychainAccount)
     }
 
-    /// Stores (or clears with an empty string) the route's credential. Saving
-    /// a scoped key removes the legacy shared item only when every configured
-    /// route now carries its own, so nothing loses access mid-migration.
+    /// Stores (or clears with an empty string) the route's credential.
+    /// Saving a scoped key removes the legacy shared item only when every
+    /// configured route now carries its own, so nothing loses access
+    /// mid-migration.
     static func setAPIKey(_ key: String, for route: InferenceRoute) {
-        let account = keychainAccount(for: route.id)
+        let name = secretName(for: route.id)
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            Keychain.delete(account)
+            LocalSecretStore.delete(name)
+            Keychain.delete(keychainAccount(for: route.id))
+            _ = keyCache.withLock { $0.removeValue(forKey: name) }
         } else {
-            Keychain.setThisDeviceOnly(trimmed, account: account)
-        }
-        if trimmed.isEmpty {
-            _ = keyCache.withLock { $0.removeValue(forKey: account) }
-        } else {
-            keyCache.withLock { $0[account] = trimmed }
+            LocalSecretStore.store(name, trimmed)
+            // Retire any Keychain copy of this route's key: the file store is
+            // authoritative now and deleting never prompts.
+            Keychain.delete(keychainAccount(for: route.id))
+            keyCache.withLock { $0[name] = trimmed }
         }
         let unscoped = load().filter { $0.isConfigured }.allSatisfy {
             hasAPIKey(for: $0)
