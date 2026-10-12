@@ -1235,6 +1235,28 @@ final class ChatStore: ObservableObject {
             }
         }
 
+        // Context-trap guard: the engine answers a request bigger than its
+        // window with send_error and nothing streams (the live 70,871-token
+        // failure). Refuse here instead — the turn stays in the transcript
+        // and the notice names the ways out. Remote routes are exempt: the
+        // provider's window, not the local engine's, applies there.
+        if sendRoute?.isConfigured != true {
+            let window = ServerSettings.fromDefaults().resolvedCtx
+            let estimate = Self.estimatedRequestTokens(messages: conversations[i].messages,
+                                                       system: systemWithCwd)
+            if window > 0, estimate + maxTokens + 256 > window {
+                conversations[i].messages.append(ChatMessage(
+                    role: "assistant", content: Self.contextOverflowNotice(
+                        estimated: estimate, window: window)))
+                conversations[i].updated = Date()
+                generating = false
+                generatingConvID = nil
+                live.reset()
+                save()
+                return
+            }
+        }
+
         conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
 
         let buffer = StreamBuffer()
@@ -2087,6 +2109,19 @@ final class ChatStore: ObservableObject {
         return ""
     }
 
+    /// Token estimate of the next request: every visible message plus the
+    /// system prompt, using the same per-message estimator the compaction
+    /// path trusts. The engine's exact count arrives with the response
+    /// (`contextUsed`); this only needs to catch the cannot-fit class first.
+    nonisolated static func estimatedRequestTokens(messages: [ChatMessage], system: String) -> Int {
+        system.utf8.count / 4 + messages.reduce(0) { $0 + $1.estimatedTokens }
+    }
+
+    /// Bilingual notice for a request that cannot fit the engine's window.
+    nonisolated static func contextOverflowNotice(estimated: Int, window: Int) -> String {
+        "Este mensaje no cabe en la ventana de contexto (≈\(estimated) tokens > \(window)). Resume el historial («Recuperar velocidad»), archiva turnos con la herramienta de memoria, abre un chat nuevo o sube el contexto en Ajustes. / This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
+    }
+
     nonisolated static func compactionCutoff(messages: [ChatMessage], alreadyCompacted: Int,
                                              keepTokens: Int = 0) -> Int? {
         var cutoff = messages.count - 4
@@ -2213,8 +2248,9 @@ final class ChatStore: ObservableObject {
         let d = UserDefaults.standard
         let enabled = d.object(forKey: SettingsKeys.chatAutoCompact) == nil
             ? true : d.bool(forKey: SettingsKeys.chatAutoCompact)
-        let limit = d.object(forKey: SettingsKeys.ctx) == nil
-            ? 16384 : d.integer(forKey: SettingsKeys.ctx)
+        // The window the engine actually launched with, not the raw setting:
+        // under contextAutomatic the solver may have shrunk it.
+        let limit = ServerSettings.fromDefaults().resolvedCtx
         guard enabled, !generating, !compacting, limit > 0,
               let i = conversations.firstIndex(where: { $0.id == id }),
               let used = conversations[i].contextUsed, Double(used) / Double(limit) > 0.7 else { return }
@@ -2756,7 +2792,14 @@ struct NativeChatView: View {
     @AppStorage(SettingsKeys.chatPDFAsImages) private var pdfAsImages = false
     @AppStorage(SettingsKeys.chatShowSystemMessage) private var showSystemMessage = true
     @AppStorage(SettingsKeys.port) private var port = 8080
-    @AppStorage(SettingsKeys.ctx) private var contextLimit = 16384
+    @AppStorage(SettingsKeys.ctx) private var configuredContextLimit = 16384
+    @AppStorage(SettingsKeys.contextAutomatic) private var contextAutomatic = false
+    /// The window the engine actually launched with — the raw setting when
+    /// manual, the VRAM-fitted solver value when automatic, so the meter
+    /// and the compaction threshold never lie about what fits.
+    private var contextLimit: Int {
+        contextAutomatic ? ServerSettings.fromDefaults().resolvedCtx : configuredContextLimit
+    }
     @AppStorage(SettingsKeys.routerMode) private var routerMode = false
     @AppStorage(SettingsKeys.chatSelectedModel) private var chatSelectedModel = ""
     @State private var draft = ""

@@ -315,6 +315,20 @@ struct ServerSettings {
         (cacheTypeV.hasPrefix("turbo") && cacheTypeK == "q4_0")
     }
 
+    /// The context window actually launched with. `contextAutomatic` used to
+    /// be display-only — "Auto" aliased 16384 while the Dashboard claimed
+    /// the app had chosen it. It now computes the largest window whose
+    /// weights + KV cache still fit VRAM, with the same halving solver
+    /// router mode uses, killing the context-spill class (a window that
+    /// pushes KV out of VRAM and drops generation ~20×) at launch.
+    var resolvedCtx: Int {
+        guard contextAutomatic else { return ctx }
+        return Self.routerCtx(forModel: modelPath, requested: ctx,
+                                          ncmoe: ncmoe,
+                                          kvScale: Estimator.kvTypeScale(cacheTypeK),
+                                          reserveMB: vramReserveMB)
+    }
+
     var arguments: [String] {
         if routerMode { return routerArguments }
         // Quantized KV requires FA, so it stays forced. Elsewhere the AMD kernel rides
@@ -323,7 +337,7 @@ struct ServerSettings {
         var args = [
             "-m", modelPath,
             "-ngl", String(ngl),
-            "-c", String(ctx),
+            "-c", String(resolvedCtx),
             "-t", String(threads),
             "-fa", faValue,
             "--host", localNetworkDiscovery ? "0.0.0.0" : "127.0.0.1",
@@ -2064,7 +2078,7 @@ final class ServerController: ObservableObject {
          GPUs detected:
         \(gpus.isEmpty ? "    (none)" : gpus)
          GPU select: \(gpuSel) | force-VRAM-buffers: \(env["GGML_METAL_SHARED_BUFFERS_DISABLE"] == "1" ? "yes" : "no")
-         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.ctx) fa=\(settings.flashAttn) ctk=\(settings.cacheTypeK) ctv=\(settings.cacheTypeV) cacheRAM=\(settings.cacheRAM)
+         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.cacheTypeK) ctv=\(settings.cacheTypeV) cacheRAM=\(settings.cacheRAM)
          dflash : \(settings.routerMode ? "per-model router plan" : settings.dflashPlanSummary)
          env: \(envLine)
          args: \(redactArguments(settings.arguments).joined(separator: " "))

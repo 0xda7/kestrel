@@ -82,11 +82,13 @@ struct ServerDetailView: View {
                             detail: estimate.map { String(format: "%.1f GB RAM", $0.ramGB) }
                                 ?? loc.t("Selecciona un modelo", "Choose a model"), tint: .chartSecondary)
             DashboardMetric(title: loc.t("Longitud de contexto", "Context length"), icon: "doc.plaintext",
-                            value: settings.contextAutomatic ? loc.t("Auto · 16k", "Auto · 16k") : "\(settings.ctx / 1024)k",
+                            value: settings.contextAutomatic
+                                ? "\(loc.t("Auto", "Auto")) · \(max(settings.resolvedCtx / 1024, 1))k"
+                                : "\(settings.ctx / 1024)k",
                             detail: settings.contextAutomatic
-                                ? loc.t("Seleccionado por la app", "Selected by the app")
+                                ? loc.t("Calculada al iniciar: pesa el modelo y tu VRAM", "Computed at launch: weighs the model and your VRAM")
                                 : loc.t("Máximo configurado", "Configured maximum"),
-                            progress: min(Double(settings.ctx) / 262_144, 1), tint: .chartSecondary)
+                            progress: min(Double(settings.resolvedCtx) / 262_144, 1), tint: .chartSecondary)
         }
     }
 
@@ -95,7 +97,7 @@ struct ServerDetailView: View {
             $0.url.standardizedFileURL.path == URL(fileURLWithPath: settings.modelPath).standardizedFileURL.path
         }) else { return nil }
         return Estimator.estimate(
-            spec: Catalog.spec(forLocal: model), hw: hardware, ctx: settings.ctx,
+            spec: Catalog.spec(forLocal: model), hw: hardware, ctx: settings.resolvedCtx,
             kvScale: (Estimator.kvTypeScale(settings.cacheTypeK) + Estimator.kvTypeScale(settings.cacheTypeV)) / 2,
             multiGPU: settings.multiGPU || settings.gpuList.count >= 2,
             tensorSplit: settings.splitMode == "tensor", ncmoeOverride: settings.ncmoe)
@@ -613,7 +615,7 @@ private struct ServerConfigurationWorkspace: View {
 
     private var contextOptions: [KestrelDropdown<String>.Option] {
         [.init(value: "automatic", title: loc.t("Automático", "Automatic"),
-               subtitle: loc.t("Recomendado · 16k", "Recommended · 16k"), systemImage: "wand.and.stars")] +
+               subtitle: loc.t("Calculado al iniciar según modelo y VRAM", "Computed at launch from model and VRAM"), systemImage: "wand.and.stars")] +
         [8192, 16384, 32768, 65536].map {
             .init(value: String($0), title: "\($0 / 1024)k", systemImage: "doc.plaintext")
         }
@@ -704,7 +706,10 @@ private struct ServerConfigurationWorkspace: View {
             settings.contextAutomatic ? "automatic" : String(settings.ctx)
         }, set: { value in
             let automatic = value == "automatic"
-            let amount = automatic ? 16384 : (Int(value) ?? 16384)
+            // Auto keeps the configured value as the solver's ceiling — it
+            // no longer rewrites 16384 behind the operator's back; the
+            // launch path computes what actually fits (ServerSettings.resolvedCtx).
+            let amount = automatic ? settings.ctx : (Int(value) ?? settings.ctx)
             if server.profile == nil {
                 globalContextAutomatic = automatic
                 globalContext = amount
