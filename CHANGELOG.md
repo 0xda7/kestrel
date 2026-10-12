@@ -3,6 +3,18 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+
+## [Unreleased]
+
+### Fixed
+
+- **Security wave A — the 2026-10-10 assessment's two Highs and the key-exposure mediums are closed (KES-01..04).** A server bound to the local network now refuses to start without an API key — any non-loopback bind, not just the previous agent-tools case — because plaintext HTTP leaves the key as the only gate between the LAN and this machine's engine. "Export diagnostics" no longer leaks `--api-key` into the shareable report: the builder is extracted and reuses the startup banner's redaction, with regression tests asserting the key never appears. The engine key left child-process argv (`ps`-visible for the server's whole lifetime): the bundled engine reads it from the 0600 local secret store through `--api-key-file`. Bonjour no longer broadcasts `auth: none` to the LAN. The Settings copy now states the plaintext-HTTP risk, the key requirement (warning upgraded from "recommended" to "required"), and where the key actually lives. Diagnosis and plan for the full upgrade: `UPGRADE_REPORT.md` and `.agents/missions/2026-10-12-enterprise-upgrade/`.
+
+
+### Changed
+
+- **Security wave B — tool consent, import gates, updater fail-closed, and the remaining secret moves (KES-05..10).** "Always allow" for agent tools is session-scoped now — restarting the app clears every grant, `exec_shell_command` is never eligible (the permission card shows per-call confirmation only), and the permanent grants persisted by older versions are swept on first use. Importing settings that would change what gets spawned (engine/latch/pi binaries, MCP server commands, extra engine arguments) shows exactly what will run and requires explicit approval before applying. Imported transcripts no longer adopt a stored tool working directory (KES-07). The updater fails closed: a release that publishes no checksums, or a checksum entry that can't be verified, aborts the install; the mounted app must carry a valid code signature matching the running app's team; and the quarantine attribute is no longer stripped from the installed copy. The memory-archive receiver token moved from plaintext UserDefaults into the local secret store (0700/0600), migrating once and deleting the legacy copy; the `secrets/` directory is created with explicit 0700 permissions. Advisory triage at each vendor bump is recorded in `patches/README.md`.
+
 ## [0.89.2] - 2026-10-12
 
 ### Fixed

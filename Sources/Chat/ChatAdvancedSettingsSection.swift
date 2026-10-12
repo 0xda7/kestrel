@@ -30,7 +30,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
-    @AppStorage(SettingsKeys.memoryArchiveHookSecret) private var archiveHookSecret = ""
+    /// KES-08: the receiver token lives in the local secret store, not UserDefaults.
     @AppStorage(SettingsKeys.chatSystem) private var systemPrompt = ""
     @AppStorage(SettingsKeys.chatTopP) private var topP = 0.95
     @AppStorage(SettingsKeys.chatMinP) private var minP = 0.05
@@ -435,7 +435,9 @@ struct ChatAdvancedSettingsSection: View {
                                     title: loc.t("Token del receptor (opcional)", "Receiver token (optional)"),
                                     help: loc.t("Se envía como Authorization: Bearer en cada entrega, para receptores que lo pidan.",
                                                 "Sent as Authorization: Bearer with each delivery, for receivers that ask for one.")) {
-                            DeferredSettingsTextField("", text: $archiveHookSecret, width: 220)
+                            DeferredSettingsTextField("", text: Binding(
+                                get: { MemoryArchiveHook.receiverToken() ?? "" },
+                                set: { MemoryArchiveHook.setReceiverToken($0) }), width: 220)
                                 .autocorrectionDisabled()
                         }
                     }
@@ -609,6 +611,6 @@ struct ChatAdvancedSettingsSection: View {
         latchDelegateEnabled = false; latchPrimaryEnabled = false
         latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""
-        archiveHookURL = ""; archiveHookSecret = ""
+        archiveHookURL = ""; MemoryArchiveHook.setReceiverToken("")
     }
 }

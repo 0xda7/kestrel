@@ -13,6 +13,16 @@ image/          stable-diffusion.cpp, outside the Metal backend
 file name**, recursively, so the number is the apply order: never reuse one, and keep it when
 moving a file.
 
+## Advisory triage (KES-11/13/14)
+
+Every vendor pin bump must carry a triage note in the bump's CHANGELOG entry: which published
+advisories (CVE/GHSA) the old pin was exposed to, which the new pin includes, and which do not
+apply and why (e.g. RPC-backend RCEs are not compiled in — the build is Metal-only without
+`-DGGML_RPC`). The 2026-10-10 assessment's baseline: all 13 published llama.cpp advisories
+predate the then-current pin, and whisper.cpp / stable-diffusion.cpp had none published. CI
+builds the committed pins only — `scripts/build-engines.sh` refuses environment-overridden
+commit variables when `CI` is set.
+
 ## `llama/`
 
 `0001` to `0007` are the port to upstream `9575389609d6`, split by the files they touch. They are a

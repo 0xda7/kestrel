@@ -38,13 +38,22 @@ struct ToolPermissionCard: View {
                     .padding(8)
                     .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 7))
             }
+            if request.name == ChatToolsService.execShellToolName {
+                // KES-05: shell execution confirms every call — there is no
+                // standing consent for arbitrary commands on this account.
+                Text(loc.t("Los comandos del shell piden confirmación cada vez.",
+                           "Shell commands ask for confirmation every time."))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             HStack {
                 Button(loc.t("Denegar", "Deny"), role: .destructive) { decide(.deny) }
                 Spacer()
-                if request.serverID != nil {
-                    Button(loc.t("Siempre este servidor", "Always this server")) { decide(.alwaysServer) }
+                if request.name != ChatToolsService.execShellToolName {
+                    if request.serverID != nil {
+                        Button(loc.t("Siempre este servidor", "Always this server")) { decide(.alwaysServer) }
+                    }
+                    Button(loc.t("Permitir siempre en esta sesión", "Always for this session")) { decide(.always) }
                 }
-                Button(loc.t("Permitir siempre", "Always allow")) { decide(.always) }
                 Button(loc.t("Permitir una vez", "Allow once")) { decide(.once) }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)

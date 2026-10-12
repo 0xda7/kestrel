@@ -772,7 +772,8 @@ enum LocalSecretStore {
     static func store(_ name: String, _ value: String) -> Bool {
         let fileURL = url(name)
         try? FileManager.default.createDirectory(atPath: fileURL.deletingLastPathComponent().path,
-                                                 withIntermediateDirectories: true)
+                                                 withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
         do {
             try value.write(to: fileURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o600],

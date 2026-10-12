@@ -71,6 +71,8 @@ struct SettingsView: View {
     @State private var engineAPIKey = ""
     @State private var showResetConfirm = false
     @State private var settingsTransferMessage: String?
+    @State private var pendingImportData: Data?
+    @State private var pendingImportRisks: [String] = []
     @State private var settingsDestination: SettingsDestination = .general
 
     private var availableKVTypes: [String] {
@@ -292,6 +294,23 @@ struct SettingsView: View {
         } message: {
             Text(settingsTransferMessage ?? "")
         }
+        .confirmationDialog(loc.t("Esta configuración ejecuta procesos",
+                                  "This configuration spawns processes"),
+                            isPresented: Binding(get: { pendingImportData != nil },
+                                                 set: { if !$0 { pendingImportData = nil } })) {
+            Button(loc.t("Importar de todos modos", "Import anyway")) {
+                if let data = pendingImportData { applyImportedSettings(data) }
+                pendingImportData = nil
+                pendingImportRisks = []
+            }
+            Button(loc.t("Cancelar", "Cancel"), role: .cancel) {
+                pendingImportData = nil
+                pendingImportRisks = []
+            }
+        } message: {
+            Text((loc.t("Al importarla, Kestrel ejecutaría:", "Importing would make Kestrel run:") + "\n\n")
+                 + pendingImportRisks.joined(separator: "\n"))
+        }
     }
 
     private var settingsNavigation: some View {
@@ -416,14 +435,31 @@ struct SettingsView: View {
             settingsTransferMessage = error.localizedDescription
         }
     }
-
     private func importSettings() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let count = try SettingsArchive.importData(Data(contentsOf: url))
+            let data = try Data(contentsOf: url)
+            // KES-06: a settings file can carry process-spawning config —
+            // binaries, MCP commands, engine flags. Show exactly what would
+            // run and require explicit approval before applying any of it.
+            let risks = SettingsArchive.processSpawningSummary(for: data)
+            if risks.isEmpty {
+                applyImportedSettings(data)
+            } else {
+                pendingImportRisks = risks
+                pendingImportData = data
+            }
+        } catch {
+            settingsTransferMessage = error.localizedDescription
+        }
+    }
+
+    private func applyImportedSettings(_ data: Data) {
+        do {
+            let count = try SettingsArchive.importData(data)
             settingsTransferMessage = loc.t("Se importaron %@ ajustes. Reinicia el servidor para aplicar los cambios del motor.", "Imported %@ settings. Restart the server to apply engine changes.", "\(count)")
         } catch {
             settingsTransferMessage = error.localizedDescription

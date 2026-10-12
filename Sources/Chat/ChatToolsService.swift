@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 
 struct BuiltinToolInfo: Identifiable, Sendable {
     let displayName: String
@@ -99,15 +100,40 @@ enum ChatToolsService {
         "file_glob_search", "grep_search", "exec_shell_command", "run_javascript"
     ]
 
+    /// KES-05: "always" consent is session-scoped and never covers the shell.
+    /// A persisted, global grant for `exec_shell_command` is full
+    /// user-account code execution for the life of the install — one
+    /// misclick away. Grants live in memory, so restarting the app clears
+    /// them; grants persisted by pre-KES-05 versions are swept away.
+    static let execShellToolName = "exec_shell_command"
+    private static let sessionAllowed = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+    private static let legacySwept = OSAllocatedUnfairLock<Bool>(initialState: false)
+
     static func isAlwaysAllowed(_ name: String) -> Bool {
-        UserDefaults.standard.bool(forKey: permissionKey(name))
+        sweepLegacyPermissionsIfNeeded()
+        guard name != execShellToolName else { return false }
+        return sessionAllowed.withLock { $0.contains(name) }
     }
 
     static func allowAlways(_ name: String) {
-        UserDefaults.standard.set(true, forKey: permissionKey(name))
+        sweepLegacyPermissionsIfNeeded()
+        guard name != execShellToolName else { return }
+        sessionAllowed.withLock { $0.insert(name) }
     }
 
     static func revokeAllPermissions() {
+        sessionAllowed.withLock { $0.removeAll() }
+        sweepLegacyPermissionsIfNeeded(force: true)
+    }
+
+    /// Versions before KES-05 persisted "always" grants in UserDefaults;
+    /// sweep them (once lazily, always on explicit revoke) so permanent
+    /// grants from old installs die with this version instead of surviving
+    /// as invisible standing consent.
+    private static func sweepLegacyPermissionsIfNeeded(force: Bool = false) {
+        let shouldRun = force || !legacySwept.withLock({ $0 })
+        legacySwept.withLock { $0 = true }
+        guard shouldRun else { return }
         let defaults = UserDefaults.standard
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("toolPermission.always.") {
             defaults.removeObject(forKey: key)

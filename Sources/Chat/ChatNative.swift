@@ -1799,6 +1799,9 @@ final class ChatStore: ObservableObject {
             ChatToolsService.allowAlways(request.name)
         } else if decision == .alwaysServer, let serverID = request.serverID,
                   let context = agentContext {
+            // Snapshot of the server's CURRENT tools only (KES-05): tools it
+            // registers later still prompt, and allowAlways itself refuses
+            // the shell, so a server-wide grant can never whitewash exec.
             for tool in context.tools where tool.mcpServerID == serverID {
                 ChatToolsService.allowAlways(tool.name)
             }
@@ -2573,13 +2576,27 @@ final class ChatStore: ObservableObject {
         }
 
         let existingConversationIDs = Set(conversations.map(\.id))
-        let additions = imported.conversations.filter { !existingConversationIDs.contains($0.id) }
+        var additions = imported.conversations.filter { !existingConversationIDs.contains($0.id) }
+        additions = Self.neutralizedWorkingDirectories(additions)
         let existingProjectIDs = Set(projects.map(\.id))
         projects.append(contentsOf: imported.projects.filter { !existingProjectIDs.contains($0.id) })
         conversations.insert(contentsOf: additions, at: 0)
         if currentID == nil { currentID = conversations.first?.id }
         save()
         return additions.count
+    }
+
+    /// KES-07: a transcript authored elsewhere can aim the agent tools at any
+    /// directory via its stored working directory; an import never adopts it
+    /// silently. The directory is dropped and the operator re-picks one
+    /// deliberately in conversation settings if they want one.
+    static func neutralizedWorkingDirectories(_ conversations: [Conversation]) -> [Conversation] {
+        conversations.map { conversation in
+            guard let cwd = conversation.workingDirectory, !cwd.isEmpty else { return conversation }
+            var copy = conversation
+            copy.workingDirectory = nil
+            return copy
+        }
     }
 }
 

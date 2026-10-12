@@ -40,6 +40,40 @@ enum SettingsArchive {
         return count
     }
 
+    /// KES-06: everything an import would restore that can spawn a process
+    /// or change what gets spawned — engine and sidecar binary paths, MCP
+    /// server commands, and extra engine arguments. The import UI shows this
+    /// list and requires explicit approval before any of it is applied: a
+    /// settings file handed to the user is otherwise one-click arbitrary
+    /// process execution.
+    static func processSpawningSummary(for data: Data, defaults: UserDefaults = .standard) -> [String] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let config = root["config"] as? [String: Any] else { return [] }
+        var rows: [String] = []
+        let binaryKeys: [(String, String)] = [
+            (SettingsKeys.serverBinary, "engine"),
+            (SettingsKeys.latchBinaryPath, "latch"),
+            (SettingsKeys.piBinaryPath, "pi"),
+        ]
+        for (key, label) in binaryKeys {
+            if let raw = config[key], let path = restoredValue(raw) as? String,
+               !path.isEmpty, path != (defaults.string(forKey: key) ?? "") {
+                rows.append("\(label) binary: \(path)")
+            }
+        }
+        if let raw = config[SettingsKeys.extraArgs], let extra = restoredValue(raw) as? String,
+           !extra.isEmpty, extra != (defaults.string(forKey: SettingsKeys.extraArgs) ?? "") {
+            rows.append("engine extraArgs: \(extra)")
+        }
+        if let raw = config[SettingsKeys.mcpServers], let blob = restoredValue(raw) as? Data,
+           let servers = try? JSONDecoder().decode([MCPServer].self, from: blob) {
+            for server in servers where server.transport.isLocal && server.isConfigured {
+                rows.append("MCP '\(server.name)': \(([server.command] + server.arguments).joined(separator: " "))")
+            }
+        }
+        return rows
+    }
+
     private static func archiveValue(_ value: Any) -> Any {
         if let data = value as? Data { return ["$data": data.base64EncodedString()] }
         if let array = value as? [Any] { return array.map(archiveValue) }

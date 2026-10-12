@@ -53,11 +53,28 @@ actor MemoryArchiveHook {
         return url
     }
 
-    private nonisolated static var secret: String? {
-        let s = UserDefaults.standard.string(forKey: SettingsKeys.memoryArchiveHookSecret)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    /// KES-08: the receiver token rode plaintext UserDefaults — a ready-made
+    /// exfiltration credential next to the endpoint it authorizes. It lives
+    /// in the local secret store now; the legacy copy migrates once and is
+    /// then deleted so nothing plaintext remains.
+    nonisolated static func receiverToken() -> String? {
+        if let legacy = UserDefaults.standard.string(forKey: SettingsKeys.memoryArchiveHookSecret)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !legacy.isEmpty {
+            _ = LocalSecretStore.store("memory-archive-token", legacy)
+            UserDefaults.standard.removeObject(forKey: SettingsKeys.memoryArchiveHookSecret)
+            return legacy
+        }
+        let s = LocalSecretStore.value("memory-archive-token")
         return (s?.isEmpty ?? true) ? nil : s
     }
+
+    nonisolated static func setReceiverToken(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { LocalSecretStore.delete("memory-archive-token") }
+        else { _ = LocalSecretStore.store("memory-archive-token", trimmed) }
+    }
+
+    private nonisolated static var secret: String? { receiverToken() }
 
     /// Queues one archive. Returns immediately: the chat must not wait on a receiver.
     nonisolated static func send(conversationID: String, title: String,

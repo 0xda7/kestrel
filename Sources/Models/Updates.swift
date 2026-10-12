@@ -102,18 +102,25 @@ final class UpdateChecker: ObservableObject {
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: temp, to: dest)
 
-            if let checksumsURL,
-               let (data, _) = try? await URLSession.shared.data(from: checksumsURL),
-               let listing = String(data: data, encoding: .utf8) {
-                let expected = listing.split(separator: "\n")
-                    .first { $0.contains(dmgURL.lastPathComponent) }?
-                    .split(separator: " ").first.map(String.init)
-                let actual = await Task.detached { FileHash.sha256(of: dest) }.value
-                if let expected, let actual, expected.lowercased() != actual.lowercased() {
-                    try? FileManager.default.removeItem(at: dest)
-                    installError = "Checksum no coincide: descarga descartada / checksum mismatch: download discarded"
-                    return
-                }
+            // KES-09: fail closed. A missing checksums listing, an entry that
+            // doesn't cover this asset, or an unavailable actual hash all
+            // abort the install — an unverifiable download never replaces
+            // the running app.
+            guard let checksumsURL else {
+                try? FileManager.default.removeItem(at: dest)
+                installError = "La release no publica checksums; descarga descartada / release publishes no checksums; download discarded"
+                return
+            }
+            guard let (data, _) = try? await URLSession.shared.data(from: checksumsURL),
+                  let listing = String(data: data, encoding: .utf8),
+                  let expected = listing.split(separator: "\n")
+                      .first { $0.contains(dmgURL.lastPathComponent) }?
+                      .split(separator: " ").first.map(String.init),
+                  let actual = await Task.detached { FileHash.sha256(of: dest) }.value,
+                  expected.lowercased() == actual.lowercased() else {
+                try? FileManager.default.removeItem(at: dest)
+                installError = "Verificación de integridad no disponible o fallida: descarga descartada / integrity verification unavailable or failed: download discarded"
+                return
             }
 
             let installed = try await Task.detached { try Self.install(dmgAt: dest) }.value
@@ -145,6 +152,11 @@ final class UpdateChecker: ObservableObject {
             throw UpdateError(message: "El DMG no contiene una app / the DMG contains no app")
         }
         let source = mount + "/" + appName
+        // KES-09: the mounted app must carry a valid code signature, and a
+        // Developer-ID build must come from the same team as the running
+        // app — a DMG that swapped publishers mid-flight stops here.
+        try Self.verifySignature(ofAppAt: source)
+
 
         let bundle = Bundle.main.bundleURL
         let target = bundle.path.hasPrefix("/Applications/")
@@ -156,7 +168,7 @@ final class UpdateChecker: ObservableObject {
             try? fm.removeItem(at: aside)
             try fm.moveItem(at: target, to: aside)
             do {
-                try copyStripped(source: source, target: target)
+                try copyApp(source: source, target: target)
             } catch {
                 try? fm.removeItem(at: target)
                 try? fm.moveItem(at: aside, to: target)
@@ -164,16 +176,41 @@ final class UpdateChecker: ObservableObject {
             }
             try? fm.removeItem(at: aside)
         } else {
-            try copyStripped(source: source, target: target)
+            try copyApp(source: source, target: target)
         }
         return target
     }
 
-    nonisolated private static func copyStripped(source: String, target: URL) throws {
+    nonisolated private static func copyApp(source: String, target: URL) throws {
         _ = try run("/usr/bin/ditto", [source, target.path])
-        // The app's own downloads are not quarantined, but strip the attribute
-        // defensively so Gatekeeper never flags the checksum-verified copy.
-        _ = try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", target.path])
+        // KES-09: the quarantine attribute is NOT stripped. Self-downloads
+        // carry none anyway, and stripping would only remove defense-in-depth
+        // from a copy whose provenance Gatekeeper should re-evaluate.
+    }
+
+    nonisolated private static func verifySignature(ofAppAt path: String) throws {
+        _ = try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", path])
+        guard let running = teamIdentifier(ofAppAt: Bundle.main.bundleURL.path),
+              !running.isEmpty, running != "not set" else { return }
+        guard teamIdentifier(ofAppAt: path) == running else {
+            throw UpdateError(message: "La firma del código no coincide con la app instalada / the code signature does not match the installed app")
+        }
+    }
+
+    nonisolated private static func teamIdentifier(ofAppAt path: String) -> String? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        p.arguments = ["-dv", path]
+        let err = Pipe()
+        p.standardError = err
+        p.standardOutput = Pipe()
+        do { try p.run() } catch { return nil }
+        let data = err.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else { return nil }
+        return text.split(separator: "\n")
+            .first { $0.contains("TeamIdentifier=") }?
+            .split(separator: "=").last.map(String.init)
     }
 
     nonisolated private static func run(_ tool: String, _ args: [String]) throws -> String {
