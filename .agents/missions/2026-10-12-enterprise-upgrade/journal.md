@@ -38,3 +38,32 @@
   endpoint-change confirmation for the memory-archive URL (local-write-only attack surface;
   posts are attributable). pi delegate prompts still ride argv (pi interface question; goes to
   the agentic wave).
+
+- 2026-10-12 21:30 SESSION BOUNDARY (Xlaunch session 1). CI arbitration complete:
+  Build & Release SUCCESS on b126aa2 — `swift test` green in CI including the new
+  SecretRedactionTests, ToolConsentTests, ImportSafetyTests (the first CI round caught one
+  actor-isolation error in the KES-07 helper — fixed nonisolated, re-run green; the translation
+  status-table gate caught two process misses — scripts/translation-status.py is the third
+  script after extract-strings + sync-translations; auto-sync hook now enabled via
+  git config core.hooksPath scripts/hooks). CodeQL in progress on the final commit (passed on
+  the pre-session tree; these waves only narrow exposure).
+  Commits this session: 115b38c (wave A), 6b33d9d (wave B), c9a94c3 + b126aa2 (gates).
+- Step 5 investigation notes for the next session (context-trap extinction):
+  * `contextAutomatic` confirmed display-only: stored at Server.swift:79, read only in
+    fromDefaults (:805), never consulted by the launch path; Settings "Auto" writes 16384.
+  * Reusable solver already exists: `ServerController.routerCtx(forModel:requested:ncmoe:
+    kvScale:reserveMB:)` (Server.swift:409) halves the window until weights+compute+KV fit
+    VRAM — generalize it to the single-model launch path and surface the chosen value in the
+    startup banner + Dashboard.
+  * Pre-send guard placement: ChatStore.send (ChatNative.swift:741) appends the user message
+    then calls stream(into:) (:1047); pi/latch branch off inside stream, so the guard belongs
+    after those branches on the engine/remote request assembly, estimator = chars/4 over
+    system + wireContent, refuse with a bilingual notice when estimate + maxTokens + 256 >
+    window (today's live failure: 70,871 tokens vs 65,536 in
+    ~/Library/Application Support/Kestrel/logs/server-2026-10-12_11-32-28.log).
+  * Auto-compact exists (compactIfNeeded :2212, fires >70% of ctx from engine-reported
+    contextUsed) but only AFTER a completed exchange — a single huge paste still overflows;
+    the pre-send guard covers exactly that hole.
+- Step 4 (Xcode) still awaits the operator's Apple ID auth; no mas/xcodes on the machine.
+  Steps 6 (agentic: loop upgrades + latch ownership) and 7 (engine series re-authoring)
+  unstarted, per plan.
