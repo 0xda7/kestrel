@@ -67,3 +67,24 @@
 - Step 4 (Xcode) still awaits the operator's Apple ID auth; no mas/xcodes on the machine.
   Steps 6 (agentic: loop upgrades + latch ownership) and 7 (engine series re-authoring)
   unstarted, per plan.
+
+- 2026-10-12 22:10 SESSION BOUNDARY (Xlaunch session 2). Step 5 SHIPPED as f8a3e63, CI green
+  (Build & Release incl. ContextTrapTests, Translations; CodeQL ran clean through the wave):
+  ServerSettings.resolvedCtx (routerCtx solver generalized to the single-model launch), banner/
+  Dashboard/estimate show the resolved window, picker keeps the configured ceiling, chat meter +
+  compaction + slow-generation heuristics read the real window, pre-send over-window guard with
+  bilingual notice in stream()'s engine branch (remote exempt). Routing note: solver reuse was T1
+  with one T2 judgment (ceiling semantics); guard thresholds kept conservative (estimate +
+  maxTokens + 256 > window).
+- Step 6 slice 1 SHIPPED as 888b36c, CI green: transient-only tool retries (read-only tools,
+  writesData-driven, 300ms/1.2s backoff, isTransient pure+tested) and the conversation usage
+  rollup (roadmap 6: turns, generated sum, peak window) surfaced next to the context meter.
+  Routing: retry-classification design was T2 (side-effect safety), implementation T1.
+- Step 6 remaining scope, next session: (a) LATCH OWNERSHIP — latch's provider config lives at
+  ~/.latch/v2/provider_config.json with credentials.json beside it; the pi pattern to copy is
+  PiBridge.swift (generate from Settings → Providers on launch + every route change, import-once
+  for hand-authored files, refuse-with-notice on missing pair). Read bot-config.v3.json for
+  shape before writing the generator. (b) structured tool schemas, (c) dynamic tool-context
+  budget, (d) tool-call visualization upgrades. Step 7 (engines re-authoring) unstarted; begin
+  from patches/README.md's frontier notes + scripts/check-patch-series.sh.
+- Xcode still absent locally (operator step); all verification remains CI-arbitrated.
