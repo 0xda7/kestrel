@@ -282,7 +282,14 @@ struct RichText: View {
         let range = NSRange(value.startIndex..., in: value)
         return regex.matches(in: value, range: range).contains { match in
             (1...2).contains { group in
-                guard let r = Range(match.range(at: group), in: value) else { return false }
+                // An unmatched alternation reports NSNotFound; converting
+                // that NSRange traps on some Foundation builds (CI's
+                // macos-26 runner reproduced it under the check harness),
+                // so check the location explicitly instead of relying on
+                // Range(_:in:) to fail softly.
+                let groupRange = match.range(at: group)
+                guard groupRange.location != NSNotFound,
+                      let r = Range(groupRange, in: value) else { return false }
                 return looksLikeFormula(String(value[r]))
             }
         }

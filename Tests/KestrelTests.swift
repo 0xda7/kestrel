@@ -1643,15 +1643,10 @@ final class ServerSettingsTests: CheckCase {
 
 final class ChatMessageTests: CheckCase {
     func testInlineMathDetectionSupportsDollarAndParenthesizedForms() {
-        FileHandle.standardError.write(Data("a1\n".utf8))
         XCTAssertTrue(RichText.containsInlineMath("Energy is $E = mc^2$."))
-        FileHandle.standardError.write(Data("a2\n".utf8))
         XCTAssertTrue(RichText.containsInlineMath(#"Energy is \(E = mc^2\)."#))
-        FileHandle.standardError.write(Data("a3\n".utf8))
         XCTAssertFalse(RichText.containsInlineMath(#"The price is \$5."#))
-        FileHandle.standardError.write(Data("a4\n".utf8))
         XCTAssertFalse(RichText.containsInlineMath("A display block uses $$x$$"))
-        FileHandle.standardError.write(Data("a5\n".utf8))
     }
 
     func testCachedInlineFormattingMatchesAFreshOneAndKeepsParagraphsApart() {
