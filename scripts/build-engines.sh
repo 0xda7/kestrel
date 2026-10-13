@@ -18,7 +18,7 @@ if [ -n "$CI" ] && { [ "${LLAMA_COMMIT+x}" = x ] || [ "${WHISPER_COMMIT+x}" = x 
     echo "CI refuses env-overridden engine pins; edit the committed pins instead." >&2
     exit 1
 fi
-LLAMA_COMMIT="${LLAMA_COMMIT:-cdc06426e70c23a1ac2bce40c85b252fec344702}"   # llama.cpp commit validated against the patches; newest upstream the whole series applies on (84e76d8a2 breaks 0002; 5a75f14c0's FA per-dtype split + batch_ext migration block the full bump)
+LLAMA_COMMIT="${LLAMA_COMMIT:-ed319febb148d02badf332f4ac499b390acbfece}"   # llama.cpp commit validated against the patches (+5: through 84e76d8a2's graph-capture change via the four re-authored patches of 2026-10-13; bench parity verified interleaved — pin 55.9 vs frontier 55.7 tg128, thermal artifacts excluded). Next wall: 5a75f14c0's FA per-dtype split breaks 0001 — the kernels/ layout port proper.
 WHISPER_COMMIT="${WHISPER_COMMIT:-371b5a7561823ab2bb32142d2751e35e7534727b}" # whisper.cpp v1.9.3 (v1.9.5 moved ggml-metal to the kernels/ layout the shared-metal series predates)
 SD_COMMIT="${SD_COMMIT:-241518b35decc6e7042037c1e224142f7c42aee3}"         # stable-diffusion.cpp commit validated for image gen; newest master still pinning the old-layout ggml submodule 4bf5f600 (e6281b6's conditioning cache breaks 0049)
 ARCH="${ARCH:-$(uname -m)}"

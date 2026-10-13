@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-metal/ggml-metal-context.m b/ggml/src/ggml-metal/ggml-metal-context.m
-index 78948dadb..bac07fb44 100644
+index 27a12bac9..93dcefe32 100644
 --- a/ggml/src/ggml-metal/ggml-metal-context.m
 +++ b/ggml/src/ggml-metal/ggml-metal-context.m
 @@ -21,16 +21,213 @@
@@ -271,7 +271,7 @@ index 78948dadb..bac07fb44 100644
          for (int cb_idx = 0; cb_idx <= n_cb; ++cb_idx) {
              id<MTLCommandBuffer> cmd_buf = ctx->cmd_bufs[cb_idx].obj;
              if (!cmd_buf) {
-@@ -1647,31 +1858,52 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -1646,31 +1857,52 @@ done:
                  __func__, bounded_bank_size/(1024.0*1024.0*1024.0),
                  bounded_threshold/(1024.0*1024.0*1024.0));
              logged_fast = true;
@@ -325,7 +325,7 @@ index 78948dadb..bac07fb44 100644
              ctx->n_nodes_0      = gf->n_nodes;
              ctx->n_nodes_1      = 0;
              ctx->n_nodes_per_cb = 0;
-@@ -1718,21 +1950,24 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -1715,21 +1947,24 @@ done:
                      ctx->capture_started = true;
                  }
              }
@@ -350,7 +350,7 @@ index 78948dadb..bac07fb44 100644
              ctx->cmd_bufs[n_cb].obj = cmd_buf;
  
              [cmd_buf enqueue];
-@@ -1748,16 +1983,17 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -1745,16 +1980,17 @@ done:
          const bool encoded_by_main = ctx->n_nodes_1 == 0 && !use_capture;
  
          if (!encoded_by_main) {
@@ -368,7 +368,7 @@ index 78948dadb..bac07fb44 100644
              ctx->cmd_bufs[cb_idx].obj = cmd_buf;
  
              // always enqueue the first two command buffers
-@@ -1766,16 +2002,21 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -1763,16 +1999,21 @@ done:
                  [cmd_buf enqueue];
  
                  // update the pointer to the last queued command buffer
@@ -390,7 +390,7 @@ index 78948dadb..bac07fb44 100644
  
          // enter here only when capturing in order to wait for all computation to finish
          // otherwise, we leave the graph to compute asynchronously
-@@ -1831,16 +2072,25 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -1828,16 +2069,25 @@ done:
  
              [ctx->capture_scope endScope];
              [[MTLCaptureManager sharedCaptureManager] stopCapture];
@@ -416,13 +416,13 @@ index 78948dadb..bac07fb44 100644
  static bool ggml_metal_graph_is_moe_decode(const struct ggml_cgraph * gf, int max_tokens) {
      bool has_experts = false;
  
-@@ -1968,30 +2218,39 @@ void ggml_metal_set_n_cb(ggml_metal_t ctx, int n_cb) {
+@@ -1965,30 +2215,39 @@ void ggml_metal_set_n_cb(ggml_metal_t ctx, int n_cb) {
              ctx->gf,
              ctx->finfo,
              idx_start,
              idx_end,
              ctx->use_concurrency,
-             ctx->capture_compute,
+             ctx->capture_compute == 0,
              ctx->debug_graph);
  
 +        const bool cbp_on = kestrel_cbp_on();
@@ -457,7 +457,7 @@ index 78948dadb..bac07fb44 100644
  }
  
 diff --git a/ggml/src/ggml-metal/ggml-metal-device.m b/ggml/src/ggml-metal/ggml-metal-device.m
-index 12ba16fd8..14d306094 100644
+index cb9f8d1bb..faab9fbe2 100644
 --- a/ggml/src/ggml-metal/ggml-metal-device.m
 +++ b/ggml/src/ggml-metal/ggml-metal-device.m
 @@ -1,11 +1,13 @@
@@ -674,7 +674,7 @@ index 12ba16fd8..14d306094 100644
          return;
      }
 diff --git a/ggml/src/ggml-metal/ggml-metal-ops.cpp b/ggml/src/ggml-metal/ggml-metal-ops.cpp
-index f1c57487b..4920c9f23 100644
+index 1d27e79a9..155553cfb 100644
 --- a/ggml/src/ggml-metal/ggml-metal-ops.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal-ops.cpp
 @@ -2995,17 +2995,28 @@ int ggml_metal_op_mul_mat(ggml_metal_op_t ctx, int idx) {

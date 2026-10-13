@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-backend-meta.cpp b/ggml/src/ggml-backend-meta.cpp
-index 910ca4d26..94c6c6bc8 100644
+index c96b8b8d7..2e803fc89 100644
 --- a/ggml/src/ggml-backend-meta.cpp
 +++ b/ggml/src/ggml-backend-meta.cpp
 @@ -2109,17 +2109,25 @@ static void ggml_backend_meta_get_tensor_async(ggml_backend_t backend, const ggm
@@ -92,7 +92,7 @@ index 910ca4d26..94c6c6bc8 100644
                  n_subgraphs++;
                  i_start = i + 1;
 diff --git a/ggml/src/ggml-metal/ggml-metal-context.m b/ggml/src/ggml-metal/ggml-metal-context.m
-index a2728d31d..8dacceed9 100644
+index 47e3e4e24..69737fbb9 100644
 --- a/ggml/src/ggml-metal/ggml-metal-context.m
 +++ b/ggml/src/ggml-metal/ggml-metal-context.m
 @@ -263,16 +263,20 @@ struct ggml_metal {
@@ -948,7 +948,7 @@ index a2728d31d..8dacceed9 100644
          [encoder copyFromBuffer:bid_src.metal
                     sourceOffset:bid_src.offs
                         toBuffer:bid_dst.metal
-@@ -1910,27 +2358,32 @@ static bool ggml_metal_exchange_reduce_peer_fused(ggml_metal_t ctx_self, ggml_me
+@@ -1911,27 +2359,32 @@ static bool ggml_metal_exchange_reduce_peer_fused(ggml_metal_t ctx_self, ggml_me
  
      link_out->seq_x = seq;
  
@@ -982,7 +982,7 @@ index a2728d31d..8dacceed9 100644
              struct ggml_metal_buffer_id bid_tmp = ggml_metal_get_buffer_id(tmp_self);
              id<MTLBlitCommandEncoder> enc_in = [cmd_buf blitCommandEncoder];
              [enc_in copyFromBuffer:view sourceOffset:0
-@@ -1938,25 +2391,28 @@ static bool ggml_metal_exchange_reduce_peer_fused(ggml_metal_t ctx_self, ggml_me
+@@ -1939,25 +2392,28 @@ static bool ggml_metal_exchange_reduce_peer_fused(ggml_metal_t ctx_self, ggml_me
              [enc_in endEncoding];
              ok = ggml_metal_add_inplace_into(ctx_self, cmd_buf, t_self, tmp_self);
          } else {
@@ -1012,7 +1012,7 @@ index a2728d31d..8dacceed9 100644
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
  
-@@ -2071,29 +2527,34 @@ static bool ggml_metal_exchange_reduce_peer_push(ggml_metal_t ctx_self, ggml_met
+@@ -2072,29 +2528,34 @@ static bool ggml_metal_exchange_reduce_peer_push(ggml_metal_t ctx_self, ggml_met
          return false;
      }
  
@@ -1048,7 +1048,7 @@ index a2728d31d..8dacceed9 100644
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
  
-@@ -2166,30 +2627,35 @@ static bool ggml_metal_exchange_reduce_peer(ggml_metal_t ctx_self, ggml_metal_t
+@@ -2167,30 +2628,35 @@ static bool ggml_metal_exchange_reduce_peer(ggml_metal_t ctx_self, ggml_metal_t
          return false;
      }
  
@@ -1084,7 +1084,7 @@ index a2728d31d..8dacceed9 100644
          atomic_fetch_add(&g_tr_bytes_peer, size);
      }
  
-@@ -2207,16 +2673,20 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
+@@ -2208,16 +2674,20 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
                                  struct ggml_tensor * t_self, struct ggml_tensor * t_peer,
                                  struct ggml_tensor * tmp_self, uint64_t seq) {
      struct ggml_metal_xdev_link * link_out = ggml_metal_xdev_link_get(ctx_self, ctx_peer);
@@ -1105,7 +1105,7 @@ index a2728d31d..8dacceed9 100644
      if (fused < 0) {
          const char * v = getenv("KESTREL_MGPU_PEER_FUSED");
          fused = v == NULL ? 1 : atoi(v);
-@@ -2273,35 +2743,65 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
+@@ -2274,35 +2744,65 @@ bool ggml_metal_exchange_reduce(ggml_metal_t ctx_self, ggml_metal_t ctx_peer,
      const uint64_t seq_out  = seq;
      const uint64_t seq_in   = seq;
      link_out->seq_x = seq;
@@ -1173,7 +1173,7 @@ index a2728d31d..8dacceed9 100644
          // out through the shared block and back in: this card touches it twice
          atomic_fetch_add(&g_tr_bytes_host, 2*size);
          atomic_fetch_add(&g_tr_encode_ns, kestrel_now_ns() - t_enter);
-@@ -2423,16 +2923,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
+@@ -2424,16 +2924,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
              goto done;
          }
          ctx->bounded_moe_ids_readback = ids_readback;
@@ -1191,7 +1191,7 @@ index a2728d31d..8dacceed9 100644
              const struct ggml_metal_buffer_id src = ggml_metal_get_buffer_id(ids);
              id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
              [blit copyFromBuffer:(__bridge id<MTLBuffer>) src.metal sourceOffset:src.offs
-@@ -2683,16 +3184,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
+@@ -2684,16 +3185,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
                  } else {
                      memcpy((uint8_t *) [full_stage contents] + off_full, host->data, ggml_nbytes(host));
                  }
@@ -1209,7 +1209,7 @@ index a2728d31d..8dacceed9 100644
                      const size_t next_size = ggml_nbytes(next_ids);
                      if (next_size > ids_cap) {
                          result = GGML_STATUS_FAILED;
-@@ -2836,16 +3338,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
+@@ -2837,16 +3339,17 @@ static enum ggml_status ggml_metal_graph_compute_moe_staged(ggml_metal_t ctx, st
                  goto done;
              }
              ctx->bounded_moe_expert_stage = expert_stage;
@@ -1227,7 +1227,7 @@ index a2728d31d..8dacceed9 100644
              };
              for (int i = first; i < end; ++i) {
                  struct ggml_tensor * op = gf->nodes[i];
-@@ -2944,19 +3447,35 @@ done:
+@@ -2945,19 +3448,35 @@ done:
      }
      ggml_metal_op_cached_moe_ids_clear();
      ggml_metal_op_cached_moe_full_clear();
@@ -1256,15 +1256,15 @@ index a2728d31d..8dacceed9 100644
 +    if (!ggml_metal_merge_graph()) {
 +        ggml_metal_cmd_buf_hold_flush(ctx);
 +    }
- 
      if (ctx->has_error) {
          GGML_LOG_ERROR("%s: backend is in error state from a previous command buffer failure - recreate the backend to recover\n", __func__);
          return GGML_STATUS_FAILED;
      }
  
- #ifdef KESTREL_ENABLE_DYNAMIC_MOE
-     bool staged_moe = false;
-@@ -3113,42 +3632,61 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+     if (gf->n_nodes == 0) {
+         return GGML_STATUS_SUCCESS;
+     }
+@@ -3115,42 +3634,61 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
          // short-hand
          id<MTLCommandQueue> queue = ctx->queue;
  
@@ -1328,7 +1328,7 @@ index a2728d31d..8dacceed9 100644
              if (ctx->cmd_bufs[cb_idx].obj) {
                  [ctx->cmd_bufs[cb_idx].obj release];
              }
-@@ -3287,16 +3825,17 @@ void ggml_metal_graph_optimize(ggml_metal_t ctx, struct ggml_cgraph * gf) {
+@@ -3289,16 +3827,17 @@ void ggml_metal_graph_optimize(ggml_metal_t ctx, struct ggml_cgraph * gf) {
      }
  
      //printf("%s: graph optimize took %.3f ms\n", __func__, (ggml_time_us() - t_start) / 1000.0);
@@ -1346,7 +1346,7 @@ index a2728d31d..8dacceed9 100644
          [cmd_buf commit];
  
          [ctx->cmd_bufs_ext addObject:cmd_buf];
-@@ -3309,16 +3848,17 @@ void ggml_metal_event_record(ggml_metal_t ctx, ggml_metal_event_t ev) {
+@@ -3311,16 +3850,17 @@ void ggml_metal_event_record(ggml_metal_t ctx, ggml_metal_event_t ev) {
  void ggml_metal_event_wait(ggml_metal_t ctx, ggml_metal_event_t ev) {
      if (ggml_metal_defer_waits() && ctx->n_ev_wait_pending < GGML_METAL_MAX_PENDING_WAITS) {
          ctx->ev_wait_pending[ctx->n_ev_wait_pending++] = ev;
@@ -1365,7 +1365,7 @@ index a2728d31d..8dacceed9 100644
  
          [ctx->cmd_bufs_ext addObject:cmd_buf];
 diff --git a/ggml/src/ggml-metal/ggml-metal.cpp b/ggml/src/ggml-metal/ggml-metal.cpp
-index ddad25afd..c90cb36e3 100644
+index 92179490e..9c984bdac 100644
 --- a/ggml/src/ggml-metal/ggml-metal.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal.cpp
 @@ -1072,17 +1072,37 @@ static void ggml_backend_metal_comm_free(void * comm_ctx_v) {

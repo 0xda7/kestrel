@@ -1,5 +1,5 @@
 diff --git a/ggml/src/ggml-metal/CMakeLists.txt b/ggml/src/ggml-metal/CMakeLists.txt
-index e7afdb695..77b7cd790 100644
+index e7afdb695..a9d3fb31b 100644
 --- a/ggml/src/ggml-metal/CMakeLists.txt
 +++ b/ggml/src/ggml-metal/CMakeLists.txt
 @@ -25,37 +25,45 @@ if (GGML_METAL_NDEBUG)
@@ -113,7 +113,7 @@ index b538b1ad2..cf42cf7e0 100644
  ggml_metal_event_t ggml_metal_get_ev_cpy(ggml_metal_t ctx);
  
 diff --git a/ggml/src/ggml-metal/ggml-metal-context.m b/ggml/src/ggml-metal/ggml-metal-context.m
-index 442ed2a07..4c346dc9b 100644
+index e9064666f..66d57dbca 100644
 --- a/ggml/src/ggml-metal/ggml-metal-context.m
 +++ b/ggml/src/ggml-metal/ggml-metal-context.m
 @@ -3,41 +3,93 @@
@@ -601,7 +601,7 @@ index 442ed2a07..4c346dc9b 100644
                destinationOffset:bid_dst.offs
                             size:size];
  
-@@ -466,22 +755,753 @@ bool ggml_metal_cpy_tensor_async(ggml_metal_t ctx_src, ggml_metal_t ctx_dst, con
+@@ -466,26 +755,757 @@ bool ggml_metal_cpy_tensor_async(ggml_metal_t ctx_src, ggml_metal_t ctx_dst, con
          [cmd_buf retain];
  
          ggml_metal_event_wait(ctx_dst, ev_cpy);
@@ -610,6 +610,7 @@ index 442ed2a07..4c346dc9b 100644
      }
  }
  
++
 +bool ggml_metal_add_inplace_supported(ggml_metal_t ctx, const struct ggml_tensor * acc, const struct ggml_tensor * add) {
 +    if (ctx->has_error) {
 +        return false;
@@ -1288,10 +1289,13 @@ index 442ed2a07..4c346dc9b 100644
  enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph * gf) {
 +    // command buffers run in commit order, so a held one has to go in before this graph
 +    ggml_metal_cmd_buf_hold_flush(ctx);
-+
      if (ctx->has_error) {
          GGML_LOG_ERROR("%s: backend is in error state from a previous command buffer failure - recreate the backend to recover\n", __func__);
          return GGML_STATUS_FAILED;
+     }
+ 
+     if (gf->n_nodes == 0) {
+         return GGML_STATUS_SUCCESS;
      }
  
 +#ifdef KESTREL_ENABLE_DYNAMIC_MOE
@@ -1355,7 +1359,7 @@ index 442ed2a07..4c346dc9b 100644
  
      // keep the memory wired
      ggml_metal_device_rsets_keep_alive(ctx->dev);
-@@ -542,41 +1562,48 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -544,41 +1564,48 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
                  } else {
                      [ctx->capture_scope beginScope];
                      ctx->capture_started = true;
@@ -1405,7 +1409,7 @@ index 442ed2a07..4c346dc9b 100644
              ctx->cmd_bufs[cb_idx].obj = cmd_buf;
  
              // always enqueue the first two command buffers
-@@ -586,16 +1613,17 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -588,16 +1615,17 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
  
                  // update the pointer to the last queued command buffer
                  // this is needed to implement synchronize()
@@ -1423,7 +1427,7 @@ index 442ed2a07..4c346dc9b 100644
          // otherwise, we leave the graph to compute asynchronously
          if (use_capture && ctx->capture_started) {
              // wait for completion and check status of each command buffer
-@@ -652,46 +1680,85 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
+@@ -654,46 +1682,85 @@ enum ggml_status ggml_metal_graph_compute(ggml_metal_t ctx, struct ggml_cgraph *
  
              ctx->capture_started = false;
          }
@@ -1513,7 +1517,7 @@ index 442ed2a07..4c346dc9b 100644
          ctx->cmd_buf_last = cmd_buf;
  
 diff --git a/ggml/src/ggml-metal/ggml-metal-device.cpp b/ggml/src/ggml-metal/ggml-metal-device.cpp
-index dc6b695eb..0bf7c4195 100644
+index dc6b695eb..9ae977d2b 100644
 --- a/ggml/src/ggml-metal/ggml-metal-device.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal-device.cpp
 @@ -76,21 +76,51 @@ struct ggml_metal_pipeline_with_params ggml_metal_library_get_pipeline_base(ggml
@@ -2735,7 +2739,7 @@ index dc6b695eb..0bf7c4195 100644
      return res;
  }
 diff --git a/ggml/src/ggml-metal/ggml-metal-device.h b/ggml/src/ggml-metal/ggml-metal-device.h
-index 1bdaecc73..2b3c03f90 100644
+index 1bdaecc73..3e8e146d9 100644
 --- a/ggml/src/ggml-metal/ggml-metal-device.h
 +++ b/ggml/src/ggml-metal/ggml-metal-device.h
 @@ -103,54 +103,57 @@ ggml_metal_library_t ggml_metal_library_init_from_source(ggml_metal_device_t dev
@@ -2901,7 +2905,7 @@ index 1bdaecc73..2b3c03f90 100644
  //
  struct ggml_metal_buffer_id ggml_metal_buffer_get_id(ggml_metal_buffer_t buf, const struct ggml_tensor * t);
 diff --git a/ggml/src/ggml-metal/ggml-metal-device.m b/ggml/src/ggml-metal/ggml-metal-device.m
-index 81ea7f9d7..1f2c9b1dd 100644
+index 81ea7f9d7..3293fc281 100644
 --- a/ggml/src/ggml-metal/ggml-metal-device.m
 +++ b/ggml/src/ggml-metal/ggml-metal-device.m
 @@ -1,21 +1,29 @@
@@ -4701,7 +4705,7 @@ index 81ea7f9d7..1f2c9b1dd 100644
      }
  }
 diff --git a/ggml/src/ggml-metal/ggml-metal-impl.h b/ggml/src/ggml-metal/ggml-metal-impl.h
-index 490dd83a1..05dc54e94 100644
+index 490dd83a1..d95de71d3 100644
 --- a/ggml/src/ggml-metal/ggml-metal-impl.h
 +++ b/ggml/src/ggml-metal/ggml-metal-impl.h
 @@ -25,46 +25,46 @@
@@ -4927,7 +4931,7 @@ index 490dd83a1..05dc54e94 100644
      float    start;
      float    step;
 diff --git a/ggml/src/ggml-metal/ggml-metal-ops.cpp b/ggml/src/ggml-metal/ggml-metal-ops.cpp
-index 708703e51..59970fbb5 100644
+index 54d5b9808..66538599d 100644
 --- a/ggml/src/ggml-metal/ggml-metal-ops.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal-ops.cpp
 @@ -1,37 +1,144 @@
@@ -6505,7 +6509,7 @@ index 708703e51..59970fbb5 100644
      const bool use_sparse = n_kv_max_sparse > 0;
      const int n_kv_max_padded = use_sparse ? GGML_PAD(n_kv_max_sparse, OP_FLASH_ATTN_EXT_VEC_NCPSG) : 0;
  
-@@ -5157,17 +5979,17 @@ int ggml_metal_op_argmax(ggml_metal_op_t ctx, int idx) {
+@@ -5144,17 +5966,17 @@ int ggml_metal_op_argmax(ggml_metal_op_t ctx, int idx) {
          /*.ne00 = */ ne00,
          /*.nb01 = */ nb01,
      };
@@ -6524,7 +6528,7 @@ index 708703e51..59970fbb5 100644
  
      ggml_metal_encoder_set_pipeline(enc, pipeline);
      ggml_metal_encoder_set_bytes   (enc, &args, sizeof(args), 0);
-@@ -5176,16 +5998,196 @@ int ggml_metal_op_argmax(ggml_metal_op_t ctx, int idx) {
+@@ -5163,16 +5985,196 @@ int ggml_metal_op_argmax(ggml_metal_op_t ctx, int idx) {
  
      ggml_metal_encoder_set_threadgroup_memory_size(enc, smem, 0);
  
@@ -6721,7 +6725,7 @@ index 708703e51..59970fbb5 100644
  
      GGML_ASSERT(ggml_is_contiguous_rows(op->src[0]));
  
-@@ -5734,17 +6736,17 @@ int ggml_metal_op_count_equal(ggml_metal_op_t ctx, int idx) {
+@@ -5721,17 +6723,17 @@ int ggml_metal_op_count_equal(ggml_metal_op_t ctx, int idx) {
              /*.nb12 =*/ nb12,
              /*.nb13 =*/ nb13,
          };
@@ -6741,7 +6745,7 @@ index 708703e51..59970fbb5 100644
          ggml_metal_encoder_set_buffer(enc, ggml_metal_get_buffer_id(op->src[1]), 2);
          ggml_metal_encoder_set_buffer(enc, ggml_metal_get_buffer_id(op), 3);
 diff --git a/ggml/src/ggml-metal/ggml-metal-ops.h b/ggml/src/ggml-metal/ggml-metal-ops.h
-index 583d1156b..a522ea21c 100644
+index 583d1156b..8ae5d381e 100644
 --- a/ggml/src/ggml-metal/ggml-metal-ops.h
 +++ b/ggml/src/ggml-metal/ggml-metal-ops.h
 @@ -22,16 +22,24 @@ ggml_metal_op_t ggml_metal_op_init(
@@ -6806,7 +6810,7 @@ index 583d1156b..a522ea21c 100644
  int ggml_metal_op_opt_step_sgd      (ggml_metal_op_t ctx, int idx);
  int ggml_metal_op_count_equal       (ggml_metal_op_t ctx, int idx);
 diff --git a/ggml/src/ggml-metal/ggml-metal.cpp b/ggml/src/ggml-metal/ggml-metal.cpp
-index c6c8ce836..60178f062 100644
+index c6c8ce836..6d189c491 100644
 --- a/ggml/src/ggml-metal/ggml-metal.cpp
 +++ b/ggml/src/ggml-metal/ggml-metal.cpp
 @@ -1,15 +1,21 @@
@@ -7352,7 +7356,7 @@ index c6c8ce836..60178f062 100644
              reg = {
                  /* .api_version = */ GGML_BACKEND_API_VERSION,
 diff --git a/ggml/src/ggml-metal/kernels/softmax.metal b/ggml/src/ggml-metal/kernels/softmax.metal
-index 6a04bedb7..172e94478 100644
+index 6a04bedb7..4e93352de 100644
 --- a/ggml/src/ggml-metal/kernels/softmax.metal
 +++ b/ggml/src/ggml-metal/kernels/softmax.metal
 @@ -219,18 +219,18 @@ kernel void kernel_soft_max_4(
