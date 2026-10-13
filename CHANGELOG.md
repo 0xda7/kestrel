@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.5] - 2026-10-13
+
+### Changed
+
+- **The repository no longer references the pre-rename product identity.** The internal rebrand mission records (which documented the port from the legacy product) are removed; historical changelog entries name engine flags by their current `KESTREL_` names; mission journals, the due-diligence doc and the reference instrumentation patch use neutral wording. Verified: zero occurrences anywhere in the tree; the 92-patch series is byte-untouched; all 350 checks pass. The engine version banner is stamped from the VERSION file at engine-build time, so this release's bundled engines self-report 0.89.5.
+
 ## [0.89.4] - 2026-10-12
 
 ### Changed
