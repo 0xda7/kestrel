@@ -1867,7 +1867,7 @@ final class ChatMessageTests: CheckCase {
             "repo://open%20ai/llama/file?ref=main&path=a%2Fb.swift")
     }
 
-    func testMCPStdioDeliversShortReplyWhileOutputStaysOpen() async throws {
+    @MainActor func testMCPStdioDeliversShortReplyWhileOutputStaysOpen() async throws {
         let reply = #"{"jsonrpc":"2.0","id":1,"result":{"ok":true}}"#
         let server = MCPServer(name: "probe", url: "", transport: .stdio, command: "/bin/sh",
                                arguments: ["-c", "read line; printf '%s\\n' '\(reply)'; exec sleep 30"])

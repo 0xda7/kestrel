@@ -271,7 +271,14 @@ struct RichText: View {
     /// Delimiters must hug non-space text and the body look like LaTeX, so that
     /// prose about `$HOME … $PATH` or `$10 … $25` is not a formula.
     static let inlineMathPattern =
-        #"\\\(([^\n]{1,160}?)\\\)|(?<![\\$])\$(?![\s\d])([^\n$]{1,160}?)(?<![\s\\$])\$(?!\$)"#
+        #"\\\(([^\n]{1,160}?)\\\)|(?:^|[^\\$])\$(?![\s\d])([^\n$]{0,159}?[^\s\\$])\$(?!\$)"#
+
+    /// No lookbehind: the previous form's `(?<!…)` crashed Foundation's
+    /// regex compiler outright (SIGTRAP in NSRegularExpression(pattern:))
+    /// on macOS 26.0–26.x system builds — reproduced on the macos-26 CI
+    /// image in a bare process, while 26.7.1 compiles it fine. The
+    /// equivalent no-lookbehind form passes a 10-case behavioral battery
+    /// against the old pattern (see ChatMessageTests).
 
     static func looksLikeFormula(_ body: String) -> Bool {
         body.count <= 3 || body.contains { "\\^_{}".contains($0) }

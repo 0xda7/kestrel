@@ -86,7 +86,7 @@ struct CheckSet: @unchecked Sendable {
     /// An erased check: the body always receives the concrete instance.
     struct Check {
         let name: String
-        let body: (CheckCase) async throws -> Void
+        let body: @MainActor (CheckCase) async throws -> Void
     }
 
     let suite: String
@@ -98,7 +98,7 @@ struct CheckSet: @unchecked Sendable {
     /// missing from its __checkSet is a compile error, never a silent drop.
     struct TypedCheck<T: CheckCase> {
         let name: String
-        let body: (T) async throws -> Void
+        let body: @MainActor (T) async throws -> Void
     }
 
     init<T: CheckCase>(suite: String, instance: @escaping () -> T,

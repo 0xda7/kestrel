@@ -95,7 +95,7 @@ final class MetaPromptServiceTests: CheckCase {
 
     /// The empty-task guard returns the bilingual failure text before pi is
     /// ever launched.
-    func testEmptyTaskDescriptionReturnsFailureText() async {
+    @MainActor func testEmptyTaskDescriptionReturnsFailureText() async {
         let blankTask = await MetaPromptService.run(taskDescription: "   ", existingPrompt: "Old",
                                                     skillsList: "- a")
         XCTAssertEqual(blankTask, MetaPromptService.emptyTaskMessage)
@@ -107,7 +107,7 @@ final class MetaPromptServiceTests: CheckCase {
     /// Live-fire: one real run through the confined path against pi's own
     /// configured model. Opt-in via KESTREL_META_PROMPT_LIVE=1 because it
     /// spends a real model call (up to the 600 s budget).
-    func testLivePromptAuthoringRun() async throws {
+    @MainActor func testLivePromptAuthoringRun() async throws {
         guard ProcessInfo.processInfo.environment["KESTREL_META_PROMPT_LIVE"] == "1" else {
             throw XCTSkip("Set KESTREL_META_PROMPT_LIVE=1 to run the live-fire pi check")
         }

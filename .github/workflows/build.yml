@@ -37,18 +37,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: Regex isolation probe (diagnostic)
-        run: |
-          cat > /tmp/probe.swift <<'SWIFT'
-          import Foundation
-          let pattern = #"\\\(([^^\n]{1,160}?)\\\)|(?<![\\$])\$(?![\s\d])([^^\n$]{1,160}?)(?<![\s\\$])\$(?!\$)"#
-          print("compiling...")
-          let re = try! NSRegularExpression(pattern: pattern)
-          print("compiled; matching...")
-          let s = "Energy is $E = mc^2$."
-          print("matches:", re.matches(in: s, range: NSRange(s.startIndex..., in: s)).count)
-          SWIFT
-          swift /tmp/probe.swift
       - run: swift run --disable-sandbox kestrel-checks
 
   build:
