@@ -145,3 +145,16 @@
 - Step 7 (engines Group A) remains the open arc, plan in engines-reaauthoring-plan.md.
   Xcode 26.5 also unblocks LOCAL Metal builds — make-app.sh metallib assembly is now possible
   on this machine for the first time (relevant when Group A lands).
+
+- 2026-10-13 02:10 SESSION BOUNDARY (Xlaunch session 6 — engines Group A opened). The
+  graph-capture wall fell: four patches re-authored (0002/0039/0063/0085 — details in
+  engines-frontier/EVIDENCE.md) take the series STRICT-CLEAN at ed319febb (+5 past the pin,
+  through 84e76d8a2). Build gate GREEN (llama-server 100%). Bench gate FAILED: tg128 collapses
+  57.6±0.8 (restored pin, verified this session) → 24.6±7.6 (84e7) / 44.8±2.8 (ed319) while pp512
+  largely survives — decode-path command-buffer signature. PIN DOES NOT MOVE (cdc06426e stays);
+  the local engine is RESTORED and verified at 57.6; the re-authored patches are preserved in
+  git stash ("engines-frontier-ed319febb re-authored patches") + engines-frontier/*.patch
+  artifacts; main carries only the evidence. Session-7 opens with the A/B isolation in
+  EVIDENCE.md §Next steps (0063's held-buffer hunk is suspect #1). Routing note: splice work
+  was T1-mechanical; the contamination lesson (regenerate only from committed baselines) and
+  the bench-verdict call were T2.
