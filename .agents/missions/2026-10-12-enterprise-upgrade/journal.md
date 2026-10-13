@@ -118,3 +118,30 @@
   decision (which MoE cache wins) needing bench evidence.
 - Next session begins Group A: new port-adapt patch against cbe28bb3c's split tree,
   0001+0002 re-authored on top, strict-apply-check.sh as the landing tool.
+
+- 2026-10-13 00:20 SESSION BOUNDARY (Xlaunch session 5). STEP 4 COMPLETE — "harness only", per
+  operator decision. Net: the XCTest target became kestrel-checks (zero-dependency CheckCase
+  harness, supervisor-validated design from HANDOFF-local-test-pipeline.md, completed here):
+  all 49 suites/350 checks ported (incl. the Tests/KestrelTests subdirectory the original
+  survey missed); KestrelCore library + two-line Kestrel launcher (an executable cannot be
+  link-imported — root cause of the linker wall); -enable-testing on the library for debug;
+  ModelSpec default-arg accessors made explicit at the call sites and estimated() defaults
+  dropped (both app callers explicit); CI + scripts/test.sh run swift run --disable-sandbox
+  kestrel-checks; release builds --product Kestrel (make-app.sh). FIRST LOCAL RUN: 350/350.
+  Commits fb5f5a9..9a6cddf; CI Build & Release GREEN on the runner (Translations green;
+  CodeQL running, historically clean).
+- THE SWIFT 6 v6 FLIP IS LIVE (in fb5f5a9): Xcode 26.5 (installed + licensed this session,
+  operator accepted) cleared the IRGen SmallVector crash staged since 2026-10-10. Full package
+  builds in v6; suite green in v6; release product clean.
+- Debugging arc worth recording (three wrong theories died on evidence): (1) "ICU regression
+  traps regex compile" — the CI probe 'confirmed' it, but the local reproduction with the NEW
+  pattern exposed the truth via the .ips crash report: dispatch_assert_queue_fail — the v6
+  flip turns actor isolation into runtime asserts, and the runner awaited nonisolated check
+  bodies, hopping off the main actor mid-check. Fix: Check.body/TypedCheck.body are
+  @MainActor closures by type; three async test methods annotated. (2) The no-lookbehind
+  inline-math rewrite stays anyway: 10-case battery-verified equivalent, removes exotic
+  constructs from a hot path, plus the NSNotFound group-range guard. (3) The SwiftPM sandbox
+  kills bare executables at launch (exit 132/133) — --disable-sandbox everywhere.
+- Step 7 (engines Group A) remains the open arc, plan in engines-reaauthoring-plan.md.
+  Xcode 26.5 also unblocks LOCAL Metal builds — make-app.sh metallib assembly is now possible
+  on this machine for the first time (relevant when Group A lands).
