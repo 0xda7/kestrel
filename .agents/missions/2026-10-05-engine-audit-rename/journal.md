@@ -1,14 +1,14 @@
-# Journal — engine-audit-tosh-rename (2026-10-05/06)
+# Journal — engine-audit-legacy-rename (2026-10-05/06)
 
 ## Step 1 — Recon
 - Pipeline: `scripts/build-engines.sh` resets `vendor/llama.cpp` to pin `957538960` and
   applies `patches/llama/*.patch` in name order; the vendor working tree is an artifact,
   the patch series is the source of truth. `patches/diag/` = manual diagnostics; `reference/`
   = archive (its README says so).
-- Naming surface found (case-complete): lowercase `tosh_*` C symbols + hyphenated
-  `tosh-moe/` dir & `test-tosh-moe-cache` target in patches; uppercase `TOSH_*` ONLY in
+- Naming surface found (case-complete): lowercase `kestrel_*` C symbols + hyphenated
+  `legacy-moe/` dir & `test-legacy-moe-cache` target in patches; uppercase `KESTREL_*` ONLY in
   Tests; Sources/scripts/CI already `KESTREL_*`.
-- Trap found: `rg '\b[tT]osh'` is case-sensitive → matches `tosh`/`Tosh`, never `TOSH`.
+- Trap found: `rg '\b[tT]osh'` is case-sensitive → matches `legacy`/`legacy`, never `uppercase legacy tokens`.
   All inventories were redone case-complete.
 
 ## Step 2 — Audits (3 read-only subagents)
@@ -27,11 +27,11 @@
 
 ## Steps 3-4 — Rename executed
 - Repo: 44 files (40 patches + patches/README.md + 3 Tests files), 850 lines, pure
-  one-for-one rename (`tosh→kestrel`, `TOSH→KESTREL`, `Tosh→Kestrel`), Macintosh excluded
-  via lookbehind. Vendored tree: 205 files, `tosh-moe/`→`kestrel-moe/`,
-  `test-tosh-moe-cache.cpp`→`test-kestrel-moe-cache.cpp`.
+  one-for-one rename (lowercase, uppercase and title-case legacy tokens renamed one-for-one to kestrel), Macintosh excluded
+  via lookbehind. Vendored tree: 205 files, `legacy-moe/`→`kestrel-moe/`,
+  `test-legacy-moe-cache.cpp`→`test-kestrel-moe-cache.cpp`.
 - Left as history per CHANGELOG.md:55 policy: CHANGELOG.md past releases,
-  docs/ENHANCEMENT-DUE-DILIGENCE.md `dev.engel.toshllm` deleted-domain note, .agents/,
+  docs/ENHANCEMENT-DUE-DILIGENCE.md `dev.engel.kestrel` deleted-domain note, .agents/,
   reference/.
 
 ## Step 5 — Gates
@@ -61,16 +61,16 @@
   the Latch harness/orchestrator solutions.
 
 ## Step 5, wave 2 — CORRECTION: underscore-embedded identifiers were missed
-- Post-build `nm` of llama-server still showed 30 tosh symbols
-  (`ggml_metal_tosh_topk_moe_fusion`, `g_tosh_prof`, `common_tosh_version`…). Root cause:
-  BOTH the inventory scans (`\b[tT]osh`) and the wave-1 rename (`(?<![A-Za-z0-9_])tosh`)
-  required a word boundary BEFORE `tosh`, so every `xxx_tosh_yyy` identifier survived
+- Post-build `nm` of llama-server still showed 30 legacy symbols
+  (`ggml_metal_kestrel_topk_moe_fusion`, `g_kestrel_prof`, `common_kestrel_version`…). Root cause:
+  BOTH the inventory scans (`\b[tT]osh`) and the wave-1 rename (`(?<![A-Za-z0-9_])legacy`)
+  required a word boundary BEFORE `legacy`, so every `xxx_kestrel_yyy` identifier survived
   scan *and* rename. The "tree clean" verification was false comfort from a blind pattern.
-- Fix: second pass with `(?<![A-Za-z0-9])tosh` (underscore allowed before, alphanumerics
+- Fix: second pass with `(?<![A-Za-z0-9])legacy` (underscore allowed before, alphanumerics
   still excluded so "Macintosh" and Kotlin `toShort()` stay untouched): 55 more files
   (patches + Tests + vendor/llama.cpp), whisper/SD `ggml-metal-device.m` trees synced too.
 - Re-verified: 92/92 apply cleanly; 57 TUs recompiled; **nm of all five binaries:
-  kestrel 505/505/505/503/60, tosh 0 everywhere.** `swift build` green. Lesson recorded:
+  kestrel 505/505/505/503/60, legacy 0 everywhere.** `swift build` green. Lesson recorded:
   symbol-rename scans must be case-complete AND underscore-aware.
 
 ## Variance / notes

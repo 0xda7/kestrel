@@ -5,7 +5,7 @@
   1. `DashboardMetricsView` used `vram.gpus.first` → always Intel UHD 630 (index 0). Fix `6125b15` (primaryGPU: busiest-else-largest).
   2. Live AX snapshot of pid 49761 still showed "GPU, 15%, Intel(R) UHD Graphics 630" — desktop compositing lit the iGPU, so "busiest" picked Intel. Fix `6ac3860` (residency >20% threshold — still Intel at 38% while idle, no model loaded).
   3. ioreg PerformanceStatistics capture: AMD driver exposes NO idle activity key + inUseVidMemoryBytes=0; Intel reports compositing activity. Any load-based rule is biased to the iGPU on this hardware. Fix `abd99cb`: residency-first (>256 MB used), else largest totalMB. No activity fallback.
-- Deployed: TOSH_VERSION=0.88.0 TOSH_NO_BUMP=1 make-app.sh → distto /Applications, xattr -dr quarantine, relaunch (pid 50391).
+- Deployed: KESTREL_VERSION=0.88.0 KESTREL_NO_BUMP=1 make-app.sh → distto /Applications, xattr -dr quarantine, relaunch (pid 50391).
 - GATE CLOSED: cua-driver AX snapshot of Configuration window (id=control, window 1314): `AXStaticText = "GPU, 33%, AMD Radeon Pro 5500M"`. The 33% is max-across-GPUs (Intel compositing); the card NAME is the discrete GPU as requested.
 - Note: fix is on main (abd99cb) but NOT in v0.88.0 release DMGs; next tag carries it.
 
@@ -83,8 +83,8 @@
   (.agents/missions/2026-10-02-llmspace-engine/plan.md) BEFORE any code (doctrine).
 - Harness outage window (~15:58-16:09 PT): bash/glob/read all dead (spawn ENOENT); web+write lived.
   Recovery full by 16:09. No claims made during outage beyond fetched web evidence.
-- Repo MOVED by operator during outage: /Users/admin/KimiK3_Nvidia/toshllm-main (shell, now empty)
-  → /Users/admin/KimiK3_Nvidia/ToshLLM (verified: main...origin/main, HEAD 96a9dfa, clean).
+- Repo MOVED by operator during outage: /Users/admin/KimiK3_Nvidia/kestrel-main (shell, now empty)
+  → /Users/admin/KimiK3_Nvidia/Kestrel (verified: main...origin/main, HEAD 96a9dfa, clean).
   My accidental plan.md write into the shell dir relocated; shell dir restored empty.
 - Scout evidence (fetched): llm-space = Pi-based workbench; engine = earendil-works/pi (MIT).
   Pi CLI: -p / --mode json (JSONL events, LF framing, message_end authoritative) / --mode rpc;
@@ -139,7 +139,7 @@
   8/8 PASS exit 0 (9 PASS lines = 8 cases + summary); session-trace claim verified empirically
   (--no-session + --session-dir DOES write full JSONL traces: 2 files under smoke dir). Routing
   precedence re-read and confirmed (explicit chip mode overrides global toggle). Packaged
-  TOSH_NO_BUMP=1 ./make-app.sh → MAKEAPP_EXIT=0, dist/Kestrel.app signed, VERSION 0.88.0
+  KESTREL_NO_BUMP=1 ./make-app.sh → MAKEAPP_EXIT=0, dist/Kestrel.app signed, VERSION 0.88.0
   untouched, 'pi-sessions' symbol in binary (grep=1). Step 8 handoff: operator replaces the
   running app (pid 434 = pre-pi build) with dist/Kestrel.app, enables pi via chip or settings
   toggle, sends one message; evidence = conversations.json + AppSupport/Kestrel/pi-sessions/*.
@@ -161,7 +161,7 @@
   (c) Old llama-server died with the replaced app (pid 2655 gone; operator now runs
   dist/Kestrel.app pid 3435) — engine must be restarted from the new app's Chat UI before
   an in-app pi send can get a live reply.
-- 17:42 PT operator renamed the working copy folder ToshLLM → Kestrel-AIEngine (AMENDMENT 3).
+- 17:42 PT operator renamed the working copy folder Kestrel → Kestrel-AIEngine (AMENDMENT 3).
   Session workspace cwd broke (spawn ENOENT) → re-anchored. Git state verified intact from the
   new path: main @ 96a9dfa, same 8 mission files. Ghost app (pid 3435 executing from deleted
   path) re-opened from dist/Kestrel.app under the new path. .build purged (52 stale absolute
@@ -170,14 +170,14 @@
   /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine: (1) cold rebuild SWIFT_EXIT=0 (56.66s, 191/191,
   --disable-sandbox required: session file-sandbox denies SwiftPM's internal sandbox-exec at
   manifest compile — environment quirk, not a code defect); pi-sessions symbol present in fresh
-  .build binary (grep=1); zero 'ToshLLM' refs remain anywhere in .build. (2) dist/Kestrel.app
+  .build binary (grep=1); zero 'Kestrel' refs remain anywhere in .build. (2) dist/Kestrel.app
   proven fresh: no source file newer than its 17:12 binary — every pi edit incl. the 17:06
   npm-scope fix is packaged; adhoc signature valid. (3) pi 1.0.0 healthy; seeded
   ~/.pi/agent/models.json resolves kestrel-local / Qwen3.5-9B GGUF 128K (verified in isolated
   HOME — LIST_EXIT=0; direct ~/.pi access EPERMs only because the session file-sandbox blocks
   writes outside the workspace, the app itself is unaffected). (4) env note for evidence
   commands: sandbox shells have bare PATH — export nvm node bin + /usr/local/bin before node/pi.
-  State carried forward: NO app or llama-server currently running; toshllm-main/ ghost folder is
+  State carried forward: NO app or llama-server currently running; kestrel-main/ ghost folder is
   empty and safe to delete. Steps 8 (operator in-app live-fire) and 9 (operator commit+push)
   remain pending as before, unchanged by the rename.
 
@@ -334,7 +334,7 @@ Verification evidence:
 - Local server auth path re-verified on test port: no key 401, right key 200, wrong key 401,
   POST /v1/chat/completions without key 401; /health stays open for supervisors.
 - Secrets sweep Sources/ scripts/ Assets/ (patterns sk-/xoxb/ghp_/AKIA/bearer-hex): clean.
-- dist repackaged: TOSH_NO_BUMP=1 TOSH_ARCH=x86_64 ./make-app.sh → exit 0 (VERSION 0.88.0
+- dist repackaged: KESTREL_NO_BUMP=1 KESTREL_ARCH=x86_64 ./make-app.sh → exit 0 (VERSION 0.88.0
   kept). Prior bundle backed up to /tmp/Kestrel-app-backup-0.88.0. Operator NOT killed or
   relaunched: running app (pid 437) + engine keep the operator's in-flight test; swap to the
   new dist on their signal.
@@ -352,26 +352,26 @@ restart: the run's phase-1 inventory and phase-2 harness builders had settled on
 remaining phases were executed hands-on with the same gates. Subagents per operator
 directive: GLM-5.3-Flash (Start Plan).
 
-Naming (operator complaint "ToshLLM/Tosh still persistent + engeldelgado"):
-- Scout evidence: 1,760 raw hits → 230 distinct TOSH_ env tokens across 100 patch files;
+Naming (operator complaint "Kestrel/legacy still persistent + engeldelgado"):
+- Scout evidence: 1,760 raw hits → 230 distinct KESTREL_ env tokens across 100 patch files;
   engine BINARIES read them (strings proof) → rename required patch-side + rebuild, else the
   AMD-FA/MoE/MGPU kernel toggles die silently. Inventory on disk:
   .agents/missions/2026-10-03-prompt-space-2/naming-inventory.json (565 KB).
-- Executed: uniform TOSH_→KESTREL_ (line-count-preserving) across patches/ (88 files) +
+- Executed: uniform KESTREL_→KESTREL_ (line-count-preserving) across patches/ (88 files) +
   reference/ + scripts/build-engines.sh (its CMake flags -DKESTREL_ENABLE_DYNAMIC_MOE /
   -DKESTREL_VERSION must match the patched source — caught before building); all three
   engines rebuilt (llama/whisper/sd) from pinned upstream with the renamed series; gates:
-  grep -ac TOSH_ = 0 on all 6 rebuilt binaries, KESTREL_FA_AMD present, LIVE PROBE: server on
+  grep -ac KESTREL_ = 0 on all 6 rebuilt binaries, KESTREL_FA_AMD present, LIVE PROBE: server on
   :8099 with KESTREL_FA_AMD=1 → "KESTREL-ENV-OK" (log line "Kestrel engine 0.88.0"). THEN the
   Swift/scripts/CI/Assets-lang/root rename (25 files) — ordering guarantees the repo never
   sends names the shipped binary doesn't read. Backup of pre-rename patches+script:
   /tmp/kestrel-rename-backup/. Old build-static moved to /tmp/kestrel-build-static-backup
   (the vendor dir had no .git; fresh clone+build regenerated it).
 - Keeps (deliberate): .agents/ mission history (append-only audit records), past-release
-  CHANGELOG entries, "MACINTOSH" (TOSH substring false positive in web-ui bundle).
+  CHANGELOG entries, "MACINTOSH" substring false positives in the web-ui bundle.
 - engeldelgado: zero hits in live code (the 2026-10-01 rebrand cleaned product code; only
-  historical records carry it). Machine cleanup: dev.engel.toshllm defaults domain EXPORTED
-  to .agents/backups/dev.engel.toshllm.plist then DELETED.
+  historical records carry it). Machine cleanup: the pre-rename defaults domain defaults domain EXPORTED
+  to .agents/backups/the pre-rename defaults domain.plist then DELETED.
 
 Meta-prompt harness (pi as prompt creator, LLM Space mirror):
 - SkillsDiscovery.swift (Claude-format SKILL.md scan of ~/.pi/agent/skills + ~/.claude +

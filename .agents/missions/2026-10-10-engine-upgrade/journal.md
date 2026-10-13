@@ -1,10 +1,10 @@
 # Journal
 
-- 2026-10-10 09:40 Step 0. Committed the completed tosh→kestrel rename (1dbd949, 51 files,
-  tree clean afterwards). `~/toshllm-study` verified a pure clone at the 0.87.9 release commit
+- 2026-10-10 09:40 Step 0. Committed the completed legacy→kestrel rename (1dbd949, 51 files,
+  tree clean afterwards). `~/kestrel-study` verified a pure clone at the 0.87.9 release commit
   (only untracked: STRUCTURAL_MAP.md, latch-demo.txt, .agents/) and moved to
-  `~/.Trash/toshllm-study-20261010-095053`. Note: the 3 "tosh" grep hits left in Sources/ are
-  the word "Hackintosh" — the rename is genuinely complete in code.
+  `~/.Trash/kestrel-study-20261010-095053`. Note: the 3 "legacy" grep hits left in Sources/ are
+  the word "Hackinlegacy" — the rename is genuinely complete in code.
 - 2026-10-10 09:55 Baseline on the 5500M (Spark-X2.5-1.7B-Q8_0, -ngl 99): pp512 1013.30 t/s,
   tg128 55.15 t/s, build 957538960 (b11141), Kestrel engine 0.88.0. Smoke (temp 0): "The
   capital of France is Paris." — coherent. Recorded in baseline-llama-bench.txt.

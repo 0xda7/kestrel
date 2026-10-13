@@ -18,8 +18,8 @@ strict concurrency — without shipping an unvalidated Metal backend.
 
 ## Steps
 
-- Step 0 housekeeping: commit the finished tosh→kestrel rename; remove the stale
-  `~/toshllm-study` clone (v0.87.9, zero post-clone commits, moved to Trash).
+- Step 0 housekeeping: commit the finished legacy→kestrel rename; remove the stale
+  `~/kestrel-study` clone (v0.87.9, zero post-clone commits, moved to Trash).
 - Step 1 engines: baseline bench → strict bisect of each upstream gap → pin moves →
   rebuild → 5500M validation → docs (patches/README frontier, CHANGELOG).
 - Step 2 Swift 6: tools-version bump, strict concurrency waves (Task.detached,

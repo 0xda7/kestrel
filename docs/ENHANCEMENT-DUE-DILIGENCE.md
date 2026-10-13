@@ -66,8 +66,8 @@ Reading:
    (`security find-generic-password -s com.northlatchlabs.kestrel -a api-key -w`).
 2. **Ad-hoc signing, no hardened runtime.** The dist app is ad-hoc signed without
    entitlements. Fine for a local dev build; a notarized release path already exists in CI.
-3. **Legacy defaults domain** `dev.engel.toshllm` — done 2026-10-03: the inert domain was
-   exported to `.agents/backups/dev.engel.toshllm.plist` and deleted; the drift risk is gone.
+3. **Legacy defaults domain** (the pre-rename app's personal domain) — done 2026-10-03: the inert domain was
+   exported and deleted; the drift risk is gone.
 
 ## 4. Roadmap (ranked, awaiting scope approval) [roadmap]
 

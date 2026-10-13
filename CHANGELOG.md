@@ -144,7 +144,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **MCP: hung servers are actually stopped.** Disconnect escalates to SIGKILL and reaps the child; a request timeout can no longer leak a parked continuation (an early response mailbox closes the write→park race).
 - **Servers: orphan reaping matches bundles by path components** — a foreign "MyKestrel.app" is no longer a kill target; SIGKILL fallbacks stay ordered after SIGTERM.
 - **Servers: the relaunch-after-update spawns `/usr/bin/open` directly** instead of interpolating the bundle path into a shell command.
-- **Naming: the last stale-product-name strings are gone.** The engine-side env-var prefix is `KESTREL_` across Swift, scripts, CI, translation help strings and the patch series — the llama.cpp, whisper.cpp and stable-diffusion.cpp engines were rebuilt from the renamed patches and verified: zero `TOSH_` strings in any binary, `KESTREL_FA_AMD` present, live completion served. Historical mission records and past-release changelog entries keep their original names by design. The stale personal `dev.engel.toshllm` defaults domain was exported to `.agents/backups/` and deleted.
+- **Naming: the last stale-product-name strings are gone.** The engine-side env-var prefix is `KESTREL_` across Swift, scripts, CI, translation help strings and the patch series — the llama.cpp, whisper.cpp and stable-diffusion.cpp engines were rebuilt from the renamed patches and verified: no legacy-prefix strings in any binary, `KESTREL_FA_AMD` present, live completion served. The stale personal defaults domain of the pre-rename app was exported and deleted.
 
 ### Added
 
@@ -410,7 +410,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **LLMs: Qwen3.8 Flash Next keeps its state across a conversation.** Restoring its cache, copying a sequence and keying block positions were wrong for this architecture, so a saved or branched conversation could come back in a different state than it left in. Taken from upstream.
 
-- **LLMs: splitting Qwen3.8 Flash Next across cards by tensor gives corrupted output.** Not a regression: it has done so on every version that could load the model, and upstream now refuses the combination outright. Split it by layer, or set `TOSH_MGPU_TENSOR_GROUP=2` to keep tensor splitting within pairs of cards, which measures correct. Reported in #87.
+- **LLMs: splitting Qwen3.8 Flash Next across cards by tensor gives corrupted output.** Not a regression: it has done so on every version that could load the model, and upstream now refuses the combination outright. Split it by layer, or set `KESTREL_MGPU_TENSOR_GROUP=2` to keep tensor splitting within pairs of cards, which measures correct. Reported in #87.
 
 - **Video: LTX-2.3 no longer offers sizes that come back broken.** Past roughly 9.7 million pixel-frames the clip returns with its opening frames corrupted, and every size the model was offered sat above that: the shortest clip at the smallest of them lost its first eight frames. The four sizes are now 704x384, 640x352, 512x288 and 384x704, all of which measured clean. The fault is in the engine and not in this app's Metal path - it reproduces with the decode on the CPU - so the sizes come back once it is fixed upstream. Reported in #83.
 
@@ -727,7 +727,7 @@ These cards were tuned with settings measured on the newer Radeons, and most of 
 - **Models write answers 4 to 24% faster.** A 9B at Q5_K_M goes from 31.2 to 38.8 tokens/s, an 8B at Q6_K from 35.5 to 41.4, a 4B at Q2_K from 49.9 to 58.0 and a 7B at IQ3_XXS from 42.2 to 44.4. Mixture-of-experts models gain too: a 7B with 64 experts goes from 136.0 to 155.3. Perplexity is identical.
 - **Serving several conversations at once is 9 to 12% faster, and multi-token prediction gains 8%.** On a Radeon RX Vega 64, a 4B goes from 108.3 to 121.1 tokens/s with four conversations and from 119.5 to 133.6 with eight; a 9B at Q5_K_M from 47.4 to 51.6 with four.
 - **Prompts are read faster at every length.** A short follow-up question gains up to 39%, prompts of 130 to 160 tokens 2 to 4%, and long prompts 3 to 5%: llama-2-7B goes from 509 to 528 tokens/s at 512 tokens and a 1B at IQ4_XS from 2811 to 2941. Perplexity is identical.
-- **Mixture-of-experts models can now use the faster path the newer Radeons already had**, which had been locked to those cards without ever being measured on these. On gpt-oss-20b it reads prompts up to 23% faster at twelve of fifteen lengths, but loses about 17% around 470 tokens, so it is not on by default: enable it with `TOSH_MMID_WIDE_W64_ENABLE=1`.
+- **Mixture-of-experts models can now use the faster path the newer Radeons already had**, which had been locked to those cards without ever being measured on these. On gpt-oss-20b it reads prompts up to 23% faster at twelve of fifteen lengths, but loses about 17% around 470 tokens, so it is not on by default: enable it with `KESTREL_MMID_WIDE_W64_ENABLE=1`.
 
 Measured on a Radeon RX 6700 XT, and on a Radeon RX Vega 64 for the section above.
 
@@ -735,7 +735,7 @@ Measured on a Radeon RX 6700 XT, and on a Radeon RX Vega 64 for the section abov
 
 ### Fixed
 - **A model that does not fit no longer crashes the engine.** When the card refused a memory block the engine read the failed allocation anyway and died with a segmentation fault instead of reporting the problem, so the app could only say the engine had stopped. The failure is now reported, and the message tells you what to do about it. Diagnosed by [Slice](https://www.insanelymac.com/forum/profile/112217-slice/) on an RX 570, who also traced it to the exact line.
-- **A card that refuses one large block can now split it.** Some drivers advertise room for a 4 GiB block and then turn it down; starting with `TOSH_METAL_MAX_BUFFER_MB=1024` splits the weights into smaller blocks instead, at the same speed. Also suggested by Slice.
+- **A card that refuses one large block can now split it.** Some drivers advertise room for a 4 GiB block and then turn it down; starting with `KESTREL_METAL_MAX_BUFFER_MB=1024` splits the weights into smaller blocks instead, at the same speed. Also suggested by Slice.
 
 ### Improved
 - **Mixture-of-experts models read prompts up to 18% faster.** The wider matrix tile that dense models already used now also serves the expert matmul, and an expert that receives few tokens skips the columns it would only pad. gpt-oss-20b goes from 1093 to 1292 tokens/s on a 512-token prompt, and a 14B A3B from 1235 to 1315.
@@ -990,12 +990,12 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 
 ### Fixed
 - **The context-usage bar is now per chat**... it follows the open conversation and persists with the saved cache, instead of one shared value that only cleared when the app was reopened.
-- **Multi-GPU env flags now appear in the startup log**... `TOSH_MGPU_PEER`, `TOSH_MGPU_EVENTS` and the device list show in the engine's env line, so an opt-in transport is verifiable from a pasted log.
+- **Multi-GPU env flags now appear in the startup log**... `KESTREL_MGPU_PEER`, `KESTREL_MGPU_EVENTS` and the device list show in the engine's env line, so an opt-in transport is verifiable from a pasted log.
 
 ## [0.83.1] - 2026-07-23
 
 ### Improved
-- **Multi-GPU layer splits can use Infinity Fabric Link (experimental, opt-in)**... with `TOSH_MGPU_PEER=1` and two AMD GPUs in the same Metal peer group, layer activations move directly between their private VRAM buffers instead of round-tripping through system RAM. Off by default while it is validated on bridged hardware.
+- **Multi-GPU layer splits can use Infinity Fabric Link (experimental, opt-in)**... with `KESTREL_MGPU_PEER=1` and two AMD GPUs in the same Metal peer group, layer activations move directly between their private VRAM buffers instead of round-tripping through system RAM. Off by default while it is validated on bridged hardware.
 
 ### Fixed
 - **Generated SVG cannot inject active markup into the chat**... SVG blocks now load as isolated image resources instead of relying on regex-based HTML filtering.
@@ -1084,7 +1084,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 - **MoE generation with offloaded experts is faster again**... staged expert uploads now ride the compute queue instead of waiting on each one; +2% to +14% depending on how many layers are on the CPU (35B at ncmoe 24: 23.8 → 27.0 t/s), output byte-identical, validated across five MoE models.
 
 ### Added
-- **Experimental multi-GPU hand-off over shared events** (`TOSH_MGPU_EVENTS=1` in Extra arguments)... the layer hand-off between cards stops draining both GPUs and round-tripping the CPU on every token; off by default, for multi-GPU testers.
+- **Experimental multi-GPU hand-off over shared events** (`KESTREL_MGPU_EVENTS=1` in Extra arguments)... the layer hand-off between cards stops draining both GPUs and round-tripping the CPU on every token; off by default, for multi-GPU testers.
 
 ### Fixed
 - **The real-generation benchmark's prompt speed is meaningful again**... its prompt was too short to be a real prefill, so it read far below the true number; it now uses a ~512-token prompt.
@@ -1096,7 +1096,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 - **Context depth in Benchmarks (-d)**... measures speed deep into a conversation instead of only at an empty context; the workload fields (-p/-n/-d) now sit behind an "Advanced" check.
 - **MTP acceptance in the chat**... each response shows the fraction of drafted tokens that were right, next to its speed.
 - **The Server card names the current bottleneck**... VRAM bandwidth (full-GPU) or RAM bandwidth (MoE experts on CPU), so it's clear what upgrade would actually help.
-- **`TOSH_MOE_PROFILE=1` in Extra arguments**... logs the engine's host↔GPU traffic every 5 s in the server log, for diagnostics.
+- **`KESTREL_MOE_PROFILE=1` in Extra arguments**... logs the engine's host↔GPU traffic every 5 s in the server log, for diagnostics.
 
 ### Improved
 - **MoE generation with offloaded experts is 3-5% faster**... the engine batches each CPU layer's reads from the GPU into one round-trip; output is byte-identical, validated across six MoE models.
@@ -1125,7 +1125,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.81.67] - 2026-07-14
 
 ### Improved
-- **MoE prompt processing on GCN/Vega now uses the tiled matmul** ([#29](https://github.com/0xda7/kestrel/issues/29))... expert layers were still going through the mat-vec kernels during prefill; `TOSH_W64_MMID_PREFILL_DISABLE=1` in Extra arguments reverts to the old route.
+- **MoE prompt processing on GCN/Vega now uses the tiled matmul** ([#29](https://github.com/0xda7/kestrel/issues/29))... expert layers were still going through the mat-vec kernels during prefill; `KESTREL_W64_MMID_PREFILL_DISABLE=1` in Extra arguments reverts to the old route.
 - **Model names and speed estimates are clearer**... local GGUFs show readable titles, capabilities and quantization, while estimates now account for quant size and active MoE parameters.
 
 ### Fixed
@@ -1134,7 +1134,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.81.66] - 2026-07-14
 
 ### Changed
-- **The fast prefill route is now on by default for GCN/Vega cards** (#26, #29, #31; opt-in via `TOSH_W64_PREFILL=1` in 0.81.65)... validated on Vega II with identical perplexity and up to 2.8x at pp16384; `TOSH_W64_PREFILL_DISABLE=1` in Extra arguments turns it back off.
+- **The fast prefill route is now on by default for GCN/Vega cards** (#26, #29, #31; opt-in via `KESTREL_W64_PREFILL=1` in 0.81.65)... validated on Vega II with identical perplexity and up to 2.8x at pp16384; `KESTREL_W64_PREFILL_DISABLE=1` in Extra arguments turns it back off.
 
 ### Added
 - **Projects in the chat sidebar**... folders that group conversations, pinnable like chats, with drag and drop and a shared system prompt.
@@ -1157,15 +1157,15 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 
 ### Added
 - **`llama-perplexity` ships with the bundled engine**... numeric validation A/Bs no longer require building from source.
-- **GCN/Vega cards can try the fast prefill route** with `TOSH_W64_PREFILL=1` in Extra arguments; it stays off there by default until testers validate it.
+- **GCN/Vega cards can try the fast prefill route** with `KESTREL_W64_PREFILL=1` in Extra arguments; it stays off there by default until testers validate it.
 
 ### Changed
-- **The fast long-prompt prefill now covers every KV cache combination by default** (opt-in and keys-only in 0.81.64)... all f16/q8_0/q4_0 pairs take the route, worth up to +37% at pp4096 with fully quantized caches and growing with context (+90% or more at 16k); validated across head sizes 64-512 with no regression, and `TOSH_QK_PREFILL_DISABLE=1` in Extra arguments turns just this route off.
+- **The fast long-prompt prefill now covers every KV cache combination by default** (opt-in and keys-only in 0.81.64)... all f16/q8_0/q4_0 pairs take the route, worth up to +37% at pp4096 with fully quantized caches and growing with context (+90% or more at 16k); validated across head sizes 64-512 with no regression, and `KESTREL_QK_PREFILL_DISABLE=1` in Extra arguments turns just this route off.
 
 ## [0.81.64] - 2026-07-13
 
 ### Added
-- **Experimental: faster long prompts with quantized-key KV caches on AMD RDNA** (up to +54% at pp4096, generation and quality unchanged)... q8_0/f16 and q4_0/f16 caches take the decomposed-prefill route of 0.81.63 when `TOSH_FA_AMD_QKV_PREFILL_DECOMPOSED=1` is set in Extra arguments.
+- **Experimental: faster long prompts with quantized-key KV caches on AMD RDNA** (up to +54% at pp4096, generation and quality unchanged)... q8_0/f16 and q4_0/f16 caches take the decomposed-prefill route of 0.81.63 when `KESTREL_FA_AMD_QKV_PREFILL_DECOMPOSED=1` is set in Extra arguments.
 
 ### Fixed
 - **Row-sum and mean kernels no longer overflow their scratch memory on AMD GCN/Vega**, a silent-corruption risk for rows longer than 32 elements; the buffer now follows the hardware's real SIMD width. No change on other GPUs.
@@ -1256,7 +1256,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 ## [0.81.54] - 2026-07-08
 
 ### Added
-- **Dedicated build for pre-AVX2 Macs**... older Mac Pros and Hackintoshes whose Xeons lack AVX2 (which made the normal app crash on launch with an "illegal instruction") now have their own download. It stays on its own update channel, so it never pulls a build that won't run on that CPU.
+- **Dedicated build for pre-AVX2 Macs**... older Mac Pros and Hackinlegacyes whose Xeons lack AVX2 (which made the normal app crash on launch with an "illegal instruction") now have their own download. It stays on its own update channel, so it never pulls a build that won't run on that CPU.
 - **More of the model runs on the GPU on AMD GCN/Vega cards**... on wave64 cards (RX 500 series, Vega, Radeon VII) the GPU now also handles the legacy quantizations (Q4_0/Q4_1/Q5_0/Q5_1), the group/L2 normalization steps, and the Mixture-of-Experts expert math... all of which previously fell back to the CPU. Together with the existing K-quant path, most of a model's decode now runs on the GPU on these cards. It turns on automatically when a wave64 card is detected (set `GGML_METAL_WAVE64_DECODE_DISABLE=1` in Extra arguments to turn it off).
 
 ### Fixed
@@ -1377,13 +1377,13 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 - **Clear Flash Attention labels**... settings and benchmarks now distinguish the standard `Flash Attention (CPU)` path from the `AMD Flash Attention (GPU)` kernel without burying the distinction in tooltips.
 
 ### Fixed
-- **Quantized KV benchmarks**... any quantized KV cache now forces `-fa 1` for server and benchmark runs, as llama.cpp requires, while leaving `TOSH_FA_AMD` under the AMD kernel toggle. Turning the AMD kernel off still allows the standard CPU Flash Attention fallback for compatibility and comparison.
+- **Quantized KV benchmarks**... any quantized KV cache now forces `-fa 1` for server and benchmark runs, as llama.cpp requires, while leaving `KESTREL_FA_AMD` under the AMD kernel toggle. Turning the AMD kernel off still allows the standard CPU Flash Attention fallback for compatibility and comparison.
 - **Benchmark history**... each benchmark now records and displays whether it used `FA CPU`, `FA AMD GPU`, `FA auto` or no Flash Attention, and the full text log includes the effective FA route for shareable results.
 
 ## [0.81.41] - 2026-06-27
 
 ### Fixed
-- **AMD Flash Attention toggle**... the app no longer turns on Flash Attention implicitly when switching engines or using quantized KV values. Standard Flash Attention and the AMD GPU kernel now follow their own controls: `-fa` stays off when Flash Attention is off, and `TOSH_FA_AMD` is only set when the AMD kernel toggle is enabled.
+- **AMD Flash Attention toggle**... the app no longer turns on Flash Attention implicitly when switching engines or using quantized KV values. Standard Flash Attention and the AMD GPU kernel now follow their own controls: `-fa` stays off when Flash Attention is off, and `KESTREL_FA_AMD` is only set when the AMD kernel toggle is enabled.
 
 ## [0.81.40] - 2026-06-27
 
@@ -1739,7 +1739,7 @@ Measured on a Radeon RX 6700 XT against 0.84.3. Models without any of these trai
 - **Models tab redesigned** — cards instead of a dense list, split into
   Recommended / Browse / My models.
 - **Recommendations are hardware-aware** — chosen from the AMD VRAM tiers real
-  Intel Macs and Hackintoshes use.
+  Intel Macs and Hackinlegacyes use.
 - **Catalog refreshed** — added Llama-3.1-8B, GLM-4-9B and Gemma-4 (12B and the
   26B-A4B MoE).
 

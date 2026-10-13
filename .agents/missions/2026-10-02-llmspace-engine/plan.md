@@ -71,7 +71,7 @@ AMENDMENT 1: Step-2 operator gate PASSED 16:15 PT — architecture = Pi CLI side
 - Step 5 ✅ 16:39 PT — settings section: global toggle, binary path, model/provider passthrough (empty = pi's own config; `pi --list-models` documented), timeout stepper 30–1800 s.
 - Step 6 ✅ 16:52 PT — session traces under AppSupport/Kestrel/pi-sessions via `--session-dir` + `--no-session` (stateless turns, bounded transcript in prompt); skills/MCP stay pi agent-dir config (`~/.pi/agent/`), no Kestrel code; documented in settings help + AUTHORS.md.
 - Step 7 ✅ 17:00 PT — gates: `swift build` exit 0 (255 s cold, 36 s warm — `/tmp/kestrel-build-pi3.log`); behavioral driver **8/8 PASS exit 0** on FINAL source (delta assembly across chunks, authoritative blocks-array replacement, abnormal-exit bilingual + status + stderr surfacing, timeout keeps partial, missing-binary launch notice); **live-fire driver 3/3 PASS exit 0** (real `pi` 1.0.0 → local llama-server → `KESTREL_LIVE_OK` streamed progressively — caught and fixed GUI-PATH gap `env: node: No such file or directory` status 127 via `childEnvironment()`); real JSONL capture `/tmp/pi_smoke2.jsonl` (74 records) confirms full event contract against live engine; secret grep `xlaunch-981b50a9` in Sources/ Scripts/ docs/ = **0**; attribution in AUTHORS.md (Pi MIT + llm-space link, no-credentials note).
-- Step 7b ✅ 17:03 PT — operator convenience: `TOSH_NO_BUMP=1 ./make-app.sh` → MAKEAPP_EXIT=0, `dist/Kestrel.app` signed, VERSION untouched (0.88.0), pi-sessions symbol verified in binary. The running /Applications/Kestrel.app (pid 434) predates the pi code and must be replaced for Step 8.
+- Step 7b ✅ 17:03 PT — operator convenience: `KESTREL_NO_BUMP=1 ./make-app.sh` → MAKEAPP_EXIT=0, `dist/Kestrel.app` signed, VERSION untouched (0.88.0), pi-sessions symbol verified in binary. The running /Applications/Kestrel.app (pid 434) predates the pi code and must be replaced for Step 8.
 - Step 8 ⏳ PENDING OPERATOR — in-app send with pi selected; evidence = conversations.json + AppSupport/Kestrel/pi-sessions file.
 - Step 9 ⏳ PENDING OPERATOR AUTHORIZATION — commit + push after Step 8.
 - 17:15 PT round-4 evidence — zero-model failure path verified behaviorally: with pi's own
@@ -86,12 +86,12 @@ AMENDMENT 1: Step-2 operator gate PASSED 16:15 PT — architecture = Pi CLI side
   pattern in Chat's pi settings that resolves via pi's own config.
 
 AMENDMENT 3 (operator action, 17:42 PT): canonical working-copy folder renamed by the
-operator: /Users/admin/KimiK3_Nvidia/ToshLLM → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine.
+operator: /Users/admin/KimiK3_Nvidia/Kestrel → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine.
 Git tree intact (main @ 96a9dfa, same 8 mission files modified/untracked). Consequences
 handled: (1) running dist app was a ghost of the deleted path — re-opened from the new path;
 (2) .build metadata carried 52 stale absolute references → purged, cold rebuild re-establishes
 the build gate under the new path; (3) earlier evidence lines in this plan and the journal
-cite the old path — treat "ToshLLM" in recorded commands as "Kestrel-AIEngine" going forward.
+cite the old path — treat "Kestrel" in recorded commands as "Kestrel-AIEngine" going forward.
 Old path no longer exists.
 
 AMENDMENT 4 (operator-approved 19:08 PT via "you take the most advantageous offer and most
