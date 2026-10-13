@@ -158,3 +158,13 @@
   EVIDENCE.md §Next steps (0063's held-buffer hunk is suspect #1). Routing note: splice work
   was T1-mechanical; the contamination lesson (regenerate only from committed baselines) and
   the bench-verdict call were T2.
+
+- 2026-10-13 03:30 SESSION 7 — THE FRONTIER LANDED (c5c5294). The session-6 "regression" was
+  a measurement artifact: an interleaved cool-start A/B (pin and frontier binaries alternating,
+  20 s cool-downs) showed PARITY — pin 55.9 vs frontier 55.7 t/s tg128 — and the heat-soak
+  proof was conclusive (the PIN binary itself dropped to 27.4 t/s when benched right after a
+  full build). Lesson recorded in patches/README.md: never bench right after a build on this
+  machine. Full gate rerun and passed: strict apply 92/92, build 100%, round-trip byte-identical,
+  temp-0 smoke coherent (b11174-ed319febb), advisory triage clean. PIN MOVED:
+  cdc06426e → ed319febb. Next wall for the arc: 5a75f14c0 (FA per-dtype) breaks 0001 —
+  the kernels/ port, mapped in EVIDENCE.md.
