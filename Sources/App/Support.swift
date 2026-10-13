@@ -732,12 +732,12 @@ enum Keychain {
 
 // MARK: - Local secret store (machine-generated, machine-local secrets)
 
-/// File-backed storage for machine- and operator-local secrets — the local
+/// File-backed storage for machine-local secrets — the local
 /// engine's API key and the remote provider keys. Unlike the Keychain,
 /// reading a 0600 file in a 0700 Application Support folder never involves an
 /// ACL evaluation, so no access dialog can ever appear for it, and an ad-hoc
 /// rebuild keeps access for free. Provider keys moved here from the Keychain
-/// by operator decision: on ad-hoc builds the Keychain's per-signature ACL
+/// by deliberate decision: on ad-hoc builds the Keychain's per-signature ACL
 /// raised the macOS password dialog after every rebuild, a cost that was
 /// never requested. Legacy Keychain items migrate on first read and are then
 /// deleted (see InferenceRoutes).

@@ -17,7 +17,7 @@ enum LatchDelegateService {
     static let toolName = "latch_delegate"
     static let defaultTimeoutSeconds = 300
     /// Floor for model-requested budgets: below this a multi-step agent run
-    /// can only die mid-work (live-fire 2026-10-02: a model asked for 30 s).
+    /// can only die mid-work (observed-in-use 2026-10-02: a model asked for 30 s).
     static let minimumTimeoutSeconds = 60
     static let maximumTimeoutSeconds = 900
     static let maximumOutputCharacters = 12_000
@@ -100,7 +100,7 @@ enum LatchDelegateService {
         }
         let attach = (arguments["attach"] as? [Any])?.compactMap { $0 as? String } ?? []
         // Floor at 60 s: latch is a multi-step agent loop (it plans, reads,
-        // writes) and models routinely underestimate it — live-fire showed a
+        // writes) and models routinely underestimate it — practice showed a
         // model requesting 30 s, which can only end in a budget kill. The
         // request is honored above the floor and clamped at the maximum.
         let timeout = {

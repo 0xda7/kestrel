@@ -11,7 +11,7 @@ import Foundation
 /// the ported llm-space meta-prompt system prompt.
 ///
 /// The harness runs on the shipped PiDelegateService sidecar and is confined
-/// like the chat path (AMENDMENT 4) and stricter: `--no-tools` always (a
+/// like the chat path and stricter: `--no-tools` always (a
 /// prompt author needs no tool surface; system-prompt text cannot disable
 /// pi's tools — only the flag does), `--thinking off` (the whole budget goes
 /// to the authored prompt text), a pinned 600 s budget, and no session
@@ -220,7 +220,7 @@ enum MetaPromptService {
         case .completed(let output):
             let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
             if produced.isEmpty {
-                // Empty-success guard (AMENDMENT 4): surface the failure with
+                // Empty-success guard: surface the failure with
                 // the reasoning the buffer captured — never a blank result.
                 let captured = (streamed?.reasoning ?? outcome.reasoning)
                     .trimmingCharacters(in: .whitespacesAndNewlines)

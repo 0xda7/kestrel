@@ -149,7 +149,7 @@ struct Conversation: Identifiable, Codable {
     /// the model engine. Optional so older JSON decodes and older builds ignore
     /// the extra key.
     var assistantMode: String? = nil
-    /// Pi agent opt-in for this conversation (AMENDMENT 4): false/nil keeps
+    /// Pi agent opt-in for this conversation: false/nil keeps
     /// pi confined (--no-tools, chat budget); true enables pi's native tools
     /// for this chat only, with a larger budget and a warning banner.
     /// Optional so older JSON decodes.
@@ -684,8 +684,8 @@ final class ChatStore: ObservableObject {
         save()
     }
 
-    /// Per-conversation pi agent opt-in (AMENDMENT 4). Enabling restores pi's
-    /// native tool surface for this chat only — the operator's explicit act.
+    /// Per-conversation pi agent opt-in. Enabling restores pi's
+    /// native tool surface for this chat only — the user's explicit act.
     func setConversationAgentMode(_ c: Conversation, _ enabled: Bool) {
         guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
         conversations[i].piAgentMode = enabled ? true : nil
@@ -813,11 +813,11 @@ final class ChatStore: ObservableObject {
 
     /// One-shot prompt for a pi run: a char-bounded recent transcript and the
     /// standing instruction. The system prompt rides `--system-prompt` as a
-    /// real system message (AMENDMENT 4) instead of prompt preamble, so the
+    /// real system message instead of prompt preamble, so the
     /// context here is exactly the conversation.
     private func piPrompt(for i: Int,
                           continuationInstruction: String?) -> String {
-        // Char budget is operator-tunable: a long chat re-sends this much
+        // Char budget is user-tunable: a long chat re-sends this much
         // every turn, so the default (12k chars ≈ 3k tokens) weighs cost
         // against continuity; the newest user message always rides whole.
         let storedBudget = UserDefaults.standard.integer(forKey: SettingsKeys.piContextCharacters)
@@ -863,7 +863,7 @@ final class ChatStore: ObservableObject {
         "pi terminó de forma anómala (estado \(status)). / pi exited abnormally (status \(status))."
     }
 
-    /// Empty-success guard (AMENDMENT 4): the run ended cleanly but produced
+    /// Empty-success guard: the run ended cleanly but produced
     /// no visible text, so this surfaces instead of a blank bubble.
     nonisolated static var piEmptyReplyMessage: String {
         "pi completó el turno sin producir respuesta visible. / pi completed the turn without producing a visible reply."
@@ -889,7 +889,7 @@ final class ChatStore: ObservableObject {
         let convID = conversations[i].id
         let toolCwd = effectiveWorkingDirectory(for: convID)
         let agentMode = conversations[i].piAgentMode == true
-        // AMENDMENT 4: the system prompt rides --system-prompt; the fallback
+        // the system prompt rides --system-prompt; the fallback
         // persona (sidecar is a conversational assistant, not a repo manager)
         // applies only when the conversation carries no prompt of its own.
         let systemForRun = system.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -953,7 +953,7 @@ final class ChatStore: ObservableObject {
                 let captured = outcome.reasoning.trimmingCharacters(
                     in: .whitespacesAndNewlines)
                 if produced.isEmpty {
-                    // Empty-success guard (AMENDMENT 4): the run ended cleanly
+                    // Empty-success guard: the run ended cleanly
                     // but said nothing (e.g. the whole budget went to thinking
                     // or reasoning). Surface the failure — never a blank bubble.
                     reply = captured.isEmpty
@@ -2648,7 +2648,7 @@ final class ChatStore: ObservableObject {
 
     /// KES-07: a transcript authored elsewhere can aim the agent tools at any
     /// directory via its stored working directory; an import never adopts it
-    /// silently. The directory is dropped and the operator re-picks one
+    /// silently. The directory is dropped and the user re-picks one
     /// deliberately in conversation settings if they want one.
     nonisolated static func neutralizedWorkingDirectories(_ conversations: [Conversation]) -> [Conversation] {
         conversations.map { conversation in
@@ -3131,7 +3131,7 @@ struct NativeChatView: View {
                     }
                 }
                 Divider()
-                // AMENDMENT 4: pi's tools stay OFF in chats by default; this
+                // pi's tools stay OFF in chats by default; this
                 // per-conversation opt-in restores them for this chat only.
                 Toggle(isOn: Binding(
                     get: { conversation.piAgentMode == true },
@@ -3304,7 +3304,7 @@ struct NativeChatView: View {
             workingDirectoryChip
             if chat.current?.assistantMode == "pi",
                chat.current?.piAgentMode == true {
-                // AMENDMENT 4 warning: visible before sending, not after.
+                // visible before sending, not after.
                 Label {
                     Text(loc.t(
                         "Modo agente: pi puede leer y escribir archivos en la carpeta de trabajo.",
@@ -4304,7 +4304,7 @@ struct NativeChatView: View {
                 .padding(.vertical, 6)
             }
             Divider()
-            // Prompt Space (AMENDMENT 4 wave 1): template library that renders
+            // Prompt Space: template library that renders
             // into this chat's system prompt.
             Button(loc.t("Espacio de prompts…", "Prompt Space…"),
                    systemImage: "text.badge.star") {

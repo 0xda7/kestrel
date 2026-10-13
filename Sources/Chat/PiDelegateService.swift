@@ -14,7 +14,7 @@ import Foundation
 /// auth chain (`pi auth`, models.json, env) — never from this process, never
 /// on the command line, never in any file Kestrel writes.
 ///
-/// Confinement (AMENDMENT 4, live-fire evidence 2026-10-02): pi ships with
+/// Confinement (observed 2026-10-02): pi ships with
 /// bash/read/edit/write tools ACTIVE, and system-prompt text cannot disable
 /// them — a chat turn once wrote Swift files into this repository. Chat turns
 /// therefore pass `--no-tools` by default; only an explicit per-conversation
@@ -42,7 +42,7 @@ enum PiDelegateService {
     /// Session files land here — one JSONL trace per turn (llm-space trace
     /// convention; `--no-session` probe-proven to suppress the file entirely).
     /// Kestrel never resumes them — each turn stays self-contained; the files
-    /// exist so the operator can inspect and replay runs.
+    /// exist so the user can inspect and replay runs.
     static var sessionsDirectory: String {
         let base = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory,
                                                        .userDomainMask, true).first
@@ -100,7 +100,7 @@ enum PiDelegateService {
     /// Builds the pi argv for one conversation turn.
     /// - Chats run with `--no-tools`: pi answers as an assistant only. The
     ///   system prompt's "tools disabled" line is advisory; this flag is the
-    ///   enforcement (live-fire: a chat turn once edited this repository).
+    ///   enforcement (observed in real use: a chat turn once edited this repository).
     /// - Agent opt-in (`agentMode`) omits the flag, restoring pi's native
     ///   tool surface under the conversation's working directory.
     /// - Session saving stays ON: every turn writes a JSONL trace under
@@ -164,7 +164,7 @@ enum PiDelegateService {
         case exited(status: Int32, output: String)
         case failed(reason: String)
         /// True when the run ended cleanly but produced no visible reply —
-        /// e.g. the model spent its whole budget thinking (live-fire: the
+        /// e.g. the model spent its whole budget thinking (observed in real use: the
         /// "empty assistant bubble" report). Callers must surface a failure,
         /// never a blank bubble.
         var isEmptySuccess: Bool {

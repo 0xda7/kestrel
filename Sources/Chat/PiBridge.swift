@@ -18,7 +18,7 @@ import Foundation
 /// Credentials live in Kestrel's local secret store (0600 files) — the
 /// system Keychain is no longer written for provider keys, because on ad-hoc
 /// builds every rebuild invalidates the item's ACL and raises the macOS
-/// password dialog (the operator explicitly declined that design).
+/// password dialog (never requested, removed by design).
 enum PiBridge {
     static let generationMarkerName = "models.json.generated-by-kestrel"
     /// Keychain is not used for provider keys anymore; this store is.

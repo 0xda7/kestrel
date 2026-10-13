@@ -109,7 +109,7 @@ final class MetaPromptServiceTests: CheckCase {
     /// spends a real model call (up to the 600 s budget).
     @MainActor func testLivePromptAuthoringRun() async throws {
         guard ProcessInfo.processInfo.environment["KESTREL_META_PROMPT_LIVE"] == "1" else {
-            throw XCTSkip("Set KESTREL_META_PROMPT_LIVE=1 to run the live-fire pi check")
+            throw XCTSkip("Set KESTREL_META_PROMPT_LIVE=1 to run the observed-in-use pi check")
         }
         guard PiDelegateService.isInstalled else {
             throw XCTSkip("pi is not installed at \(PiDelegateService.binaryPath)")

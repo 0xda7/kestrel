@@ -382,7 +382,7 @@ struct ServerSettings {
             args += ["--tools", "all"]
             // The MCP proxy endpoint is REQUIRED for agent tools: without it
             // this engine build answers POST /tools with 404 "this feature is
-            // disabled" (verified in the live-fire of 2026-10-01) — the tools
+            // disabled" (verified in the observed-in-use of 2026-10-01) — the tools
             // list, but calls fail. The flag is the engine's documented-risky
             // /cors-proxy relay, so it stays loopback-only unless the LAN
             // refusal above has been satisfied with an API key.
@@ -637,7 +637,7 @@ struct ServerSettings {
         return MTLCreateSystemDefaultDevice()?.name ?? "default"
     }
 
-    /// Web chat UI bundled with the app (served via llama-server --path). The rebranded
+    /// Web chat UI bundled with the app (served via llama-server --path). The
     /// llama.cpp UI wins; the basic console stays as fallback.
     static var chatUIPath: String? {
         guard let res = Bundle.main.resourceURL else { return nil }

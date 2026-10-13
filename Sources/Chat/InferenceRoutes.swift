@@ -102,7 +102,7 @@ enum InferenceRoutes {
     /// Provider keys live in the local secret store, NOT the system Keychain:
     /// this app is ad-hoc signed, so every rebuild changes the signing
     /// identity and every uncached Keychain read of an older item raises the
-    /// macOS password dialog — a cost the operator explicitly declined
+    /// macOS password dialog — a cost deliberately removed by design
     /// ("never asked for this"). Reading a 0600 file in a 0700 folder never
     /// prompts, survives rebuilds, and is the same trade the engine's own
     /// key already made. Keychain items from older builds are migrated on
