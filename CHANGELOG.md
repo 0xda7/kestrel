@@ -5,11 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
-## [Unreleased]
+## [0.89.4] - 2026-10-12
 
 ### Changed
 
 - **Engines: the llama.cpp pin advances five commits, through the graph-capture wall** (`cdc06426e` → `ed319febb`, build b11174). Four patches are re-authored (`0002`, `0039`, `0063`, `0085`) — each wall was context drift around upstream's `n_nodes` early-return and the `capture_compute == 0` argument change, not semantic conflict. Full gate: all 92 patches apply with the build's own plain `git apply`; `llama-server` builds 100%; the round trip (fresh worktree at the pin + series) diffs byte-identical against the built tree; a temp-0 smoke answers coherently through the new binary; and the bench gate ran as a thermally-clean interleaved A/B — pin 55.9 vs frontier 55.7 t/s decode (parity; the first, alarming readings were taken on a heat-soaked machine immediately after full builds and are excluded as measurement artifacts, a lesson now recorded in `patches/README.md`). Advisory triage for the range: no published llama.cpp advisories exist since the previous pin's coverage (all 13 predate both commits). The next wall — `5a75f14c0`'s FA per-dtype library split breaking patch `0001` — is the `kernels/` layout port proper, mapped in the mission's `engines-frontier/EVIDENCE.md`.
+## [0.89.4] - 2026-10-12
+
+### Changed
+
+- **Engine: llama.cpp pin advances `cdc06426e` → `ed319febb`** — five commits upstream, through the graph-capture change (84e76d8a2, #29390) via four re-authored Metal patches (0002/0039/0063/0085). Gates: strict apply 92/92, build 100%, round-trip byte-identical, temp-0 smoke coherent, and **bench parity on the Radeon Pro 5500M** (pin 55.9 vs frontier 55.7 t/s tg128, measured interleaved with cool-downs after the first comparison proved heat-soak was faking a regression — "never bench right after a build on this machine" is now recorded in patches/README.md). Next upstream wall: 5a75f14c0's FA per-dtype split breaks patch 0001 (the kernels/ layout port).
+- Xcode 26.5 support: local Metal metallib assembly works on this machine for the first time (relevant to the kernels/ port).
+
 ## [0.89.3] - 2026-10-12
 
 ### Fixed
