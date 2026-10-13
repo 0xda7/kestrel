@@ -4,7 +4,7 @@ All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
-## [Unreleased]
+## [0.89.3] - 2026-10-12
 
 ### Fixed
 
@@ -24,6 +24,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - **The test suite runs anywhere, and the package is fully Swift 6.** The 26-suite XCTest target is now `kestrel-checks`, a zero-dependency check harness (`Tests/Checks`): XCTest names and signatures preserved at every call site, typed registrations so a missing check is a compile error, a per-check 120 s watchdog, skips with reasons, exit codes CI understands — and `swift run kestrel-checks` needs no Xcode at all. First local run on this machine: **350 checks, 0 failures** (two fixture-gated integration tests skip with instructions). To make the module importable, the app compiles as the `KestrelCore` library behind a two-line `Kestrel` launcher (packaging unchanged: the executable keeps its name and path), CI and `scripts/test.sh` run the harness, and release builds select `--product Kestrel` so shipping artifacts carry no testing instrumentation. With Xcode 26.5 installed, the long-staged Swift 6 v6 language-mode flip was arbitrated and landed: the IRGen SmallVector crash that blocked it on 6.3.3.1/26.0 is gone — the whole package builds in v6 mode, the suite is green under it, and the release product builds clean.
+
+## [0.89.3] - 2026-10-12
+
+### Added
+
+- **`kestrel-checks`: the test suite now runs on bare Command Line Tools.** A zero-dependency check harness (350 checks, 26 suites) replaces the XCTest target as an executable target — `swift run kestrel-checks` — so the suite runs locally without a 15 GB Xcode install and in CI with one command. It caught a real bug on its first CI run.
+
+### Fixed
+
+- **Markdown: `NSNotFound` capture-group ranges crashed `Range` conversion.** The new check harness flushed it out on its first CI run; group ranges are now guarded before conversion.
+- **The context trap is extinct.** "Auto" context used to alias 16384 while the Dashboard claimed it had chosen; it now computes the largest window that actually fits VRAM (weights + KV), and a send larger than the window is refused with a bilingual notice instead of reaching the engine unanswered.
+- **Agent tools retry only on transient errors.** A malformed or empty tool step no longer triggers blind rapid retries (the empty-answer storms), and the conversation rolls up per-turn token usage.
+
+### Security (independent audit waves, KES-01…11)
+
+- LAN mode now **requires** the API key (was: plaintext HTTP, optional key); diagnostics export no longer includes the engine argv (which carried `--api-key`); the web UI advertises its auth state; agent-tool "always allow" consent is bounded per-tool with a revoke surface; archive-hook and update paths fail closed; imports are gated.
+
+### Changed
+
+- **Swift 6 language mode is live.** The app compiles under full v6 checking: the package split into a `KestrelCore` library plus a thin app launcher, which also dodged the previously documented IRGen toolchain crash — verified locally (CLT) and in CI (Xcode 26.5).
+- **Kestrel owns latch's provider configuration** — the pi-pattern applied to the second sidecar: generated config, one-time import of hand-authored files, consistency tests.
+- Agent tool registration is schema-gated with a dynamic tool budget and a delegate view.
 
 ## [0.89.2] - 2026-10-12
 
