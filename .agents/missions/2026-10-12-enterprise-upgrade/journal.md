@@ -168,3 +168,9 @@
   temp-0 smoke coherent (b11174-ed319febb), advisory triage clean. PIN MOVED:
   cdc06426e → ed319febb. Next wall for the arc: 5a75f14c0 (FA per-dtype) breaks 0001 —
   the kernels/ port, mapped in EVIDENCE.md.
+
+- 2026-10-13 03:15 MISSION CLOSE-OUT. FINAL-DELIVERY.md written (delivery/). One open item
+  beyond our control: commits c5c5294+ created NO GitHub Actions runs (account billing, same
+  class as the 2026-10-10 incident — the 0.89.3 tag builds likely consumed the macOS minutes).
+  All five engines gates are recorded locally in the commit message. When billing is restored,
+  the queued pushes' checks should be confirmed (or re-run via workflow_dispatch).
