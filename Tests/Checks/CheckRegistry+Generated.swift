@@ -58,6 +58,7 @@ enum CheckRegistry {
         ("PiBridgeTests", PiBridgeTests.__checkSet),
         ("SubtitleLayoutTests", SubtitleLayoutTests.__checkSet),
         ("ToolSupportTests", ToolSupportTests.__checkSet),
+        ("SurgicalChecks", SurgicalChecks.__checkSet),
     ]
 }
 
