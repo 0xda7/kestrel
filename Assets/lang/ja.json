@@ -859,8 +859,6 @@
   "Key stored": "",
   "Kind": "種類",
   "LCM and Turbo: few steps and guidance near 1.5": "LCM と Turbo: 少ないステップと 1.5 前後のガイダンス",
-  "Language": "言語",
-  "Language for the entire Kestrel interface. Community-contributed languages appear here automatically.": "Kestrelのインターフェイス全体の言語です。コミュニティが提供した言語は自動でここに現れます。",
   "Language models on your GPU, with no cloud or accounts.": "GPU上で動く言語モデル。クラウドもアカウントも不要です。",
   "Language, color, and menu bar.": "言語、色、メニューバー。",
   "Last %@ results": "直近 %@ 件の結果",

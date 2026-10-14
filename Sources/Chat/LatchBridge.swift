@@ -22,7 +22,11 @@ enum LatchBridge {
     static let migrationDefaultsKey = "latchBridgeSidecarMigrated"
 
     static var sidecarDirectory: URL {
-        URL(fileURLWithPath: NSHomeDirectory() + "/.latch/v2")
+        // The embedded harness runs with its own isolated home
+        // (LatchDelegateService.sandboxHome), so the provider config we own
+        // and regenerate lives there — never in the operator's real ~/.latch
+        // and never shared with other applications.
+        LatchDelegateService.sandboxHome.appendingPathComponent(".latch/v2")
     }
 
     static var configFileURL: URL {

@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.10] — 2026-10-14
+
+- **Fix: the embeddings toggle can no longer silence the chat server.**
+  `--embeddings` dedicates the whole engine process to embeddings — every
+  chat request then fails with "context does not support logits
+  computation" (the 2026-10-14 all-night outage where no model answered)
+  and the load warmup can abort the engine. The flag is now ignored on the
+  primary chat server and only applies to a dedicated second server.
+- **Fix: gemma models no longer abort the engine at load.** Gemma attention
+  falls through to the generic Metal flash-attention kernel, which requires
+  K and V to share a cache type; a mixed pair (observed: q8_0/q4_0) hit the
+  GGML_ASSERT twice on 2026-10-14. Mixed K/V for gemma is now equalized on
+  the smaller type at launch.
+- **English only.** Spanish UI support removed by operator directive: the
+  language picker is gone and every label resolves to English.
+- **The embedded chat agent runs in its own home.** Its sessions and
+  history lived under the user's real ZCode data — chat history showed up
+  inside the ZCode app and the agent read that app's settings. It now runs
+  with an isolated home under Kestrel's Application Support.
+- **No hidden provider login.** The embedded z.ai/gateway bootstrap
+  (builtin provider config + baked-in key) is removed. Providers are
+  exclusively what you configure in Settings → Providers, each carrying its
+  own key; the local engine stays the default.
+
 ## [0.89.9] — 2026-10-14
 
 - **Fix: a failed turn can no longer poison the conversation.** Strict chat

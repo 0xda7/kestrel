@@ -302,6 +302,16 @@ struct ServerSettings {
     static let dynamicMoeTensorOverride = #"\.ffn_(up|down|gate|gate_up)_(ch|)exps=MTL0"#
     static let kvCacheTypes = ["f16", "q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl", "turbo4", "turbo3"]
 
+    /// Gemma attention takes flash-attention paths that fall through to the
+    /// generic Metal kernel, which requires K and V to share a type — a mixed
+    /// pair aborts the whole engine at load (GGML_ASSERT in ggml-metal-ops,
+    /// observed twice 2026-10-14 with gemma-4-12b + q8_0/q4_0). The turbo vec
+    /// kernels that tolerate mixed pairs never engage for gemma, so its K and
+    /// V are equalized at launch on the smaller of the two types.
+    static func kvTypesMustMatch(forModel path: String) -> Bool {
+        path.lowercased().contains("gemma")
+    }
+
     var usesTurboKV: Bool {
         cacheTypeK.hasPrefix("turbo") || cacheTypeV.hasPrefix("turbo")
     }
@@ -334,6 +344,18 @@ struct ServerSettings {
         // Quantized KV requires FA, so it stays forced. Elsewhere the AMD kernel rides
         // on "auto": an explicit "1" would drop uncovered models to the CPU fallback.
         let faValue = kvNeedsFlashAttention ? "1" : (effectiveFaAmd ? "auto" : flashAttn)
+        // Equalize K/V for models whose attention hits the same-type-requiring
+        // generic Metal kernel (see kvTypesMustMatch); the smaller type keeps
+        // VRAM at or below what the mixed pair already reserved.
+        var effCacheTypeK = cacheTypeK
+        var effCacheTypeV = cacheTypeV
+        if effCacheTypeK != effCacheTypeV, Self.kvTypesMustMatch(forModel: modelPath) {
+            if Estimator.kvTypeScale(effCacheTypeV) < Estimator.kvTypeScale(effCacheTypeK) {
+                effCacheTypeK = effCacheTypeV
+            } else {
+                effCacheTypeV = effCacheTypeK
+            }
+        }
         var args = [
             "-m", modelPath,
             "-ngl", String(ngl),
@@ -358,8 +380,8 @@ struct ServerSettings {
             if imageMaxTokens > 0 { args += ["--image-max-tokens", String(imageMaxTokens)] }
         }
         if jinja || mmproj != nil { args.append("--jinja") }
-        if cacheTypeK != "f16" { args += ["-ctk", cacheTypeK] }
-        if cacheTypeV != "f16" { args += ["-ctv", cacheTypeV] }
+        if effCacheTypeK != "f16" { args += ["-ctk", effCacheTypeK] }
+        if effCacheTypeV != "f16" { args += ["-ctv", effCacheTypeV] }
         // localhost-only endpoint; feeds the speculative-decoding readout in Diagnostics
         args.append("--metrics")
         args += ["--cache-ram", String(cacheRAM)]
@@ -376,7 +398,15 @@ struct ServerSettings {
         if let counts = layerBalancedTensorSplit {
             args += ["--tensor-split", counts.map(String.init).joined(separator: ",")]
         }
-        if embeddings { args.append("--embeddings") }
+        // --embeddings dedicates the entire process to /v1/embeddings: chat
+        // requests then fail with "context does not support logits
+        // computation" (the 2026-10-14 all-night every-model-silent outage)
+        // and the load-time warmup can abort the engine outright. It stays
+        // available for a dedicated second RAG server — never on the primary
+        // server the native chat talks to.
+        if embeddings && port != Self.fromDefaults().port {
+            args.append("--embeddings")
+        }
         if agentToolsEnabled {
             if !args.contains("--jinja") { args.append("--jinja") }
             args += ["--tools", "all"]

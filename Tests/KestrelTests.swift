@@ -2380,25 +2380,17 @@ final class LocalizationTests: CheckCase {
         }
     }
 
-    func testLocalizerSwitchesLanguage() {
+    func testLocalizerAlwaysResolvesEnglish() {
+        // English-only product language (operator directive 2026-10-14):
+        // the switcher is gone and t() always resolves the English half.
         let loc = Localizer()
-        loc.language = "es"
-        XCTAssertTrue(loc.isSpanish)
-        XCTAssertEqual(loc.t("hola", "hello"), "hola")
-        loc.language = "en"
+        XCTAssertEqual(loc.language, "en")
         XCTAssertFalse(loc.isSpanish)
         XCTAssertEqual(loc.t("hola", "hello"), "hello")
     }
 
-    func testDynamicMoeOptimizationStatesUseActiveLanguage() {
+    func testDynamicMoeOptimizationStatesLocalizeInEnglish() {
         let loc = Localizer()
-        loc.language = "es"
-        XCTAssertEqual(DynamicMoeOptimizationState.testingDirect(slots: 8).localized(using: loc),
-                       "Probando dMoE directo K8…")
-        XCTAssertEqual(DynamicMoeOptimizationState.optimizedSplit(slots: 64, ringSlots: 8)
-            .localized(using: loc), "Optimizado: ruta dividida K64 + ring8")
-
-        loc.language = "en"
         XCTAssertEqual(DynamicMoeOptimizationState.testingDirect(slots: 8).localized(using: loc),
                        "Testing direct dMoE K8…")
         XCTAssertEqual(DynamicMoeOptimizationState.optimizedSplit(slots: 64, ringSlots: 8)
@@ -3017,8 +3009,8 @@ extension LocalizationTests {
         checks: [
             .init(name: "testDocsHaveSameSectionsInBothLanguages") { $0.testDocsHaveSameSectionsInBothLanguages() },
             .init(name: "testDocsNeverMentionForbiddenNames") { $0.testDocsNeverMentionForbiddenNames() },
-            .init(name: "testLocalizerSwitchesLanguage") { $0.testLocalizerSwitchesLanguage() },
-            .init(name: "testDynamicMoeOptimizationStatesUseActiveLanguage") { $0.testDynamicMoeOptimizationStatesUseActiveLanguage() },
+            .init(name: "testLocalizerAlwaysResolvesEnglish") { $0.testLocalizerAlwaysResolvesEnglish() },
+            .init(name: "testDynamicMoeOptimizationStatesLocalizeInEnglish") { $0.testDynamicMoeOptimizationStatesLocalizeInEnglish() },
         ])
 }
 
@@ -3136,5 +3128,98 @@ extension ModelNameTests {
             .init(name: "testEngineCheckSeparatesKnownUpstreamFailure") { $0.testEngineCheckSeparatesKnownUpstreamFailure() },
             .init(name: "testEngineCheckCleanRunHasNoFailures") { $0.testEngineCheckCleanRunHasNoFailures() },
             .init(name: "testEngineCheckBinarySitsNextToTheEngine") { $0.testEngineCheckBinarySitsNextToTheEngine() },
+        ])
+}
+
+// MARK: - Enterprise hardening (0.89.10)
+
+/// Each check pins one 2026-10-14 production incident from the operator's
+/// own logs, so the class of failure can't silently return.
+final class EnterpriseHardeningTests: CheckCase {
+    private func makeSettings(port: Int = 8099,
+                              modelPath: String = "/tmp/m.gguf",
+                              cacheTypeK: String = "f16",
+                              cacheTypeV: String = "f16") -> ServerSettings {
+        ServerSettings(serverBinary: "/usr/bin/true", modelPath: modelPath, port: port,
+                       ngl: 99, ncmoe: 0, ctx: 16384, threads: 6, flashAttn: "auto",
+                       noMmap: true, jinja: true,
+                       vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                       cacheTypeK: cacheTypeK, cacheTypeV: cacheTypeV, mlock: false)
+    }
+
+    /// The all-night outage: --embeddings on the chat-serving server makes
+    /// every chat request fail ("does not support logits computation") and
+    /// can abort the engine at load. It must never ride the primary server.
+    func testPrimaryServerNeverLaunchesEmbeddingsOnly() throws {
+        let primaryPort = ServerSettings.fromDefaults().port
+        var primary = makeSettings(port: primaryPort)
+        primary.embeddings = true
+        XCTAssertFalse(primary.arguments.contains("--embeddings"),
+                       "primary chat server must never be embeddings-only")
+
+        var second = makeSettings(port: primaryPort == 8099 ? 8098 : 8099)
+        second.embeddings = true
+        XCTAssertTrue(second.arguments.contains("--embeddings"),
+                      "a dedicated second server keeps the RAG flag")
+    }
+
+    /// The double engine abort: gemma + mixed K/V hits the same-type-requiring
+    /// generic Metal kernel. Mixed pairs for gemma must be equalized on the
+    /// smaller type; tuned mixes for other models (q8_0/turbo4) stay as set.
+    func testGemmaEqualizesMixedKVTypes() throws {
+        var gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        gemma.embeddings = false
+        let gArgs = gemma.arguments
+        let gk = try XCTUnwrap(gArgs.firstIndex(of: "-ctk"))
+        let gv = try XCTUnwrap(gArgs.firstIndex(of: "-ctv"))
+        XCTAssertEqual(gArgs[gk + 1], "q4_0")
+        XCTAssertEqual(gArgs[gv + 1], "q4_0")
+
+        var qwen = makeSettings(modelPath: "/tmp/Qwen3.5-9B-distilled-IQ4_NL.gguf",
+                                cacheTypeK: "q8_0", cacheTypeV: "turbo4")
+        qwen.embeddings = false
+        let qArgs = qwen.arguments
+        let qk = try XCTUnwrap(qArgs.firstIndex(of: "-ctk"))
+        let qv = try XCTUnwrap(qArgs.firstIndex(of: "-ctv"))
+        XCTAssertEqual(qArgs[qk + 1], "q8_0")
+        XCTAssertEqual(qArgs[qv + 1], "turbo4")
+    }
+
+    /// English is the product language: the picker is gone and a stored
+    /// "es" must not bring Spanish back.
+    func testLocalizerIsEnglishOnly() throws {
+        UserDefaults.standard.set("es", forKey: SettingsKeys.language)
+        let loc = Localizer()
+        XCTAssertEqual(loc.language, "en")
+        XCTAssertEqual(loc.t("Idioma", "Language"), "Language")
+        XCTAssertFalse(loc.isSpanish)
+        XCTAssertEqual(loc.availableLanguages, ["en"])
+        UserDefaults.standard.removeObject(forKey: SettingsKeys.language)
+    }
+
+    /// The agent's sessions must never land in the operator's real ZCode
+    /// data, and no hidden provider login may ride the environment.
+    func testLatchChildEnvironmentIsIsolatedAndProviderNeutral() throws {
+        let env = LatchDelegateService.childEnvironment()
+        let home = try XCTUnwrap(env["HOME"])
+        XCTAssertNotEqual(home, NSHomeDirectory())
+        XCTAssertTrue(home.hasSuffix("Kestrel/latch-home"))
+        XCTAssertNil(env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"],
+                     "no hidden builtin provider login")
+        XCTAssertNil(env["LATCH_API_KEY"], "no baked-in gateway key")
+        XCTAssertNil(env["AI_GATEWAY_API_KEY"], "no mirrored gateway key")
+    }
+}
+
+extension EnterpriseHardeningTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "EnterpriseHardeningTests",
+        instance: { EnterpriseHardeningTests() },
+        checks: [
+            .init(name: "testPrimaryServerNeverLaunchesEmbeddingsOnly") { try await $0.testPrimaryServerNeverLaunchesEmbeddingsOnly() },
+            .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
+            .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
+            .init(name: "testLatchChildEnvironmentIsIsolatedAndProviderNeutral") { try await $0.testLatchChildEnvironmentIsIsolatedAndProviderNeutral() },
         ])
 }

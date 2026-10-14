@@ -859,8 +859,6 @@
   "Key stored": "",
   "Kind": "类型",
   "LCM and Turbo: few steps and guidance near 1.5": "LCM 与 Turbo：较少步数，引导值约 1.5",
-  "Language": "语言",
-  "Language for the entire Kestrel interface. Community-contributed languages appear here automatically.": "整个 Kestrel 界面的语言。社区贡献的语言会自动出现在这里。",
   "Language models on your GPU, with no cloud or accounts.": "在你的 GPU 上运行语言模型，无需云端或账户。",
   "Language, color, and menu bar.": "语言、颜色和菜单栏。",
   "Last %@ results": "最近 %@ 个结果",

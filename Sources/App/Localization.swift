@@ -17,24 +17,19 @@ import SwiftUI
 /// in the Settings picker automatically. Run `scripts/extract-strings.py` to
 /// regenerate the English key template translators start from.
 final class Localizer: ObservableObject {
-    /// Active language code ("es", "en", or any bundled community code).
-    /// Defaults to English; the user can switch in Settings.
-    @Published var language: String = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en" {
-        didSet {
-            UserDefaults.standard.set(language, forKey: SettingsKeys.language)
-            loadOverlay()
-        }
-    }
+    /// English is the product language (operator directive 2026-10-14).
+    /// The Settings picker is removed, a stored "es" is ignored, and every
+    /// `loc.t("es", "en")` call site resolves to its English half.
+    @Published private(set) var language: String = "en"
 
     /// English → translated string, for the active community language. Empty for
     /// the built-in es/en (they need no overlay).
     private var overlay: [String: String] = [:]
 
-    /// Built-in languages first, then any `lang/<code>.json` found in the bundle.
-    let availableLanguages: [String]
+    /// English only — the picker this fed is gone.
+    let availableLanguages: [String] = ["en"]
 
     init() {
-        availableLanguages = Localizer.discoverLanguages()
         loadOverlay()
     }
 

@@ -131,32 +131,48 @@ enum LatchDelegateService {
         return await run(argv: argv, workingDirectory: workingDirectory, timeout: timeout)
     }
 
-    /// Environment the harness needs to boot. The standalone harness resolves
-    /// its provider runtime through two facts the Latch desktop app always
-    /// provides and a GUI-spawned child would otherwise never see (it reads
-    /// no dotfiles): the bundled provider config file, and the gateway key.
-    /// Without these the harness exits 1 with the bilingual "Bundled 与
-    /// Active ... 均不可用" bootstrap failure — the entire 0.89.6 chat
-    /// outage, root-caused 2026-10-14 by running the harness with each fact
-    /// supplied until it answered AGENT-OK.
-    static func childEnvironment() -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
-        if env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"] == nil {
-            let candidates = [
-                "/Applications/Latch.app/Contents/Resources/config/provider/zcode-builtin.json",
-                NSHomeDirectory() + "/.latch/v2/runtime/provider/bundled/zcode-builtin.json",
-            ]
-            if let found = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
-                env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"] = found
+    /// Private home for the embedded latch harness. The harness keeps its
+    /// sessions, history and state under `~/.zcode` and its provider config
+    /// under `~/.latch`; with the inherited home those landed in the
+    /// operator's real ZCode data — chat history showing up inside the ZCode
+    /// app and the agent reading that app's settings. Everything the embedded
+    /// agent writes now lives under Kestrel's Application Support, seeded
+    /// once with the harness boot config; the two products never share state.
+    static var sandboxHome: URL {
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/Kestrel/latch-home")
+        let fm = FileManager.default
+        try? fm.createDirectory(at: home.appendingPathComponent(".latch/v2"),
+                                withIntermediateDirectories: true)
+        let cli = home.appendingPathComponent(".zcode/cli")
+        try? fm.createDirectory(at: cli, withIntermediateDirectories: true)
+        let bootConfig = cli.appendingPathComponent("config.json")
+        if !fm.fileExists(atPath: bootConfig.path) {
+            let real = NSHomeDirectory() + "/.zcode/cli/config.json"
+            if fm.fileExists(atPath: real) {
+                try? fm.copyItem(atPath: real, toPath: bootConfig.path)
             }
         }
-        if env["LATCH_API_KEY"] == nil {
-            let stored = LocalSecretStore.value("latch-api-key") ?? "local"
-            env["LATCH_API_KEY"] = stored
-        }
-        if env["AI_GATEWAY_API_KEY"] == nil {
-            env["AI_GATEWAY_API_KEY"] = env["LATCH_API_KEY"]
-        }
+        return home
+    }
+
+    /// Environment the harness runs in: its own isolated home (see
+    /// sandboxHome) and nothing else injected. Providers are user-configured
+    /// in Settings → Providers and reach the harness only through the
+    /// provider_config.json LatchBridge generates in that sandbox home — no
+    /// hidden embedded login, no baked-in gateway key. A remote provider the
+    /// user adds (z.ai or any OpenAI-compatible endpoint) carries its own key
+    /// inside that file.
+    static func childEnvironment() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = Self.sandboxHome.path
+        // Scrub any provider credentials inherited from whatever launched the
+        // app (a terminal with ZCode/latch runtime vars set would otherwise
+        // leak its login into the agent): the agent's ONLY provider source is
+        // the LatchBridge-generated file inside its sandbox home.
+        env.removeValue(forKey: "ZCODE_BUILTIN_PROVIDER_CONFIG_FILE")
+        env.removeValue(forKey: "LATCH_API_KEY")
+        env.removeValue(forKey: "AI_GATEWAY_API_KEY")
         return env
     }
 
