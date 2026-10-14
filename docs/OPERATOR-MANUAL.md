@@ -87,7 +87,41 @@ Each is pinned by a regression check that fails the build if it returns:
 4. Agent history leaking into ZCode / hidden login → isolated home +
    scrubbed environment (`…testLatchChildEnvironmentIsIsolated…`).
 
-## 8. Troubleshooting — read the truth in the logs
+## 8. Laya — the decision engine (what it is, how to use it)
+
+Laya is **not a chat model**. It is a typed-decision engine: you give it a
+document plus a question set, it returns structured decisions with
+confidence — built for triage, not conversation. Chatting with it gives
+you nothing by design.
+
+**What you can do with it (all via `~/bin/laya` in Terminal):**
+
+1. `laya ~/papers/paper.txt` — instant triage of any document with the
+   built-in medical set: study type (trial / cohort / case report /
+   review / other, each with a confidence bar), complications YES/NO with
+   probability, clinical-relevance score.
+2. `laya anyfile.txt -q my-questions.json` — your own decision workflow,
+   any domain. Three question types:
+   - `choice` — picks one label; define each bucket's criteria.
+   - `noul` — yes/no with probability.
+   - `score` — anchored rating (define low/middle/high anchors).
+3. It reads the first 12,000 characters, cleans code blocks, retries on
+   rejects. Output is a printed decision card per question.
+
+**How to run it (no code, no builds):**
+
+1. The "Laya Decisions" card re-appears on the Servers tab (the
+   deleted-flag setting was reset to false on 2026-10-14; it seeds on
+   app launch).
+2. Servers tab → **Laya Decisions** → press **Start** (port 8098 — it
+   never auto-starts; you decide when models run).
+3. Terminal: `~/bin/laya ~/papers/paper.txt`
+4. Press **Stop** on the card when done to free VRAM.
+
+If the CLI says "Laya engine is not running," that is its designed
+behavior: it never spawns processes — start the card in the app.
+
+## 9. Troubleshooting — read the truth in the logs
 
 Logs: `~/Library/Application Support/Kestrel/logs/server-*.log`
 (newest last). Signatures and what they mean today:
@@ -102,7 +136,7 @@ Logs: `~/Library/Application Support/Kestrel/logs/server-*.log`
 - Engine not listening → check the Home tab card; the log's `args:`
   line shows exactly what the engine was started with.
 
-## 9. Where things live
+## 10. Where things live
 
 | What | Where |
 |---|---|
@@ -114,7 +148,7 @@ Logs: `~/Library/Application Support/Kestrel/logs/server-*.log`
 | Agent private home | `~/Library/Application Support/Kestrel/latch-home/` |
 | Secrets | `~/Library/Application Support/Kestrel/secrets/` (0600) |
 
-## 10. Release history (this machine)
+## 11. Release history (this machine)
 
 - 0.89.10 (2026-10-14): all four incident fixes, English-only UI,
   agent isolation, hidden login removed, 4 regression guards. 413/413.
