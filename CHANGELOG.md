@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.11] — 2026-10-14
+
+- **Laya is a native agent capability.** The chat agent gets a built-in
+  `laya_decide` tool: hand it any document (path or inline text) and it
+  returns a Laya decision card — typed choices with per-option confidence
+  bars, yes/no with probability, anchored scores — at ~33 ms per question.
+  Question sets: the seeded "Medical Triage" set, your own sets stored in
+  the app's laya-questions folder, or ad-hoc questions JSON. Every failure
+  states exactly what to do (e.g. the engine card must be started by hand).
+- The engine integration uses llama-server's /v1/systemone endpoint on the
+  "Laya Decisions" card; nothing starts in the background, ever.
+
 ## [0.89.10] — 2026-10-14
 
 - **Fix: the embeddings toggle can no longer silence the chat server.**

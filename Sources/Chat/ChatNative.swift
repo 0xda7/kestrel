@@ -1138,6 +1138,7 @@ final class ChatStore: ObservableObject {
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
                     if LatchDelegateService.isEnabled { availableTools.append(LatchDelegateService.tool) }
+                    availableTools.append(LayaDecideService.tool)
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
                     availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
@@ -1612,6 +1613,8 @@ final class ChatStore: ObservableObject {
                 } else if request.name == LatchDelegateService.toolName {
                     result = await LatchDelegateService.execute(
                         arguments: arguments, workingDirectory: context.workingDirectory)
+                } else if request.name == LayaDecideService.toolName {
+                    result = await LayaDecideService.execute(arguments: arguments)
                 } else if ChatMemoryService.toolNames.contains(request.name) {
                     result = await MainActor.run {
                         self?.runMemoryTool(request.name, arguments: arguments)

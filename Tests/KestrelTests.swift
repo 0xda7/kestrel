@@ -3210,6 +3210,44 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertNil(env["LATCH_API_KEY"], "no baked-in gateway key")
         XCTAssertNil(env["AI_GATEWAY_API_KEY"], "no mirrored gateway key")
     }
+
+    /// Laya integration (0.89.11): the medical triage set seeds on first
+    /// use, questions serialize to the exact /v1/systemone wire shape, and
+    /// the retry ladder is the reference CLI's descending sizes.
+    func testLayaQuestionSetSeedsAndWireShape() throws {
+        let sets = LayaDecideService.loadSets()
+        let triage = try XCTUnwrap(sets.first { $0.name == "Medical Triage" })
+        let choice = try XCTUnwrap(triage.questions["study_type"])
+        XCTAssertEqual(choice.wireJSON()["type"] as? String, "choice")
+        let criteria = try XCTUnwrap(choice.wireJSON()["criteria"] as? [String: String])
+        XCTAssertEqual(criteria.count, 5)
+        let score = try XCTUnwrap(triage.questions["clinical_relevance"])
+        let anchors = try XCTUnwrap(score.wireJSON()["criteria"] as? [String])
+        XCTAssertEqual(anchors, ["background interest only", "moderately useful", "directly changes practice"])
+        XCTAssertEqual(LayaDecideService.sliceSizes.first, 12000)
+        XCTAssertEqual(LayaDecideService.sliceSizes.last, 350)
+        XCTAssertEqual(LayaDecideService.sliceSizes,
+                       LayaDecideService.sliceSizes.sorted(by: >), "sizes must descend")
+    }
+
+    /// Answers parse from the engine's response shape into the three typed
+    /// lines the agent shows.
+    func testLayaAnswerParsingAndSummaryLines() throws {
+        let sample = """
+        {"answers":{"study_type":{"type":"choice","choice":"clinical trial",
+        "confidence":0.82,"probabilities":{"clinical trial":0.82,"review":0.11,"other":0.07}},
+        "reports_complications":{"type":"noul","noul":0.91},
+        "clinical_relevance":{"type":"score","score":64}}}
+        """
+        let answers = try LayaDecideService.parseAnswers(Data(sample.utf8))
+        XCTAssertEqual(answers.count, 3)
+        XCTAssertEqual(answers["study_type"]?.summaryLine(key: "study_type", instructions: ""),
+                       "study_type → clinical trial (82%)")
+        XCTAssertEqual(answers["reports_complications"]?.summaryLine(key: "reports_complications", instructions: ""),
+                       "reports_complications → YES (91%)")
+        XCTAssertEqual(answers["clinical_relevance"]?.summaryLine(key: "clinical_relevance", instructions: ""),
+                       "clinical_relevance → score 64")
+    }
 }
 
 extension EnterpriseHardeningTests {
@@ -3221,5 +3259,7 @@ extension EnterpriseHardeningTests {
             .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
             .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
             .init(name: "testLatchChildEnvironmentIsIsolatedAndProviderNeutral") { try await $0.testLatchChildEnvironmentIsIsolatedAndProviderNeutral() },
+            .init(name: "testLayaQuestionSetSeedsAndWireShape") { try await $0.testLayaQuestionSetSeedsAndWireShape() },
+            .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
         ])
 }
