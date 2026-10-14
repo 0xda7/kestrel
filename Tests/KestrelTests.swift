@@ -2172,8 +2172,13 @@ final class CompactionTests: CheckCase {
         ]
         let history = ChatStore.requestHistory(system: "", summary: nil,
                                                messages: messages, from: 0)
-        XCTAssertEqual(history.map { $0["role"] as? String ?? "" }, ["user", "user"])
-        XCTAssertEqual(history.last?["content"] as? String, "¿qué pasó?")
+        // 0.89.9 contract: the dropped reasoning-only assistant leaves two
+        // consecutive user turns, which strict chat templates (the medical
+        // finetunes' "roles must alternate" Jinja) reject with a 400 — so
+        // the seam merges them into one user message. A failed turn must
+        // never poison the rest of the conversation.
+        XCTAssertEqual(history.map { $0["role"] as? String ?? "" }, ["user"])
+        XCTAssertEqual(history.last?["content"] as? String, "hola\n\n¿qué pasó?")
     }
 
     func testAttachmentsAreFoldedIntoTheWireHistory() {

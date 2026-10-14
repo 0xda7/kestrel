@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.9] — 2026-10-14
+
+- **Fix: a failed turn can no longer poison the conversation.** Strict chat
+  templates (medical finetunes and many small models ship the "roles must
+  alternate" Jinja) rejected any history with consecutive user messages —
+  exactly what a failed/empty assistant turn leaves behind, so one error
+  made every later message fail with 400. The request seam now merges
+  consecutive user turns; the contract check pins the merged form.
+
 ## [0.89.8] — 2026-10-14
 
 - **Laya served from Kestrel, not from hidden processes.** A one-time

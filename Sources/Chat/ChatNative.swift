@@ -1871,7 +1871,26 @@ final class ChatStore: ObservableObject {
             }
             return ["role": m.role, "content": text]
         }
-        return history
+        // Strict templates (many small and medical finetunes ship the
+        // assertive "roles must alternate" Jinja) reject consecutive
+        // same-role messages with a 400 — which is exactly what a failed
+        // assistant turn leaves behind: user, (no reply), user. Merge
+        // consecutive user turns into one so a broken turn can never
+        // poison every later message in the conversation. Tool messages
+        // keep their required position (they follow their assistant call).
+        var alternationSafe: [[String: Any]] = []
+        for message in history {
+            if message["role"] as? String == "user",
+               let last = alternationSafe.last, last["role"] as? String == "user",
+               let text = message["content"] as? String,
+               let lastText = last["content"] as? String {
+                alternationSafe[alternationSafe.count - 1]["content"] =
+                    (lastText.isEmpty ? text : lastText + "\n\n" + text)
+            } else {
+                alternationSafe.append(message)
+            }
+        }
+        return alternationSafe
     }
 
     /// Per-conversation usage rollup (roadmap item 6). Prompt tokens are
