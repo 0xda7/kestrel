@@ -346,7 +346,16 @@ enum LatchDelegateService {
 
         func withStderr(_ headline: String) -> String {
             let trimmed = err.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? headline : headline + "\n\nlatch stderr: " + trimmed.prefix(600)
+            var prefix = ""
+            // The #1 real-world latch failure is the local engine being down;
+            // the harness's Node stack hides ECONNREFUSED in a wall of text.
+            // Name it first, in both languages, with the one-click fix.
+            if trimmed.contains("ECONNREFUSED") {
+                prefix = "El motor local no está en marcha — pulsa Inicio en la pestaña Home/Servers. / "
+                    + "The local engine is not running — press Start on the Home/Servers tab. "
+                    + "(ECONNREFUSED)\n\n"
+            }
+            return prefix + (trimmed.isEmpty ? headline : headline + "\n\nlatch stderr: " + trimmed.prefix(600))
         }
 
         if timedOut {
