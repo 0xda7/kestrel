@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.6] — 2026-10-14
+
+- **Engine upgraded to current llama.cpp** under Kestrel's full patch series (re-based 7/7 clean, byte-identical round-trip verified). Brings the ModernBERT decision architecture: **Laya loads and answers typed questions** (`/v1/systemone`), plus three weeks of upstream fixes. Old engine remains beside the new one as a backup file.
+- **Pi removed entirely; Latch is the sole agent.** Chat turns stream through latch live; "Agent (latch + tools)" is a one-click toggle with working directory and budget shown. No pi code, settings, or sidecar writes remain; the app never touches `~/.pi`.
+- Empty latch turns surface as failures with diagnostics — never a blank reply.
+
 ## [0.89.5] - 2026-10-13
 
 ### Changed
