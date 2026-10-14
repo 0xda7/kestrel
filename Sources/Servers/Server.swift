@@ -1900,9 +1900,8 @@ final class ServerController: ObservableObject {
 
     func start(_ settings: ServerSettings) {
         guard state == .stopped || isFailed else { return }
-        // The sidecars' kestrel-local entries name the model that is about
-        // to load; refresh them so pi and latch never see a stale model id.
-        PiBridge.sync()
+        // The sidecar's kestrel-local entry names the model that is about
+        // to load; refresh it so latch never sees a stale model id.
         LatchBridge.sync()
         guard FileManager.default.fileExists(atPath: settings.serverBinary) else {
             let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"

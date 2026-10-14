@@ -1034,140 +1034,9 @@ index 000000000..c10b750d1
 +    }
 +    return nrows * row_size;
 +}
-diff --git a/tests/test-turbo-quant.c b/tests/test-turbo-quant.c
-new file mode 100644
-index 000000000..789bdfb6d
---- /dev/null
-+++ b/tests/test-turbo-quant.c
-@@ -0,0 +1,125 @@
-+#include "ggml-quants.h"
-+
-+#include <math.h>
-+#include <stdint.h>
-+#include <stdio.h>
-+#include <stdlib.h>
-+#include <string.h>
-+
-+extern void turbo_cpu_fwht_inverse(float * x, int group_size);
-+
-+static uint32_t rng_state = 0x12345678u;
-+
-+static float next_value(void) {
-+    rng_state = rng_state*1664525u + 1013904223u;
-+    return ((float) (rng_state >> 8)/(float) 0x00ffffffu)*2.0f - 1.0f;
-+}
-+
-+static void inverse_groups(float * values, int n) {
-+    for (int i = 0; i < n; i += 128) {
-+        turbo_cpu_fwht_inverse(values + i, 128);
-+    }
-+}
-+
-+static float cosine(const float * a, const float * b, int n) {
-+    double dot = 0.0;
-+    double na = 0.0;
-+    double nb = 0.0;
-+    for (int i = 0; i < n; ++i) {
-+        dot += (double) a[i]*b[i];
-+        na += (double) a[i]*a[i];
-+        nb += (double) b[i]*b[i];
-+    }
-+    return na > 0.0 && nb > 0.0 ? (float) (dot/sqrt(na*nb)) : 1.0f;
-+}
-+
-+static float relative_norm_error(const float * a, const float * b, int n) {
-+    double na = 0.0;
-+    double nb = 0.0;
-+    for (int i = 0; i < n; ++i) {
-+        na += (double) a[i]*a[i];
-+        nb += (double) b[i]*b[i];
-+    }
-+    return na > 0.0 ? (float) fabs(sqrt(nb/na) - 1.0) : (float) sqrt(nb);
-+}
-+
-+static void fill_values(float * values, int n, int pattern) {
-+    for (int i = 0; i < n; ++i) {
-+        switch (pattern) {
-+            case 0: values[i] = 0.0f; break;
-+            case 1: values[i] = sinf((float) i*0.071f)*10.0f; break;
-+            case 2: values[i] = next_value(); break;
-+            default: values[i] = (i % 29 == 0) ? 25.0f : next_value()*0.05f; break;
-+        }
-+    }
-+}
-+
-+static int test_turbo3(int n, int pattern) {
-+    const size_t bytes = (size_t) (n/QK_TURBO3)*sizeof(block_turbo3_0);
-+    float * input = (float *) malloc((size_t) n*sizeof(float));
-+    float * output = (float *) malloc((size_t) n*sizeof(float));
-+    block_turbo3_0 * q0 = (block_turbo3_0 *) calloc(1, bytes);
-+    block_turbo3_0 * q1 = (block_turbo3_0 *) calloc(1, bytes);
-+    if (!input || !output || !q0 || !q1) return 1;
-+
-+    fill_values(input, n, pattern);
-+    quantize_row_turbo3_0_ref(input, q0, n);
-+    quantize_row_turbo3_0_ref(input, q1, n);
-+    dequantize_row_turbo3_0(q0, output, n);
-+    inverse_groups(output, n);
-+
-+    const float cos = cosine(input, output, n);
-+    const float norm_err = relative_norm_error(input, output, n);
-+    const int failed = memcmp(q0, q1, bytes) != 0 || cos < 0.90f || norm_err > 0.002f;
-+    if (failed) fprintf(stderr, "turbo3 n=%d pattern=%d cosine=%g norm_err=%g\n", n, pattern, cos, norm_err);
-+
-+    free(q1);
-+    free(q0);
-+    free(output);
-+    free(input);
-+    return failed;
-+}
-+
-+static int test_turbo4(int n, int pattern) {
-+    const size_t bytes = (size_t) (n/QK_TURBO4)*sizeof(block_turbo4_0);
-+    float * input = (float *) malloc((size_t) n*sizeof(float));
-+    float * output = (float *) malloc((size_t) n*sizeof(float));
-+    block_turbo4_0 * q0 = (block_turbo4_0 *) calloc(1, bytes);
-+    block_turbo4_0 * q1 = (block_turbo4_0 *) calloc(1, bytes);
-+    if (!input || !output || !q0 || !q1) return 1;
-+
-+    fill_values(input, n, pattern);
-+    quantize_row_turbo4_0_ref(input, q0, n);
-+    quantize_row_turbo4_0_ref(input, q1, n);
-+    dequantize_row_turbo4_0(q0, output, n);
-+    inverse_groups(output, n);
-+
-+    const float cos = cosine(input, output, n);
-+    const float norm_err = relative_norm_error(input, output, n);
-+    const int failed = memcmp(q0, q1, bytes) != 0 || cos < 0.97f || norm_err > 0.002f;
-+    if (failed) fprintf(stderr, "turbo4 n=%d pattern=%d cosine=%g norm_err=%g\n", n, pattern, cos, norm_err);
-+
-+    free(q1);
-+    free(q0);
-+    free(output);
-+    free(input);
-+    return failed;
-+}
-+
-+int main(void) {
-+    int failed = 0;
-+    const int dimensions[] = {128, 256, 384, 512, 640};
-+    for (size_t i = 0; i < sizeof(dimensions)/sizeof(dimensions[0]); ++i) {
-+        const int n = dimensions[i];
-+        for (int pattern = 0; pattern < 4; ++pattern) {
-+            failed += test_turbo3(n, pattern);
-+            failed += test_turbo4(n, pattern);
-+        }
-+    }
-+    if (failed) {
-+        fprintf(stderr, "%d TurboQuant checks failed\n", failed);
-+        return 1;
-+    }
-+    printf("TurboQuant CPU suite passed\n");
-+    return 0;
-+}
 diff --git a/kestrel-moe/kestrel-moe-cache.cpp b/kestrel-moe/kestrel-moe-cache.cpp
 new file mode 100644
-index 000000000..c2a583a93
+index 000000000..c4829cafa
 --- /dev/null
 +++ b/kestrel-moe/kestrel-moe-cache.cpp
 @@ -0,0 +1,579 @@
@@ -1752,7 +1621,7 @@ index 000000000..c2a583a93
 +}
 diff --git a/kestrel-moe/kestrel-moe-fill.cpp b/kestrel-moe/kestrel-moe-fill.cpp
 new file mode 100644
-index 000000000..235508a7c
+index 000000000..656f8490d
 --- /dev/null
 +++ b/kestrel-moe/kestrel-moe-fill.cpp
 @@ -0,0 +1,164 @@
@@ -1922,10 +1791,10 @@ index 000000000..235508a7c
 +}
 diff --git a/kestrel-moe/kestrel-moe-lru.metal b/kestrel-moe/kestrel-moe-lru.metal
 new file mode 100644
-index 000000000..3af62d3bf
+index 000000000..8f11bfb12
 --- /dev/null
 +++ b/kestrel-moe/kestrel-moe-lru.metal
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,274 @@
 +#include <metal_stdlib>
 +using namespace metal;
 +
@@ -2145,6 +2014,7 @@ index 000000000..3af62d3bf
 +struct kestrel_assemble_args {
 +    uint32_t row_u4;
 +    uint32_t n_expert;
++    int32_t  use_active;
 +};
 +
 +kernel void kestrel_moe_assemble(
@@ -2154,22 +2024,57 @@ index 000000000..3af62d3bf
 +        device const uint4          * slots       [[buffer(3)]],
 +        device const int32_t        * slot_for_id [[buffer(4)]],
 +        device const int32_t        * cold_for_id [[buffer(5)]],
++        device const int32_t        * active      [[buffer(6)]],
 +        uint gid [[thread_position_in_grid]]) {
 +    const uint64_t total = (uint64_t) args.n_expert*args.row_u4;
 +    if ((uint64_t) gid >= total) return;
 +    const uint32_t expert = gid/args.row_u4;
++    // A batch routes to far fewer experts than the bank holds, and a row nothing routes to is
++    // never read: leaving it stale costs nothing and skipping it is most of the traffic.
++    if (args.use_active != 0 && active[expert] == 0) return;
 +    const uint32_t col = gid - expert*args.row_u4;
 +    const int32_t slot = slot_for_id[expert];
 +    const int32_t ci = cold_for_id[expert];
 +    dst[gid] = slot >= 0 ? slots[(uint64_t) slot*args.row_u4 + col]
 +                         : cold[(uint64_t) ci*args.row_u4 + col];
 +}
++
++// Marks the experts one batch routes to, so the assemble can skip the rest.
++struct kestrel_mark_args {
++    int32_t n_used;
++    int32_t n_tokens;
++    int32_t stride;
++    int32_t n_expert;
++};
++
++// One threadgroup: the clear has to be visible to the marking, and a barrier only spans a
++// threadgroup. The work is a few thousand ids, so one is plenty.
++kernel void kestrel_moe_mark_active(
++        constant kestrel_mark_args & args   [[buffer(0)]],
++        device const int32_t    * ids    [[buffer(1)]],
++        device       int32_t    * active [[buffer(2)]],
++        uint tid [[thread_position_in_threadgroup]],
++        uint ntg [[threads_per_threadgroup]]) {
++    for (uint e = tid; e < (uint) args.n_expert; e += ntg) {
++        active[e] = 0;
++    }
++    threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
++    const uint n_active = (uint) (args.n_used*args.n_tokens);
++    for (uint i = tid; i < n_active; i += ntg) {
++        const uint t = i / (uint) args.n_used;
++        const uint k = i % (uint) args.n_used;
++        const int32_t e = ids[t*(uint) args.stride + k];
++        if (e >= 0 && e < args.n_expert) {
++            active[e] = 1;
++        }
++    }
++}
 diff --git a/kestrel-moe/kestrel-moe.h b/kestrel-moe/kestrel-moe.h
 new file mode 100644
-index 000000000..3e62af81b
+index 000000000..157e0be9c
 --- /dev/null
 +++ b/kestrel-moe/kestrel-moe.h
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,154 @@
 +// Experimental MoE expert cache: maps an expert to a physical slot, nothing else.
 +// RAM keeps every expert, so an eviction only drops a copy. The unit is a whole expert of a
 +// layer, all of its tensors together, because a partial one cannot run.
@@ -2242,7 +2147,7 @@ index 000000000..3e62af81b
 +}
 +
 +static inline int kestrel_moe_state_ints(int n_expert, int n_slots, int max_fetch) {
-+    return 2*n_expert + 2*n_slots + 2 + 2*max_fetch + kestrel_moe_ids_room(n_expert);
++    return 2*n_expert + 2*n_slots + 2 + 2*max_fetch + kestrel_moe_ids_room(n_expert) + n_expert;
 +}
 +static inline int kestrel_moe_off_slot_for_id(int n_expert, int n_slots, int max_fetch) { (void) n_expert; (void) n_slots; (void) max_fetch; return 0; }
 +static inline int kestrel_moe_off_cold_for_id(int n_expert, int n_slots, int max_fetch) { (void) n_slots; (void) max_fetch; return n_expert; }
@@ -2253,6 +2158,8 @@ index 000000000..3e62af81b
 +static inline int kestrel_moe_off_evict      (int n_expert, int n_slots, int max_fetch) { (void) max_fetch; return 2*n_expert + 2*n_slots + 2; }
 +static inline int kestrel_moe_off_src        (int n_expert, int n_slots, int max_fetch) { return 2*n_expert + 2*n_slots + 2 + max_fetch; }
 +static inline int kestrel_moe_off_ids        (int n_expert, int n_slots, int max_fetch) { return 2*n_expert + 2*n_slots + 2 + 2*max_fetch; }
++// Which experts the current batch routes to. Last, so every offset above keeps its place.
++static inline int kestrel_moe_off_active     (int n_expert, int n_slots, int max_fetch) { return 2*n_expert + 2*n_slots + 2 + 2*max_fetch + kestrel_moe_ids_room(n_expert); }
 +
 +// Slots per expert bank, 0 when the cache is off.
 +int kestrel_moe_slots_want(void);
@@ -2322,3 +2229,439 @@ index 000000000..3e62af81b
 +#ifdef __cplusplus
 +}
 +#endif
+diff --git a/tests/test-kestrel-moe-cache.cpp b/tests/test-kestrel-moe-cache.cpp
+new file mode 100644
+index 000000000..b34130dab
+--- /dev/null
++++ b/tests/test-kestrel-moe-cache.cpp
+@@ -0,0 +1,299 @@
++#include "kestrel-moe.h"
++
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <random>
++#include <set>
++#include <vector>
++
++#include <mach/mach.h>
++
++// resident bytes, to catch a cache that allocates per step
++static size_t rss_now() {
++    mach_task_basic_info info;
++    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
++    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t) &info, &count) != KERN_SUCCESS) {
++        return 0;
++    }
++    return info.resident_size;
++}
++
++static int g_fail = 0;
++
++static void check(bool ok, const char * what) {
++    if (!ok) {
++        printf("  FAIL %s\n", what);
++        g_fail++;
++    }
++}
++
++// Favours a few experts: uniform routing hides the cache, one hot expert flatters it.
++struct zipf_router {
++    std::mt19937 rng;
++    std::vector<double> cdf;
++
++    zipf_router(int n_expert, double s, uint32_t seed) : rng(seed) {
++        double sum = 0.0;
++        cdf.resize(n_expert);
++        for (int i = 0; i < n_expert; i++) {
++            sum += 1.0/pow(i + 1, s);
++            cdf[i] = sum;
++        }
++        for (auto & v : cdf) {
++            v /= sum;
++        }
++    }
++
++    int draw() {
++        const double u = std::uniform_real_distribution<double>(0.0, 1.0)(rng);
++        for (size_t i = 0; i < cdf.size(); i++) {
++            if (u <= cdf[i]) {
++                return (int) i;
++            }
++        }
++        return (int) cdf.size() - 1;
++    }
++
++    void draw_set(int k, std::vector<int> & out) {
++        out.clear();
++        while ((int) out.size() < k) {
++            const int e = draw();
++            bool dup = false;
++            for (int x : out) {
++                dup = dup || x == e;
++            }
++            if (!dup) {
++                out.push_back(e);
++            }
++        }
++    }
++};
++
++static void test_rejects_nonsense() {
++    printf("argumentos invalidos\n");
++
++    check(kestrel_moe_cache_init( 0, 32,  8) == nullptr, "acepta 0 capas");
++    check(kestrel_moe_cache_init(24,  0,  8) == nullptr, "acepta 0 expertos");
++    check(kestrel_moe_cache_init(24, 32,  0) == nullptr, "acepta 0 ranuras");
++    check(kestrel_moe_cache_init(24, 32, 33) == nullptr, "acepta mas ranuras que expertos");
++
++    kestrel_moe_cache * c = kestrel_moe_cache_init(2, 8, 4);
++    check(c != nullptr, "rechaza argumentos validos");
++
++    check(kestrel_moe_cache_find(c, -1, 0) == -1, "acepta una capa negativa");
++    check(kestrel_moe_cache_find(c,  2, 0) == -1, "acepta una capa fuera de rango");
++    check(kestrel_moe_cache_find(c,  0, 8) == -1, "acepta un experto fuera de rango");
++    check(kestrel_moe_cache_hold(c,  0, 8) == -1, "fija un experto fuera de rango");
++    check(kestrel_moe_cache_admit(c, 0, 8, nullptr) == -1, "admite un experto fuera de rango");
++
++    kestrel_moe_cache_free(c);
++}
++
++static void test_one_slot_one_expert() {
++    printf("un experto, una ranura\n");
++
++    const int n_layer = 3, n_expert = 16, n_slots = 4;
++    kestrel_moe_cache * c = kestrel_moe_cache_init(n_layer, n_expert, n_slots);
++
++    // admitting the same expert twice must not give it a second slot
++    const int a = kestrel_moe_cache_admit(c, 0, 5, nullptr);
++    const int b = kestrel_moe_cache_admit(c, 0, 5, nullptr);
++    check(a >= 0 && a == b, "un experto ocupa dos ranuras");
++
++    // the same expert id in another layer is a different expert
++    const int d = kestrel_moe_cache_admit(c, 1, 5, nullptr);
++    check(d >= 0, "no admite el mismo id en otra capa");
++    check(kestrel_moe_cache_find(c, 0, 5) == a, "la capa 1 movio a la capa 0");
++
++    const char * why = nullptr;
++    check(kestrel_moe_cache_check(c, &why), why ? why : "invariantes rotas");
++
++    kestrel_moe_cache_free(c);
++}
++
++static void test_held_slots_survive() {
++    printf("una ranura en uso no se expulsa\n");
++
++    const int n_slots = 4;
++    kestrel_moe_cache * c = kestrel_moe_cache_init(1, 32, n_slots);
++
++    // fill every slot and hold all of them within one step
++    std::vector<int> slots;
++    for (int e = 0; e < n_slots; e++) {
++        slots.push_back(kestrel_moe_cache_admit(c, 0, e, nullptr));
++    }
++
++    // a NEW expert cannot displace anything: every slot is in use this step
++    int evicted = -2;
++    const int s = kestrel_moe_cache_admit(c, 0, 20, &evicted);
++    check(s == -1, "expulso una ranura en uso");
++    check(evicted == -1, "informo de una expulsion que no ocurrio");
++
++    for (int e = 0; e < n_slots; e++) {
++        check(kestrel_moe_cache_find(c, 0, e) == slots[e], "un experto fijado cambio de ranura");
++    }
++
++    // once the step ends the holds are gone and the same admission works
++    kestrel_moe_cache_step(c);
++    check(kestrel_moe_cache_admit(c, 0, 31, &evicted) >= 0, "no admite tras terminar el paso");
++    check(evicted >= 0, "no informo de la expulsion");
++
++    const char * why = nullptr;
++    check(kestrel_moe_cache_check(c, &why), why ? why : "invariantes rotas");
++
++    kestrel_moe_cache_free(c);
++}
++
++static void test_evicts_least_recent() {
++    printf("expulsa la menos usada\n");
++
++    kestrel_moe_cache * c = kestrel_moe_cache_init(1, 8, 3);
++
++    kestrel_moe_cache_admit(c, 0, 0, nullptr); kestrel_moe_cache_step(c);
++    kestrel_moe_cache_admit(c, 0, 1, nullptr); kestrel_moe_cache_step(c);
++    kestrel_moe_cache_admit(c, 0, 2, nullptr); kestrel_moe_cache_step(c);
++
++    // touch 0 so that 1 becomes the oldest
++    kestrel_moe_cache_hold(c, 0, 0);
++    kestrel_moe_cache_step(c);
++
++    int evicted = -1;
++    kestrel_moe_cache_admit(c, 0, 3, &evicted);
++    check(evicted == 1, "expulso la equivocada");
++
++    kestrel_moe_cache_free(c);
++}
++
++// Long session of routing churn, invariants checked along the way.
++static void test_long_session() {
++    printf("sesion larga con ruteo realista\n");
++
++    const int n_layer = 24, n_expert = 32, n_used = 4, n_slots = 8;
++    const int n_steps = 20000;
++
++    kestrel_moe_cache * c = kestrel_moe_cache_init(n_layer, n_expert, n_slots);
++    zipf_router router(n_expert, 1.1, 1234);
++
++    std::vector<int> pick;
++    std::vector<int> slots_this_step;
++
++    // let the vectors reach their final size before the baseline
++    for (int warm = 0; warm < 64; warm++) {
++        for (int il = 0; il < n_layer; il++) {
++            router.draw_set(n_used, pick);
++            for (int e : pick) {
++                if (kestrel_moe_cache_hold(c, il, e) < 0) {
++                    kestrel_moe_cache_admit(c, il, e, nullptr);
++                }
++            }
++        }
++        kestrel_moe_cache_step(c);
++    }
++    const size_t rss0 = rss_now();
++
++    for (int step = 0; step < n_steps; step++) {
++        for (int il = 0; il < n_layer; il++) {
++            router.draw_set(n_used, pick);
++
++            slots_this_step.clear();
++
++            for (int e : pick) {
++                int slot = kestrel_moe_cache_hold(c, il, e);
++                if (slot < 0) {
++                    slot = kestrel_moe_cache_admit(c, il, e, nullptr);
++                }
++
++                // n_slots >= n_used, so a step can always place every expert it selected
++                if (slot < 0) {
++                    check(false, "se quedo sin ranuras con n_slots >= n_used");
++                    break;
++                }
++
++                // two experts of the same step must never share a slot
++                for (int s : slots_this_step) {
++                    if (s == slot) {
++                        check(false, "dos expertos del mismo paso comparten ranura");
++                    }
++                }
++                slots_this_step.push_back(slot);
++
++                check(kestrel_moe_cache_find(c, il, e) == slot, "la tabla no coincide con lo devuelto");
++            }
++        }
++
++        kestrel_moe_cache_step(c);
++
++        if ((step % 97) == 0) {
++            const char * why = nullptr;
++            if (!kestrel_moe_cache_check(c, &why)) {
++                check(false, why ? why : "invariantes rotas");
++                break;
++            }
++        }
++    }
++
++    const char * why = nullptr;
++    check(kestrel_moe_cache_check(c, &why), why ? why : "invariantes rotas al final");
++
++    const size_t rss1 = rss_now();
++    printf("  memoria residente: %.2f MiB antes, %.2f MiB despues de %d pasos\n",
++            rss0/1048576.0, rss1/1048576.0, n_steps);
++    check(rss0 == 0 || rss1 <= rss0 + (256u << 10), "la memoria crece con los pasos");
++
++    kestrel_moe_cache_stats stats = {};
++    kestrel_moe_cache_stats_get(c, &stats);
++
++    const double hit = stats.lookups ? 100.0*stats.hits/stats.lookups : 0.0;
++    printf("  %llu pasos, %llu consultas, acierto %.1f%%, %llu admisiones, %llu expulsiones, %llu sin ranura\n",
++            (unsigned long long) stats.steps, (unsigned long long) stats.lookups, hit,
++            (unsigned long long) stats.admits, (unsigned long long) stats.evictions,
++            (unsigned long long) stats.starved);
++
++    check(stats.starved == 0, "hubo pasos sin ranura disponible");
++    check(stats.evictions + (uint64_t) n_layer*n_slots >= stats.admits, "mas admisiones que ranuras y expulsiones");
++
++    kestrel_moe_cache_free(c);
++}
++
++// A cache the size of the bank must never evict.
++static void test_full_cache_never_evicts() {
++    printf("caché del tamaño del banco\n");
++
++    const int n_expert = 16;
++    kestrel_moe_cache * c = kestrel_moe_cache_init(1, n_expert, n_expert);
++    zipf_router router(n_expert, 0.8, 99);
++
++    std::vector<int> pick;
++    for (int step = 0; step < 5000; step++) {
++        router.draw_set(4, pick);
++        for (int e : pick) {
++            if (kestrel_moe_cache_hold(c, 0, e) < 0) {
++                kestrel_moe_cache_admit(c, 0, e, nullptr);
++            }
++        }
++        kestrel_moe_cache_step(c);
++    }
++
++    kestrel_moe_cache_stats stats = {};
++    kestrel_moe_cache_stats_get(c, &stats);
++    check(stats.evictions == 0, "expulso con sitio de sobra");
++    check(stats.admits <= (uint64_t) n_expert, "admitio un experto dos veces");
++
++    kestrel_moe_cache_free(c);
++}
++
++int main() {
++    printf("kestrel-moe: expert cache\n\n");
++
++    test_rejects_nonsense();
++    test_one_slot_one_expert();
++    test_held_slots_survive();
++    test_evicts_least_recent();
++    test_full_cache_never_evicts();
++    test_long_session();
++
++    printf("\n%s\n", g_fail == 0 ? "todo correcto" : "HAY FALLOS");
++
++    return g_fail == 0 ? 0 : 1;
++}
+diff --git a/tests/test-turbo-quant.c b/tests/test-turbo-quant.c
+new file mode 100644
+index 000000000..789bdfb6d
+--- /dev/null
++++ b/tests/test-turbo-quant.c
+@@ -0,0 +1,125 @@
++#include "ggml-quants.h"
++
++#include <math.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++extern void turbo_cpu_fwht_inverse(float * x, int group_size);
++
++static uint32_t rng_state = 0x12345678u;
++
++static float next_value(void) {
++    rng_state = rng_state*1664525u + 1013904223u;
++    return ((float) (rng_state >> 8)/(float) 0x00ffffffu)*2.0f - 1.0f;
++}
++
++static void inverse_groups(float * values, int n) {
++    for (int i = 0; i < n; i += 128) {
++        turbo_cpu_fwht_inverse(values + i, 128);
++    }
++}
++
++static float cosine(const float * a, const float * b, int n) {
++    double dot = 0.0;
++    double na = 0.0;
++    double nb = 0.0;
++    for (int i = 0; i < n; ++i) {
++        dot += (double) a[i]*b[i];
++        na += (double) a[i]*a[i];
++        nb += (double) b[i]*b[i];
++    }
++    return na > 0.0 && nb > 0.0 ? (float) (dot/sqrt(na*nb)) : 1.0f;
++}
++
++static float relative_norm_error(const float * a, const float * b, int n) {
++    double na = 0.0;
++    double nb = 0.0;
++    for (int i = 0; i < n; ++i) {
++        na += (double) a[i]*a[i];
++        nb += (double) b[i]*b[i];
++    }
++    return na > 0.0 ? (float) fabs(sqrt(nb/na) - 1.0) : (float) sqrt(nb);
++}
++
++static void fill_values(float * values, int n, int pattern) {
++    for (int i = 0; i < n; ++i) {
++        switch (pattern) {
++            case 0: values[i] = 0.0f; break;
++            case 1: values[i] = sinf((float) i*0.071f)*10.0f; break;
++            case 2: values[i] = next_value(); break;
++            default: values[i] = (i % 29 == 0) ? 25.0f : next_value()*0.05f; break;
++        }
++    }
++}
++
++static int test_turbo3(int n, int pattern) {
++    const size_t bytes = (size_t) (n/QK_TURBO3)*sizeof(block_turbo3_0);
++    float * input = (float *) malloc((size_t) n*sizeof(float));
++    float * output = (float *) malloc((size_t) n*sizeof(float));
++    block_turbo3_0 * q0 = (block_turbo3_0 *) calloc(1, bytes);
++    block_turbo3_0 * q1 = (block_turbo3_0 *) calloc(1, bytes);
++    if (!input || !output || !q0 || !q1) return 1;
++
++    fill_values(input, n, pattern);
++    quantize_row_turbo3_0_ref(input, q0, n);
++    quantize_row_turbo3_0_ref(input, q1, n);
++    dequantize_row_turbo3_0(q0, output, n);
++    inverse_groups(output, n);
++
++    const float cos = cosine(input, output, n);
++    const float norm_err = relative_norm_error(input, output, n);
++    const int failed = memcmp(q0, q1, bytes) != 0 || cos < 0.90f || norm_err > 0.002f;
++    if (failed) fprintf(stderr, "turbo3 n=%d pattern=%d cosine=%g norm_err=%g\n", n, pattern, cos, norm_err);
++
++    free(q1);
++    free(q0);
++    free(output);
++    free(input);
++    return failed;
++}
++
++static int test_turbo4(int n, int pattern) {
++    const size_t bytes = (size_t) (n/QK_TURBO4)*sizeof(block_turbo4_0);
++    float * input = (float *) malloc((size_t) n*sizeof(float));
++    float * output = (float *) malloc((size_t) n*sizeof(float));
++    block_turbo4_0 * q0 = (block_turbo4_0 *) calloc(1, bytes);
++    block_turbo4_0 * q1 = (block_turbo4_0 *) calloc(1, bytes);
++    if (!input || !output || !q0 || !q1) return 1;
++
++    fill_values(input, n, pattern);
++    quantize_row_turbo4_0_ref(input, q0, n);
++    quantize_row_turbo4_0_ref(input, q1, n);
++    dequantize_row_turbo4_0(q0, output, n);
++    inverse_groups(output, n);
++
++    const float cos = cosine(input, output, n);
++    const float norm_err = relative_norm_error(input, output, n);
++    const int failed = memcmp(q0, q1, bytes) != 0 || cos < 0.97f || norm_err > 0.002f;
++    if (failed) fprintf(stderr, "turbo4 n=%d pattern=%d cosine=%g norm_err=%g\n", n, pattern, cos, norm_err);
++
++    free(q1);
++    free(q0);
++    free(output);
++    free(input);
++    return failed;
++}
++
++int main(void) {
++    int failed = 0;
++    const int dimensions[] = {128, 256, 384, 512, 640};
++    for (size_t i = 0; i < sizeof(dimensions)/sizeof(dimensions[0]); ++i) {
++        const int n = dimensions[i];
++        for (int pattern = 0; pattern < 4; ++pattern) {
++            failed += test_turbo3(n, pattern);
++            failed += test_turbo4(n, pattern);
++        }
++    }
++    if (failed) {
++        fprintf(stderr, "%d TurboQuant checks failed\n", failed);
++        return 1;
++    }
++    printf("TurboQuant CPU suite passed\n");
++    return 0;
++}

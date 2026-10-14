@@ -50,17 +50,18 @@ The seven replaced the old per-area folders (`llama/metal/`, `llama/core/`, `lla
 
 A pin only moves while the whole series still applies with the plain `git apply` of
 `build-engines.sh` (the lenient mode of `check-patch-series.sh` is for judging, not building).
-As of 2026-10-13 the series applies cleanly through `ed319febb` (+5 past the previous pin
-`cdc06426e`, crossing `84e76d8a2`'s graph-capture change via four re-authored patches:
-`0002`, `0039`, `0063`, `0085`; bench parity verified interleaved — see the 2026-10-12
-mission's `engines-frontier/EVIDENCE.md`, including the thermal-artifact lesson: never bench
-right after a build on this machine). The next wall is `5a75f14c0` (FA kernels split into
-per-dtype libraries), which breaks `0001` — the `kernels/` layout port proper; past that, the
-`llama_batch_ext` migration and upstream's own MoE-cache-over-multi-GPU work need real
-re-authoring, not context repair.
-whisper v1.9.5 and stable-diffusion.cpp master cross the same `kernels/` layout split that
-`shared-metal/` predates, so those pins hold until the shared backend is ported once and the
-duplicate series collapses into the llama one.
+As of 2026-10-13 the series is the seven regenerated port patches against `091b6a7fc`
+(origin/master tip, +436 past `ed319febb`): the `kernels/` layout wall (`5a75f14c0`, fa.metal
+split into per-dtype libraries) is crossed — the AMD FA section lives in `fa_aux.metal`, the
+64-lane kernels in their own `*_w64.metal` files. Upstream's Prism Bonsai landing
+(`a9d27ac69`) superseded the Kestrel hadamard runtime and qwen4exp MTP head (the `hdmd`
+plumbing and upstream's own `src/models/qwen4exp.cpp` are used); `kernel_mul_mm_id` now runs
+on upstream's tile prepass (`htpe`/`hids`) with the Kestrel NLR/manual/wave64 semantics
+re-applied on top. The numbered-per-change tail patches (0008-0097) were absorbed into the
+regenerated seven during this port — their contents are unchanged in the tree, but the
+per-change patches are gone (see the 2026-10-13 mission journal for the drop list); new
+changes number from 0098. Laya loads on this base (`a4cb4c61f` systemone API, `1537a0a8b`
+abort fix, `6184e92c5` exact GELU ModernBERT).
 
 ## `shared-metal/`
 

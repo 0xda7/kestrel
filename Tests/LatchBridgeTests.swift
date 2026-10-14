@@ -20,6 +20,15 @@ final class LatchBridgeTests: CheckCase {
         ]
     }
 
+    func testSlugIsKeySafe() {
+        XCTAssertEqual(LatchBridge.slug("z.ai"), "z-ai")
+        XCTAssertEqual(LatchBridge.slug("OpenRouter"), "openrouter")
+        XCTAssertEqual(LatchBridge.slug("  Mi_Proveedor  "), "mi-proveedor")
+        XCTAssertEqual(LatchBridge.slug("mañana"), "ma-ana")
+        XCTAssertEqual(LatchBridge.slug("---"), "provider")
+        XCTAssertEqual(LatchBridge.slug(""), "provider")
+    }
+
     func testGeneratedJSONIsInternallyConsistent() throws {
         let json = LatchBridge.generateJSON(entries: entries(), defaultEntryID: "kestrel-local")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
@@ -102,5 +111,6 @@ extension LatchBridgeTests {
             .init(name: "testUnknownDefaultIDFallsBack") { try $0.testUnknownDefaultIDFallsBack() },
             .init(name: "testImportSkipsLoopbackAndKeepsRemote") { try $0.testImportSkipsLoopbackAndKeepsRemote() },
             .init(name: "testImportIgnoresGarbage") { $0.testImportIgnoresGarbage() },
+            .init(name: "testSlugIsKeySafe") { $0.testSlugIsKeySafe() },
         ])
 }

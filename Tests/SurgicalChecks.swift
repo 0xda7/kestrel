@@ -276,6 +276,161 @@ final class SurgicalChecks: CheckCase {
         XCTAssertEqual(decoded.disposition, note.disposition)
     }
 
+    // MARK: - Dictation parser (golden fixtures, G1 styles: terse resident,
+    // verbose attending, ASR-noisy; all synthetic)
+
+    /// Verbose attending style: labeled diagnoses, full implant sentence with
+    /// manufacturer and lot, padded numeric phrasing.
+    static let verboseDictation = """
+        This is Dr. Synth dictating. Preoperative diagnosis: bilateral mammary hypoplasia. \
+        Postoperative diagnosis: same. We proceeded with bilateral breast augmentation. \
+        Three hundred fifty cc — dictated as 350 cc — high profile silicone gel implants \
+        from Mentor, lot number SY7N421, were placed in the subpectoral plane. \
+        Estimated blood loss was approximately 75 mL. There were no complications. \
+        Dressing: steri-strips and a surgical bra. The patient was discharged home.
+        """
+
+    /// Terse resident style: no labels beyond EBL, newlines between facts.
+    /// The unlabeled "no complications" line doubles as the fence fixture:
+    /// it must parse as None without touching the dressing line below it.
+    static let terseDictation = """
+        left carpal tunnel release
+        tourniquet time 45 minutes
+        EBL 5 mL
+        no complications
+        dressing bacitracin and a soft wrap
+        """
+
+    /// ASR-noisy style: mangled units, stray punctuation, missing label colon.
+    static let noisyDictation = """
+        pre op diagnosis right breast carcinoma status post lumpectomy
+        procedure reduction mammoplasty on the, right side
+        blood loss approximately 200 CC
+        complications, none
+        """
+
+    func testVerboseDictationParsesAllFields() {
+        let parse = DictationParser.parse(Self.verboseDictation)
+        XCTAssertEqual(parse.procedure?.id, "augmentation-mammoplasty")
+        XCTAssertEqual(parse.fragments.preopDiagnosis, "bilateral mammary hypoplasia")
+        XCTAssertEqual(parse.fragments.laterality, "bilateral")
+        XCTAssertEqual(parse.fragments.ebmL, 75)
+        XCTAssertEqual(parse.fragments.complications, "None")
+        XCTAssertEqual(parse.fragments.dressing, "steri-strips and a surgical bra")
+        XCTAssertEqual(parse.fragments.disposition, "discharged home")
+    }
+
+    func testVerboseDictationYieldsCompleteImplantRecord() throws {
+        let parse = DictationParser.parse(Self.verboseDictation)
+        // Exact count, not .first: the end-to-end demo once let a phantom
+        // "75 mL EBL" parse as a second 75-cc implant; count fences it.
+        XCTAssertEqual(parse.fragments.implants?.count, 1)
+        let implant = try XCTUnwrap(parse.fragments.implants?.first)
+        XCTAssertEqual(implant.kind, "silicone gel")
+        XCTAssertEqual(implant.size, "350")
+        XCTAssertEqual(implant.profile, "high")
+        XCTAssertEqual(implant.manufacturer, "Mentor")
+        XCTAssertEqual(implant.lot, "SY7N421")
+    }
+
+    func testTerseDictationParsesNumbersAndSide() throws {
+        let parse = DictationParser.parse(Self.terseDictation)
+        XCTAssertEqual(parse.procedure?.id, "carpal-tunnel-release")
+        XCTAssertEqual(parse.fragments.laterality, "left")
+        XCTAssertEqual(parse.fragments.tourniquetMinutes, 45)
+        XCTAssertEqual(parse.fragments.ebmL, 5)
+        XCTAssertEqual(parse.fragments.complications, "None")
+        XCTAssertEqual(parse.fragments.dressing, "bacitracin and a soft wrap")
+    }
+
+    func testNoisyDictationToleratesASRNoise() throws {
+        let parse = DictationParser.parse(Self.noisyDictation)
+        XCTAssertEqual(parse.procedure?.id, "reduction-mammoplasty")
+        XCTAssertEqual(parse.fragments.preopDiagnosis,
+                       "right breast carcinoma status post lumpectomy")
+        XCTAssertEqual(parse.fragments.laterality, "right")
+        XCTAssertEqual(parse.fragments.ebmL, 200)
+        XCTAssertEqual(parse.fragments.complications, "none")
+    }
+
+    func testLateralityAmbiguityRefusesToGuess() {
+        // A revision narrative naming both sides must NOT resolve to a side.
+        let ambiguous = "revision of the left breast with attention also to the right breast"
+        XCTAssertNil(DictationParser.laterality(ambiguous))
+    }
+
+    func testLateralityTallyIsConservative() {
+        // Both side-words present → refuse, even when one is not anatomical;
+        // the safe direction under a wrong-site hazard.
+        XCTAssertNil(DictationParser.laterality("the right implant was removed, tissue left intact"))
+        XCTAssertEqual(DictationParser.laterality("left side only"), "left")
+    }
+
+    func testNumberWordsAreNotTrustedAsQuantities() {
+        // ASR renders "one fifty" for 150: unparsed by design, never guessed.
+        let parse = DictationParser.parse("breast aug bilateral, EBL one fifty")
+        XCTAssertNil(parse.fragments.ebmL)
+    }
+
+    func testUnknownProcedureIsNotMatched() {
+        let parse = DictationParser.parse("ribbon removal from a gift basket, EBL 0 mL")
+        XCTAssertNil(parse.procedure)
+        // The numeric field still parses; recognition and extraction are
+        // independent failure domains.
+        XCTAssertEqual(parse.fragments.ebmL, 0)
+    }
+
+    func testLongestSynonymWinsSeptorhinoplasty() {
+        let parse = DictationParser.parse("septorhinoplasty performed, EBL 10 mL")
+        XCTAssertEqual(parse.procedure?.id, "septorhinoplasty")
+    }
+
+    func testImplantWithoutKindStaysVisibleAsUnspecified() throws {
+        let parse = DictationParser.parse("implants: 300 cc moderate profile, Mentor, lot A8811")
+        let implant = try XCTUnwrap(parse.fragments.implants?.first)
+        XCTAssertEqual(implant.kind, "Unspecified")
+        XCTAssertEqual(implant.profile, "moderate")
+        XCTAssertEqual(implant.manufacturer, "Mentor")
+        XCTAssertEqual(implant.lot, "A8811")
+    }
+
+    func testTwoImplantSentencesYieldTwoRecords() {
+        let parse = DictationParser.parse(
+            "A 300 cc saline implant was placed on the right. A 350 cc saline implant was placed on the left.")
+        XCTAssertEqual(parse.fragments.implants?.count, 2)
+        XCTAssertEqual(parse.fragments.implants?.map(\.size), ["300", "350"])
+    }
+
+    func testBloodLossSentenceIsNotAPhantomImplant() throws {
+        // Demo-caught: "75 mL" of EBL must not become a 75-cc implant.
+        let parse = DictationParser.parse(
+            "breast aug bilateral, 350 cc implants placed. Estimated blood loss was approximately 75 mL")
+        XCTAssertEqual(parse.fragments.implants?.count, 1)
+        XCTAssertEqual(parse.fragments.ebmL, 75)
+        XCTAssertEqual(try XCTUnwrap(parse.fragments.implants?.first).size, "350")
+    }
+
+    func testLabelNeverCrossesIntoTheNextLine() throws {
+        // Demo-caught: "no complications" at line end must not capture the
+        // dressing dictated on the following line.
+        let parse = DictationParser.parse(
+            "left carpal tunnel release\nno complications\ndressing gauze and tape\n")
+        XCTAssertEqual(parse.fragments.complications, "None")
+        XCTAssertEqual(parse.fragments.dressing, "gauze and tape")
+    }
+
+    func testParseToBuildEndToEndNote() throws {
+        // The sprint-1 exit demo as one check: dictation text in, structured
+        // op note out, with the builder's gating still enforced.
+        let parse = DictationParser.parse(Self.verboseDictation)
+        let procedure = try XCTUnwrap(parse.procedure)
+        let note = try OpNoteBuilder.build(procedure: procedure, dictated: parse.fragments)
+        XCTAssertEqual(note.procedureName, "Augmentation mammoplasty")
+        XCTAssertEqual(note.laterality, "Bilateral")
+        XCTAssertTrue(note.renderedPlainText().contains("Mentor"))
+        XCTAssertTrue(note.renderedPlainText().contains("EBL: 75 mL"))
+    }
+
     // MARK: - De-identification
 
     func testSSNIsMaskedAndReported() {
@@ -462,6 +617,75 @@ final class SurgicalChecks: CheckCase {
 
 // MARK: - Generated registration (port from XCTest)
 extension SurgicalChecks {
+    // MARK: - OpenMed-inspired v0.2: context boost, street addresses,
+    // deterministic surrogates, redaction report
+
+    func testLabeledSpaceSeparatedSSNIsMerged() {
+        let result = mask("SSN: 555 01 2345 on file")
+        XCTAssertFalse(result.scrubbed.contains("555 01 2345"))
+        XCTAssertTrue(result.scrubbed.contains("[SSN]"))
+        XCTAssertTrue(result.scrubbed.contains("SSN:"), "the label stays; only the digits are the finding")
+    }
+
+    func testLabeledNPIIsMaskedAndPlainDigitsAreNot() {
+        let labeled = mask("NPI: 1234567893")
+        XCTAssertTrue(labeled.scrubbed.contains("[NPI]"))
+        XCTAssertFalse(labeled.scrubbed.contains("1234567893"))
+        XCTAssertTrue(labeled.scrubbed.contains("NPI:"))
+        // A bare 10-digit run is a phone number here, never an NPI.
+        let bare = mask("call 5550102345 today")
+        XCTAssertEqual(findings(bare, .npi).count, 0)
+        XCTAssertEqual(findings(bare, .phone).count, 1)
+    }
+
+    func testPatientIDLabelMasksIdentifier() {
+        let result = mask("patient ID: A88213-7 in the system")
+        XCTAssertTrue(result.scrubbed.contains("[ID]"))
+        XCTAssertFalse(result.scrubbed.contains("A88213-7"))
+        XCTAssertTrue(result.scrubbed.contains("patient ID"))
+    }
+
+    func testStreetAddressIsMasked() {
+        let result = mask("the patient lives at 450 Lexington Avenue now")
+        XCTAssertTrue(result.scrubbed.contains("[ADDRESS]"))
+        XCTAssertFalse(result.scrubbed.contains("450 Lexington Avenue"))
+        XCTAssertEqual(findings(result, .streetAddress).count, 1)
+    }
+
+    static let surrogateDictation = """
+        Dr. Synth evaluated the patient at 450 Lexington Avenue.
+        SSN 555-01-2345, phone (555) 010-2345, patient ID: A88213-7,
+        email m.calloway@midwest-care.org.
+        Seen on 10/21/2026 with follow-up November 3, 2026.
+        """
+
+    func testSurrogateModeIsFullyDeterministic() {
+        let first = DeIdentifier.process(Self.surrogateDictation, mode: .surrogate)
+        let second = DeIdentifier.process(Self.surrogateDictation, mode: .surrogate)
+        XCTAssertEqual(first.scrubbed, second.scrubbed,
+                       "same document, same surrogate output — the diffability contract")
+        XCTAssertFalse(first.scrubbed.contains("555-01-2345"))
+        XCTAssertFalse(first.scrubbed.contains("010-2345"))
+        XCTAssertFalse(first.scrubbed.contains("A88213-7"))
+        XCTAssertFalse(first.scrubbed.contains("midwest-care.org"))
+        XCTAssertFalse(first.scrubbed.contains("Dr. Synth"))
+    }
+
+    func testSurrogateValuesLiveInFictionalRanges() {
+        let result = DeIdentifier.process(Self.surrogateDictation, mode: .surrogate)
+        XCTAssertTrue(result.scrubbed.contains("555-01"), "phone surrogate in the fictional 555-01xx block")
+        XCTAssertTrue(result.scrubbed.contains("900-90-"), "SSN surrogate in the unassigned 900 block")
+        XCTAssertTrue(result.scrubbed.contains("@example.com"))
+    }
+
+    func testRedactionReportCountsClassesAndFlagsReview() {
+        let result = mask("Dr. Synth called from Lexington about the account. SSN 555-01-2345.")
+        let report = result.redactionReport()
+        XCTAssertTrue(report.contains("1x[SSN]"))
+        XCTAssertTrue(report.contains("1x[NAME]"))
+        XCTAssertTrue(report.contains("review candidates: 1"))
+    }
+
     @MainActor static let __checkSet = CheckSet(
         suite: "SurgicalChecks",
         instance: { SurgicalChecks() },
@@ -487,6 +711,27 @@ extension SurgicalChecks {
             .init(name: "testRenderedNoteCarriesImplantDetails") { try $0.testRenderedNoteCarriesImplantDetails() },
             .init(name: "testRenderedNoteCarriesTourniquetAndEbl") { try $0.testRenderedNoteCarriesTourniquetAndEbl() },
             .init(name: "testOpNoteRoundTripsThroughCodable") { try $0.testOpNoteRoundTripsThroughCodable() },
+            .init(name: "testVerboseDictationParsesAllFields") { $0.testVerboseDictationParsesAllFields() },
+            .init(name: "testVerboseDictationYieldsCompleteImplantRecord") { try $0.testVerboseDictationYieldsCompleteImplantRecord() },
+            .init(name: "testTerseDictationParsesNumbersAndSide") { try $0.testTerseDictationParsesNumbersAndSide() },
+            .init(name: "testNoisyDictationToleratesASRNoise") { try $0.testNoisyDictationToleratesASRNoise() },
+            .init(name: "testLateralityAmbiguityRefusesToGuess") { $0.testLateralityAmbiguityRefusesToGuess() },
+            .init(name: "testLateralityTallyIsConservative") { $0.testLateralityTallyIsConservative() },
+            .init(name: "testNumberWordsAreNotTrustedAsQuantities") { $0.testNumberWordsAreNotTrustedAsQuantities() },
+            .init(name: "testUnknownProcedureIsNotMatched") { $0.testUnknownProcedureIsNotMatched() },
+            .init(name: "testLongestSynonymWinsSeptorhinoplasty") { $0.testLongestSynonymWinsSeptorhinoplasty() },
+            .init(name: "testImplantWithoutKindStaysVisibleAsUnspecified") { try $0.testImplantWithoutKindStaysVisibleAsUnspecified() },
+            .init(name: "testTwoImplantSentencesYieldTwoRecords") { $0.testTwoImplantSentencesYieldTwoRecords() },
+            .init(name: "testBloodLossSentenceIsNotAPhantomImplant") { try $0.testBloodLossSentenceIsNotAPhantomImplant() },
+            .init(name: "testLabelNeverCrossesIntoTheNextLine") { try $0.testLabelNeverCrossesIntoTheNextLine() },
+            .init(name: "testLabeledSpaceSeparatedSSNIsMerged") { $0.testLabeledSpaceSeparatedSSNIsMerged() },
+            .init(name: "testLabeledNPIIsMaskedAndPlainDigitsAreNot") { $0.testLabeledNPIIsMaskedAndPlainDigitsAreNot() },
+            .init(name: "testPatientIDLabelMasksIdentifier") { $0.testPatientIDLabelMasksIdentifier() },
+            .init(name: "testStreetAddressIsMasked") { $0.testStreetAddressIsMasked() },
+            .init(name: "testSurrogateModeIsFullyDeterministic") { $0.testSurrogateModeIsFullyDeterministic() },
+            .init(name: "testSurrogateValuesLiveInFictionalRanges") { $0.testSurrogateValuesLiveInFictionalRanges() },
+            .init(name: "testRedactionReportCountsClassesAndFlagsReview") { $0.testRedactionReportCountsClassesAndFlagsReview() },
+            .init(name: "testParseToBuildEndToEndNote") { try $0.testParseToBuildEndToEndNote() },
             .init(name: "testSSNIsMaskedAndReported") { $0.testSSNIsMaskedAndReported() },
             .init(name: "testPhoneFormatsAreMasked") { $0.testPhoneFormatsAreMasked() },
             .init(name: "testLabeledFaxIsClassifiedAsFax") { $0.testLabeledFaxIsClassifiedAsFax() },

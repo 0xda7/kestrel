@@ -31,25 +31,13 @@ final class MetaPromptServiceTests: CheckCase {
 
     func testArgvShapeIsConfined() {
         let argv = MetaPromptService.argv(prompt: "TASK")
-        XCTAssertEqual(argv.count >= 11, true, "unexpected argv: \(argv)")
-        XCTAssertEqual(argv[0], PiDelegateService.binaryPath)
-        XCTAssertEqual(argv[1], "--mode")
-        XCTAssertEqual(argv[2], "json")
-        XCTAssertEqual(argv[3], "--session-dir")
-        XCTAssertEqual(argv[4], PiDelegateService.sessionsDirectory)
-        // Confinement: tools off, prompt-creator system prompt, thinking off.
-        XCTAssertTrue(argv.contains("--no-tools"), "argv must confine with --no-tools")
-        let systemIndex = argv.firstIndex(of: "--system-prompt")
-        XCTAssertNotNil(systemIndex)
-        XCTAssertEqual(argv[systemIndex! + 1], MetaPromptService.systemPrompt)
-        let thinkingIndex = argv.firstIndex(of: "--thinking")
-        XCTAssertNotNil(thinkingIndex)
-        XCTAssertEqual(argv[thinkingIndex! + 1], "off")
-        // The assembled prompt rides -p (print mode), last.
-        let pIndex = argv.firstIndex(of: "-p")
-        XCTAssertNotNil(pIndex)
-        XCTAssertEqual(argv[pIndex! + 1], "TASK")
-        XCTAssertEqual(pIndex! + 1, argv.count - 1)
+        XCTAssertEqual(argv.count, 3, "unexpected argv: \(argv)")
+        XCTAssertEqual(argv[0], LatchDelegateService.binaryPath)
+        XCTAssertEqual(argv[1], "-p")
+        // Confinement: the prompt-creator system prompt leads the task, and
+        // the assembled task rides with it — one self-contained prompt.
+        XCTAssertEqual(argv[2],
+                       MetaPromptService.systemPrompt + "\n\n" + "TASK")
         // No session resume: the run is self-contained.
         XCTAssertFalse(argv.contains("--continue"))
         XCTAssertFalse(argv.contains("--resume"))
@@ -58,11 +46,6 @@ final class MetaPromptServiceTests: CheckCase {
         XCTAssertFalse(argv.contains("--fork"))
         // Credentials never ride argv.
         XCTAssertFalse(argv.contains("--api-key"))
-        // Model/provider ride only when configured (pi's own configuration).
-        XCTAssertEqual(argv.contains("--provider"),
-                       !PiDelegateService.configuredProvider.isEmpty)
-        XCTAssertEqual(argv.contains("--model"),
-                       !PiDelegateService.configuredModel.isEmpty)
     }
 
     func testAssembledPromptFeedsVariablesLikeLLMSpace() {
@@ -93,8 +76,8 @@ final class MetaPromptServiceTests: CheckCase {
             "Summarize PDFs")
     }
 
-    /// The empty-task guard returns the bilingual failure text before pi is
-    /// ever launched.
+    /// The empty-task guard returns the bilingual failure text before latch
+    /// is ever launched.
     @MainActor func testEmptyTaskDescriptionReturnsFailureText() async {
         let blankTask = await MetaPromptService.run(taskDescription: "   ", existingPrompt: "Old",
                                                     skillsList: "- a")
@@ -104,15 +87,15 @@ final class MetaPromptServiceTests: CheckCase {
         XCTAssertEqual(emptyTask, MetaPromptService.emptyTaskMessage)
     }
 
-    /// Live-fire: one real run through the confined path against pi's own
+    /// Live-fire: one real run through the confined path against latch's own
     /// configured model. Opt-in via KESTREL_META_PROMPT_LIVE=1 because it
     /// spends a real model call (up to the 600 s budget).
     @MainActor func testLivePromptAuthoringRun() async throws {
         guard ProcessInfo.processInfo.environment["KESTREL_META_PROMPT_LIVE"] == "1" else {
-            throw XCTSkip("Set KESTREL_META_PROMPT_LIVE=1 to run the observed-in-use pi check")
+            throw XCTSkip("Set KESTREL_META_PROMPT_LIVE=1 to run the observed-in-use latch check")
         }
-        guard PiDelegateService.isInstalled else {
-            throw XCTSkip("pi is not installed at \(PiDelegateService.binaryPath)")
+        guard LatchDelegateService.isInstalled else {
+            throw XCTSkip("latch is not installed at \(LatchDelegateService.binaryPath)")
         }
         let result = await MetaPromptService.run(
             taskDescription: "Classify a customer support ticket into exactly one of: "
@@ -124,11 +107,11 @@ final class MetaPromptServiceTests: CheckCase {
         XCTAssertFalse(trimmed.isEmpty, "live run returned an empty result")
         XCTAssertFalse(trimmed.hasPrefix("La descripción de la tarea está vacía"),
                        "live run hit the empty-task guard")
-        XCTAssertFalse(trimmed.hasPrefix("pi completó la creación del prompt"),
+        XCTAssertFalse(trimmed.hasPrefix("latch completó la creación del prompt"),
                        "live run hit the empty-success guard")
-        XCTAssertFalse(trimmed.hasPrefix("pi terminó de forma anómala"),
+        XCTAssertFalse(trimmed.hasPrefix("latch terminó de forma anómala"),
                        "live run hit the abnormal-exit guard")
-        XCTAssertFalse(trimmed.contains("pi excedió su presupuesto"),
+        XCTAssertFalse(trimmed.contains("latch exceeded its"),
                        "live run hit the budget guard")
     }
 }

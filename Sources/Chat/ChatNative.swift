@@ -145,15 +145,9 @@ struct Conversation: Identifiable, Codable {
     /// conversation and persists with the KV cache. Optional for old JSON.
     var contextUsed: Int? = nil
     /// Assistant backend for this conversation: "latch" answers through the
-    /// latch harness, "pi" through the pi runtime (llm-space engine), nil uses
-    /// the model engine. Optional so older JSON decodes and older builds ignore
-    /// the extra key.
+    /// latch harness (the direct chat agent), nil uses the model engine.
+    /// Optional so older JSON decodes and older builds ignore the extra key.
     var assistantMode: String? = nil
-    /// Pi agent opt-in for this conversation: false/nil keeps
-    /// pi confined (--no-tools, chat budget); true enables pi's native tools
-    /// for this chat only, with a larger budget and a warning banner.
-    /// Optional so older JSON decodes.
-    var piAgentMode: Bool? = nil
 }
 
 /// A thread-safe holder for a sidecar Process, filled on the launch thread
@@ -443,10 +437,6 @@ final class ChatStore: ObservableObject {
     /// terminates it. Latch mode never sets `activeStream`, so the engine
     /// DELETE below is naturally inert for these runs.
     private var latchProcess: Process?
-    /// Running pi runtime process while a pi-mode reply streams; Stop
-    /// terminates it, same contract as latchProcess. Pi mode never sets
-    /// `activeStream`, so the engine stop path never fires against it.
-    private var piProcess: Process?
     /// Synchronously-published handles for the current sidecar runs. The
     /// MainActor properties above are set via a detached hop AFTER
     /// process.run(), so stop() in that window would find nil and a runaway
@@ -454,7 +444,6 @@ final class ChatStore: ObservableObject {
     /// task starts and filled inside onLaunch on the launch thread itself,
     /// closing that window. Box per run; cleared in finish().
     let latchProcessBox = SidecarProcessBox()
-    let piProcessBox = SidecarProcessBox()
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
@@ -677,18 +666,11 @@ final class ChatStore: ObservableObject {
         save()
     }
 
-    /// Per-conversation assistant backend: "latch", "pi", or nil (model engine).
+    /// Per-conversation assistant backend: "latch" (the direct chat agent)
+    /// or nil (model engine).
     func setConversationAssistantMode(_ c: Conversation, _ mode: String?) {
         guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
         conversations[i].assistantMode = (mode?.isEmpty ?? true) ? nil : mode
-        save()
-    }
-
-    /// Per-conversation pi agent opt-in. Enabling restores pi's
-    /// native tool surface for this chat only — the user's explicit act.
-    func setConversationAgentMode(_ c: Conversation, _ enabled: Bool) {
-        guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
-        conversations[i].piAgentMode = enabled ? true : nil
         save()
     }
 
@@ -795,199 +777,6 @@ final class ChatStore: ObservableObject {
         return UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
     }
 
-    /// Global "pi (llm-space) as primary assistant" toggle (Chat advanced
-    /// settings). Lower precedence than any per-conversation mode.
-    var globalPiPrimary: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKeys.piPrimaryEnabled)
-    }
-
-    /// True when this conversation should be answered by the pi runtime.
-    /// Precedence: per-conversation assistantMode first ("pi" or "latch");
-    /// otherwise the global primary toggle (pi wins only if latch primary is
-    /// off — one primary assistant at a time, deterministic and legible).
-    func piWanted(for c: Conversation) -> Bool {
-        if let mode = c.assistantMode { return mode == "pi" }
-        return globalPiPrimary
-            && !UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// One-shot prompt for a pi run: a char-bounded recent transcript and the
-    /// standing instruction. The system prompt rides `--system-prompt` as a
-    /// real system message instead of prompt preamble, so the
-    /// context here is exactly the conversation.
-    private func piPrompt(for i: Int,
-                          continuationInstruction: String?) -> String {
-        // Char budget is user-tunable: a long chat re-sends this much
-        // every turn, so the default (12k chars ≈ 3k tokens) weighs cost
-        // against continuity; the newest user message always rides whole.
-        let storedBudget = UserDefaults.standard.integer(forKey: SettingsKeys.piContextCharacters)
-        let maximumContextCharacters = storedBudget >= 2_000 ? min(storedBudget, 48_000) : 12_000
-        var budget = maximumContextCharacters
-        var lines: [String] = []
-        for message in conversations[i].messages.reversed() {
-            guard message.role == "user" || message.role == "assistant" else { continue }
-            if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Reasoning must never re-enter the transcript as assistant text:
-            // a leaked <think> block reads as a broken assistant turn.
-            if message.role == "assistant" {
-                body = body.replacingOccurrences(
-                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
-                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard !body.isEmpty else { continue }
-            let line = (message.role == "user" ? "User: " : "Assistant: ") + body
-            if line.count > budget {
-                lines.insert("… " + line.prefix(budget), at: 0)
-                break
-            }
-            budget -= line.count + 1
-            lines.insert(line, at: 0)
-            if budget <= 0 { break }
-        }
-        var prompt = ""
-        if !lines.isEmpty {
-            prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
-        }
-        if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
-        prompt += "Answer as the assistant directly; your reply becomes the next assistant message."
-        return prompt
-    }
-
-    nonisolated static var piUnavailableMessage: String {
-        "pi no está disponible: no se encontró el binario pi (ruta por omisión /usr/local/bin/pi). No se ha usado el motor como sustituto silencioso; cambia el modo de este chat o instala el runtime pi. / pi is unavailable: the pi binary was not found (default path /usr/local/bin/pi). The engine was not silently used instead; switch this chat's mode or install the pi runtime."
-    }
-
-    nonisolated static func piExitMessage(status: Int32) -> String {
-        "pi terminó de forma anómala (estado \(status)). / pi exited abnormally (status \(status))."
-    }
-
-    /// Empty-success guard: the run ended cleanly but produced
-    /// no visible text, so this surfaces instead of a blank bubble.
-    nonisolated static var piEmptyReplyMessage: String {
-        "pi completó el turno sin producir respuesta visible. / pi completed the turn without producing a visible reply."
-    }
-
-    nonisolated static var piEmptyReplyNote: String {
-        "Razonamiento capturado del turno / Reasoning captured during the turn:"
-    }
-
-    private func sendPiMode(i: Int, port: Int, system: String, thinking: Bool,
-                            continuationInstruction: String?) {
-        // Silent-strand guard: pi falls back to its built-in default provider
-        // when the requested provider/model pair is missing from its config,
-        // and a dead fallback key produces an empty reply with exit 0 and no
-        // stderr. Refuse the turn here, with the fix in the message, instead
-        // of publishing an empty bubble.
-        if let problem = PiBridge.validate(provider: PiDelegateService.configuredProvider,
-                                           model: PiDelegateService.configuredModel) {
-            conversations[i].messages.append(ChatMessage(role: "assistant", content: problem))
-            return
-        }
-        conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
-        let convID = conversations[i].id
-        let toolCwd = effectiveWorkingDirectory(for: convID)
-        let agentMode = conversations[i].piAgentMode == true
-        // the system prompt rides --system-prompt; the fallback
-        // persona (sidecar is a conversational assistant, not a repo manager)
-        // applies only when the conversation carries no prompt of its own.
-        let systemForRun = system.trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty ? nil : system
-        // Agent opt-in gets its own larger budget; chats stay at the chat cap.
-        let budget = agentMode ? PiDelegateService.agentTimeoutSeconds
-                               : PiDelegateService.chatTimeoutSeconds
-        let prompt = piPrompt(for: i,
-                              continuationInstruction: continuationInstruction)
-        let buffer = StreamBuffer()
-        let pump = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let snap = buffer.take() else {
-                    try? await Task.sleep(for: .milliseconds(40))
-                    continue
-                }
-                if snap.done { break }   // finish() publishes the final transcript
-                self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: nil)
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-        }
-        let store = self
-        // `store` already carries the strong reference; a `weak self` capture
-        // here would be dead weight (and a Swift 6 concurrency warning).
-        task = Task.detached(priority: .userInitiated) { [buffer, pump] in
-            PiDelegateService.ensureSessionsDirectory()
-            let outcome = await PiDelegateService.runStreaming(
-                argv: PiDelegateService.argv(prompt: prompt, thinking: thinking,
-                                             agentMode: agentMode,
-                                             systemPrompt: systemForRun),
-                workingDirectory: toolCwd,
-                timeout: budget,
-                onLaunch: { proc in
-                    store.piProcessBox.store(proc)
-                    Task { @MainActor in store.piProcess = proc }
-                },
-                onOutput: { reasoning, visible in
-                    buffer.write(reasoning: reasoning, visible: visible, speed: nil)
-                })
-            if Task.isCancelled {
-                // stop() terminated the process; keep whatever streamed.
-                let partial: String
-                switch outcome.outcome {
-                case .completed(let output), .exited(_, let output):
-                    partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                case .failed(let reason):
-                    partial = reason
-                }
-                buffer.finish()
-                await MainActor.run {
-                    store.finish(conversation: convID, text: partial, speed: nil,
-                                 model: "pi")
-                }
-                pump.cancel()
-                return
-            }
-            let reply: String
-            switch outcome.outcome {
-            case .completed(let output):
-                let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                let captured = outcome.reasoning.trimmingCharacters(
-                    in: .whitespacesAndNewlines)
-                if produced.isEmpty {
-                    // Empty-success guard: the run ended cleanly
-                    // but said nothing (e.g. the whole budget went to thinking
-                    // or reasoning). Surface the failure — never a blank bubble.
-                    reply = captured.isEmpty
-                        ? Self.piEmptyReplyMessage
-                        : Self.piEmptyReplyMessage
-                            + "\n\n" + Self.piEmptyReplyNote
-                            + "\n\n" + outcome.reasoning
-                } else if outcome.reasoning.isEmpty {
-                    reply = produced
-                } else {
-                    // Compose reasoning into the message with the same
-                    // <think> convention the local engine path uses, so it
-                    // renders in the reasoning panel, persists with the
-                    // conversation, and rides history exactly like local
-                    // replies instead of being discarded.
-                    reply = "<think>" + outcome.reasoning + "</think>" + produced
-                }
-            case .exited(let status, let output):
-                let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                reply = partial.isEmpty
-                    ? Self.piExitMessage(status: status)
-                    : partial + "\n\n" + Self.piExitMessage(status: status)
-            case .failed(let reason):
-                reply = reason
-            }
-            buffer.finish()
-            await MainActor.run {
-                store.finish(conversation: convID, text: reply, speed: nil,
-                             model: "pi")
-            }
-            pump.cancel()
-        }
-    }
-
     /// One-shot prompt for a latch run: the conversation's system prompt, a
     /// char-bounded recent transcript (attachments already ride inline inside
     /// wireContent) and the standing instruction. Bounded so a long history can
@@ -1058,26 +847,6 @@ final class ChatStore: ObservableObject {
         // engine idle watchdog (30/180 s) never fires against latch's
         // multi-minute runs, and activeStream stays nil so stop() never sends
         // an engine DELETE for these runs.
-        // Pi mode (llm-space engine sidecar) answers through the pi process:
-        // no engine, no gateway, no port. The branch returns BEFORE
-        // startWatchdog so the engine idle watchdog never fires against pi's
-        // long agent turns, and activeStream stays nil so stop() never sends
-        // an engine DELETE for these runs.
-        if piWanted(for: conversations[i]) {
-            guard PiDelegateService.isInstalled else {
-                conversations[i].messages.append(
-                    ChatMessage(role: "assistant", content: Self.piUnavailableMessage))
-                conversations[i].updated = Date()
-                generating = false
-                generatingConvID = nil
-                live.reset()
-                save()
-                return
-            }
-            sendPiMode(i: i, port: port, system: system, thinking: thinking,
-                       continuationInstruction: continuationInstruction)
-            return
-        }
         if latchWanted(for: conversations[i]) {
             guard LatchDelegateService.isInstalled else {
                 conversations[i].messages.append(
@@ -1103,7 +872,8 @@ final class ChatStore: ObservableObject {
                     }
                     if snap.done { break }   // finish() publishes the final transcript
                     self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: snap.speed)
-                    // Length-adaptive cadence (see the pi pump note).
+                    // Length-adaptive cadence: long replies ease their pump
+                    // rate so the UI stays responsive while text lands.
                     let n = snap.visible.count
                     let ms = n > 12_000 ? 600 : n > 6_000 ? 350 : n > 2_500 ? 180 : 80
                     try? await Task.sleep(for: .milliseconds(ms))
@@ -1120,7 +890,7 @@ final class ChatStore: ObservableObject {
                 let outcome = await LatchDelegateService.runStreaming(
                     argv: [LatchDelegateService.binaryPath, "-p", prompt],
                     workingDirectory: toolCwd,
-                    timeout: LatchDelegateService.maximumTimeoutSeconds,
+                    timeout: LatchDelegateService.chatTurnTimeoutSeconds,
                     onLaunch: { proc in
                         // Synchronous publish closes the stop() race window;
                         // the MainActor hop below is only for the UI-facing
@@ -1154,9 +924,9 @@ final class ChatStore: ObservableObject {
                 switch outcome {
                 case .completed(let output):
                     let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Empty-success guard (same contract as the pi path): a
-                    // clean exit with no visible output surfaces a failure
-                    // notice instead of finish() silently deleting the reply.
+                    // Empty-success guard: a clean exit with no visible
+                    // output surfaces a failure notice instead of finish()
+                    // silently deleting the reply.
                     reply = produced.isEmpty ? Self.latchEmptyReplyMessage : produced
                 case .exited(let status, let output):
                     let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1657,7 +1427,6 @@ final class ChatStore: ObservableObject {
         generatingConvID = nil
         live.reset()
         task = nil
-        piProcessBox.clear()
         latchProcessBox.clear()
         watchdog?.cancel()
         watchdog = nil
@@ -2422,12 +2191,6 @@ final class ChatStore: ObservableObject {
         if let proc = latchHandle {
             proc.terminate()
         }
-        // Same for a pi runtime run.
-        let piHandle = piProcessBox.load() ?? piProcess
-        piProcess = nil
-        if let proc = piHandle {
-            proc.terminate()
-        }
         if let stream = activeStream, !activeStreamRemote,
            let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
@@ -3074,41 +2837,33 @@ struct NativeChatView: View {
         return !(FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue)
     }
 
-    /// Shows the folder the tools are actually using, own or inherited, so it is
-    /// readable without opening the chat parameters. Clicking it changes the chat's.
-    /// Per-conversation assistant backend chip: Latch (harness process), pi
-    /// (llm-space runtime process), or the model engine. A third "Automatic"
-    /// state clears the explicit choice so the conversation follows the global
-    /// toggle again. Choosing latch/pi while the binary is missing is allowed —
-    /// the send path finishes an explicit bilingual error into the chat — but
-    /// the chip turns warning-colored so the cause is visible before sending.
+    /// Per-conversation assistant backend chip: the latch agent (harness
+    /// process with its tool surface) or the model engine. A third
+    /// "Automatic" state clears the explicit choice so the conversation
+    /// follows the global toggle again. Choosing the agent while the binary
+    /// is missing is allowed — the send path finishes an explicit bilingual
+    /// error into the chat — but the chip turns warning-colored so the cause
+    /// is visible before sending.
     @ViewBuilder private var assistantModeChip: some View {
         if let conversation = chat.current {
             let selected = conversation.assistantMode
-            let latchSelected = selected == "latch"
-            let piSelected = selected == "pi"
+            let agentSelected = selected == "latch"
             let automatic = selected == nil
-            let latch = chat.latchWanted(for: conversation)
-            let pi = chat.piWanted(for: conversation)
-            let broken = (latch && !LatchDelegateService.isInstalled)
-                || (pi && !PiDelegateService.isInstalled)
+            let agent = chat.latchWanted(for: conversation)
+            let broken = agent && !LatchDelegateService.isInstalled
+            let budget = LatchDelegateService.chatTurnTimeoutSeconds
+            let folder = chat.effectiveWorkingDirectory(for: conversation.id)
             Menu {
                 Button {
                     chat.setConversationAssistantMode(conversation, "latch")
                 } label: {
-                    if latchSelected {
-                        Label(loc.t("Latch", "Latch"), systemImage: "checkmark")
+                    if agentSelected {
+                        Label(loc.t("Agente (latch + herramientas)",
+                                    "Agent (latch + tools)"),
+                              systemImage: "checkmark")
                     } else {
-                        Text(loc.t("Latch", "Latch"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, "pi")
-                } label: {
-                    if piSelected {
-                        Label(loc.t("pi (llm-space)", "pi (llm-space)"), systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("pi (llm-space)", "pi (llm-space)"))
+                        Text(loc.t("Agente (latch + herramientas)",
+                                   "Agent (latch + tools)"))
                     }
                 }
                 Button {
@@ -3130,34 +2885,14 @@ struct NativeChatView: View {
                         Text(loc.t("Automática (ajuste global)", "Automatic (global setting)"))
                     }
                 }
-                Divider()
-                // pi's tools stay OFF in chats by default; this
-                // per-conversation opt-in restores them for this chat only.
-                Toggle(isOn: Binding(
-                    get: { conversation.piAgentMode == true },
-                    set: { chat.setConversationAgentMode(conversation, $0) })) {
-                    Label(loc.t("Modo agente (pi usa herramientas)",
-                                "Agent mode (pi uses tools)"),
-                          systemImage: "wrench.and.screwdriver")
-                }
-                if conversation.piAgentMode == true {
-                    Button {
-                        chat.setConversationAgentMode(conversation, false)
-                    } label: {
-                        Label(loc.t("Desactivar modo agente", "Turn off agent mode"),
-                              systemImage: "xmark.circle")
-                    }
-                }
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: latch ? "bird" : pi ? "petal.superscript" : "cpu")
+                    Image(systemName: agent ? "bird" : "cpu")
                         .font(.system(size: 10, weight: .medium))
                     Text(automatic
-                         ? (latch ? loc.t("Auto · Latch", "Auto · Latch")
-                                  : pi ? loc.t("Auto · pi", "Auto · pi")
+                         ? (agent ? loc.t("Auto · Agente", "Auto · Agent")
                                   : loc.t("Auto · Modelo", "Auto · Model"))
-                         : latchSelected ? loc.t("Latch", "Latch")
-                         : piSelected ? loc.t("pi (llm-space)", "pi (llm-space)")
+                         : agentSelected ? loc.t("Agente (latch)", "Agent (latch)")
                          : loc.t("Asistente del modelo", "Model assistant"))
                         .lineLimit(1)
                 }
@@ -3176,10 +2911,10 @@ struct NativeChatView: View {
             .fixedSize()
             .tint(broken ? .orange : .secondary)
             .help(broken
-                  ? loc.t("El asistente externo seleccionado (latch o pi) no tiene binario instalado; el envío mostrará el error.",
-                          "The selected external assistant (latch or pi) has no binary installed; sending will show the error.")
-                  : loc.t("Quién responde en esta conversación: latch, pi o el asistente del modelo.",
-                          "Who answers in this conversation: latch, pi, or the model assistant."))
+                  ? loc.t("El agente latch no tiene binario instalado; el envío mostrará el error.",
+                          "The latch agent has no binary installed; sending will show the error.")
+                  : loc.t("Quién responde en esta conversación: el agente latch (con herramientas, carpeta \(folder ?? "—"), presupuesto \(budget)s) o el asistente del modelo.",
+                          "Who answers in this conversation: the latch agent (with tools, folder \(folder ?? "—"), budget \(budget)s) or the model assistant."))
         }
     }
 
@@ -3302,13 +3037,14 @@ struct NativeChatView: View {
             Spacer()
             assistantModeChip
             workingDirectoryChip
-            if chat.current?.assistantMode == "pi",
-               chat.current?.piAgentMode == true {
+            if let conversation = chat.current, chat.latchWanted(for: conversation) {
+                // The agent surface is live for this chat: latch can read and
+                // write files in the working folder under the shown budget —
                 // visible before sending, not after.
                 Label {
                     Text(loc.t(
-                        "Modo agente: pi puede leer y escribir archivos en la carpeta de trabajo.",
-                        "Agent mode: pi can read and write files in the working folder."))
+                        "Agente · latch · \(LatchDelegateService.chatTurnTimeoutSeconds)s",
+                        "Agent · latch · \(LatchDelegateService.chatTurnTimeoutSeconds)s"))
                         .font(.caption2)
                         .lineLimit(1)
                 } icon: {
@@ -3317,8 +3053,8 @@ struct NativeChatView: View {
                 }
                 .foregroundStyle(.orange)
                 .help(loc.t(
-                    "Herramientas de pi activas solo para este chat. El presupuesto sube a \(PiDelegateService.agentTimeoutSeconds)s. Desactívalo en el menú del asistente.",
-                    "pi's tools are active for this chat only. Its budget rises to \(PiDelegateService.agentTimeoutSeconds)s. Turn it off in the assistant menu."))
+                    "Modo agente: latch puede leer y escribir archivos en la carpeta de trabajo (la de su chip, o la del proyecto). Presupuesto del turno: \(LatchDelegateService.chatTurnTimeoutSeconds)s. Desactívalo en el menú del asistente.",
+                    "Agent mode: latch can read and write files in the working folder (its chip's, or the project's). Turn budget: \(LatchDelegateService.chatTurnTimeoutSeconds)s. Turn it off in the assistant menu."))
             }
             if let branches = chat.current?.branches, branches.count > 1,
                let position = chat.currentBranchPosition {

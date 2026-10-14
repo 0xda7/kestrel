@@ -1,0 +1,9 @@
+ggml/src/ggml-metal/kernels/fa_w64.metal
+ggml/src/ggml-metal/kernels/kestrel_moe.metal
+ggml/src/ggml-metal/kernels/mul_mm_w64.metal
+ggml/src/ggml-metal/kernels/mul_mv_w64.metal
+ggml/src/ggml-metal/kernels/turbo.metal
+ggml/src/ggml-turbo-quant.c
+kestrel-moe/
+tests/test-kestrel-moe-cache.cpp
+tests/test-turbo-quant.c

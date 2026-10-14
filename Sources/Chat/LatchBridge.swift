@@ -11,8 +11,7 @@ import Foundation
 /// Settings → Providers knew nothing about it — the delegate's tool
 /// description had to warn that delegation "may run on remote cloud
 /// endpoints, and Kestrel does not route or constrain it". Kestrel's
-/// settings are now the single source of truth, exactly as the pi bridge
-/// established for `~/.pi/agent/models.json` in 0.89.2: every configured
+/// settings are now the single source of truth: every configured
 /// remote route becomes a latch provider, the local engine is always
 /// available as `kestrel-local` and is the default, and the file is
 /// regenerated at launch and whenever routes or keys change. A hand-authored
@@ -34,6 +33,20 @@ enum LatchBridge {
         sidecarDirectory.appendingPathComponent(generationMarkerName)
     }
 
+    // MARK: Slugs
+
+    /// Provider ids ride latch's config file, so they must be key-safe.
+    /// "z.ai" → "z-ai".
+    static func slug(_ name: String) -> String {
+        let lowered = name.lowercased().map { ch -> Character in
+            (ch.isASCII && (ch.isLetter || ch.isNumber)) ? ch : "-"
+        }
+        var out = String(lowered)
+        while out.contains("--") { out = out.replacingOccurrences(of: "--", with: "-") }
+        while out.first == "-" { out.removeFirst() }
+        while out.last == "-" { out.removeLast() }
+        return out.isEmpty ? "provider" : out
+    }
     // MARK: Config generation
 
     struct ProviderEntry {
@@ -93,8 +106,7 @@ enum LatchBridge {
     }
 
     /// Provider entries derived from Kestrel's own settings: every configured
-    /// remote route, plus `kestrel-local` from the engine defaults. Same
-    /// derivation as the pi bridge so both sidecars always agree.
+    /// remote route, plus `kestrel-local` from the engine defaults.
     static func currentEntries() -> (entries: [ProviderEntry], defaultEntryID: String?) {
         var entries: [ProviderEntry] = []
         var seenIDs: Set<String> = []
@@ -106,7 +118,7 @@ enum LatchBridge {
             guard !InferenceRoute.insecureHosts.contains(host) else { continue } // engine is emitted separately
             let key = InferenceRoutes.apiKey(for: route)
             guard !key.isEmpty else { continue } // a route without a key cannot work; do not emit a broken entry
-            var id = PiBridge.slug(route.name)
+            var id = slug(route.name)
             while seenIDs.contains(id) { id += "-2" }
             seenIDs.insert(id)
             let model = route.modelID.trimmingCharacters(in: .whitespacesAndNewlines)

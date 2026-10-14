@@ -53,7 +53,6 @@ enum SettingsArchive {
         let binaryKeys: [(String, String)] = [
             (SettingsKeys.serverBinary, "engine"),
             (SettingsKeys.latchBinaryPath, "latch"),
-            (SettingsKeys.piBinaryPath, "pi"),
         ]
         for (key, label) in binaryKeys {
             if let raw = config[key], let path = restoredValue(raw) as? String,

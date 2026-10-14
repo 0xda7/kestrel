@@ -38,7 +38,7 @@ struct PromptVariableSpec: Codable, Equatable {
 
 /// One saved prompt template in the Prompt Space library. Templates carry
 /// `{{variables}}` rendered at apply time; the body is plain text so it can
-/// ride any engine's system-prompt surface (model engine, latch, pi).
+/// ride any engine's system-prompt surface (model engine or latch agent).
 struct PromptTemplate: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
@@ -265,10 +265,10 @@ enum PromptLibrary {
         return render(render(text, values: typed), values: values)
     }
 
-    // MARK: Create with pi
+    // MARK: Create with latch
 
     /// Template name derived from the task's first words (the "create with
-    /// pi" flow): up to six words, capped at 48 characters.
+    /// latch" flow): up to six words, capped at 48 characters.
     static func name(fromTask task: String) -> String {
         var name = task.split(whereSeparator: \.isWhitespace).prefix(6)
             .joined(separator: " ")
@@ -282,7 +282,7 @@ enum PromptLibrary {
 /// The Prompt Space (wave 1): browse the template library, fill its
 /// variables, apply the render as this conversation's system prompt. Editing
 /// and creating templates lives in the same sheet so the loop stays closed.
-/// Wave 2 adds llm-space's typed variables, A/B variants, and pi as the
+/// Wave 2 adds llm-space's typed variables, A/B variants, and latch as the
 /// prompt creator.
 struct PromptSpaceView: View {
     @EnvironmentObject var loc: Localizer
@@ -300,7 +300,7 @@ struct PromptSpaceView: View {
     @State private var editingBody: String = ""
     @State private var isCreating = false
     @State private var newDraft = PromptTemplate(name: "", body: "")
-    @State private var isCreatingWithPi = false
+    @State private var isCreatingWithLatch = false
     @State private var newVariantName = ""
 
     private var selected: PromptTemplate? {
@@ -332,9 +332,9 @@ struct PromptSpaceView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    isCreatingWithPi = true
+                    isCreatingWithLatch = true
                 } label: {
-                    Label(loc.t("Crear con pi…", "Create with pi…"),
+                    Label(loc.t("Crear con latch…", "Create with latch…"),
                           systemImage: "wand.and.stars")
                 }
                 Button {
@@ -468,8 +468,8 @@ struct PromptSpaceView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 420)
-        .sheet(isPresented: $isCreatingWithPi) {
-            CreateWithPiSheet { template in
+        .sheet(isPresented: $isCreatingWithLatch) {
+            CreateWithLatchSheet { template in
                 templates.append(template)
                 PromptLibrary.save(templates)
                 selectedID = template.id
@@ -680,14 +680,14 @@ struct PromptSpaceView: View {
     }
 }
 
-// MARK: - Create with pi sheet
+// MARK: - Create with latch sheet
 
-/// llm-space's meta-prompt harness UI: a task description (+ an optional
-/// existing prompt to improve) run through `MetaPromptService.run`, which
-/// authors a system prompt with pi and returns it — or a bilingual failure
+/// The meta-prompt harness UI: a task description (+ an optional existing
+/// prompt to improve) run through `MetaPromptService.run`, which authors a
+/// system prompt with latch and returns it — or a bilingual failure
 /// message, never a silent fallback. The authored text is saved as a new
 /// template named from the task's first words.
-private struct CreateWithPiSheet: View {
+private struct CreateWithLatchSheet: View {
     @EnvironmentObject var loc: Localizer
     @Environment(\.dismiss) private var dismiss
     /// Receives the saved template (the parent appends, persists, selects).
@@ -699,17 +699,17 @@ private struct CreateWithPiSheet: View {
     @State private var failure: String?
     @State private var result: String?
     /// The in-flight authoring run. Kept so dismissing the sheet mid-run
-    /// CANCELS it — otherwise pi keeps generating for up to its 600 s budget
-    /// for a sheet nobody is watching, and the late completion then mutates
-    /// state after the view is gone.
+    /// CANCELS it — otherwise latch keeps generating for up to its 600 s
+    /// budget for a sheet nobody is watching, and the late completion then
+    /// mutates state after the view is gone.
     @State private var runTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(loc.t("Crear con pi", "Create with pi"), systemImage: "wand.and.stars")
+            Label(loc.t("Crear con latch", "Create with latch"), systemImage: "wand.and.stars")
                 .font(.headline)
-            Text(loc.t("Describe la tarea y pi escribirá el prompt.",
-                       "Describe the task and pi will write the prompt."))
+            Text(loc.t("Describe la tarea y latch escribirá el prompt.",
+                       "Describe the task and latch will write the prompt."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(loc.t("Tarea", "Task"))
@@ -732,8 +732,8 @@ private struct CreateWithPiSheet: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text(loc.t("pi está escribiendo el prompt…",
-                               "pi is writing the prompt…"))
+                    Text(loc.t("latch está escribiendo el prompt…",
+                               "latch is writing the prompt…"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -782,8 +782,8 @@ private struct CreateWithPiSheet: View {
             // Cancel the authoring run when the sheet leaves the hierarchy.
             // Cancellation propagates into runStreaming's task group, where
             // the interrupted budget sleep falls through to terminate() — so
-            // the pi process is stopped instead of generating for up to 600 s
-            // for a sheet nobody is watching.
+            // the latch process is stopped instead of generating for up to
+            // 600 s for a sheet nobody is watching.
             runTask?.cancel()
             runTask = nil
         }
@@ -806,7 +806,7 @@ private struct CreateWithPiSheet: View {
                 existingPrompt: existingText.isEmpty ? nil : existingText,
                 skillsList: skills)
             // The sheet was dismissed mid-run: the cancellation already
-            // terminated pi; publish nothing to a view that is gone.
+            // terminated latch; publish nothing to a view that is gone.
             if Task.isCancelled { return }
             isRunning = false
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -821,13 +821,13 @@ private struct CreateWithPiSheet: View {
                 return
             }
             guard !trimmed.isEmpty else {
-                failure = loc.t("pi no devolvió ningún texto. Vuelve a intentarlo.",
-                                "pi returned no text. Try again.")
+                failure = loc.t("latch no devolvió ningún texto. Vuelve a intentarlo.",
+                                "latch returned no text. Try again.")
                 return
             }
             let name = PromptLibrary.name(fromTask: taskText)
             let template = PromptTemplate(
-                name: name.isEmpty ? loc.t("Prompt de pi", "pi prompt") : name,
+                name: name.isEmpty ? loc.t("Prompt de latch", "latch prompt") : name,
                 body: output)
             result = output
             onSaved(template)

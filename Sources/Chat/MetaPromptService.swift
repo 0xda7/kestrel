@@ -4,21 +4,16 @@
 
 import Foundation
 
-/// The LLM Space meta-prompt harness (llm-space "prompt space" convention,
-/// https://github.com/deer-flow/llm-space, MIT): pi is the prompt creator.
-/// Given a task description — plus an optional existing prompt and the
-/// resolved skills markdown list — pi authors a detailed system prompt under
-/// the ported llm-space meta-prompt system prompt.
+/// The meta-prompt harness (llm-space "prompt space" convention,
+/// https://github.com/deer-flow/llm-space, MIT): given a task description —
+/// plus an optional existing prompt and the resolved skills markdown list —
+/// the latch agent authors a detailed system prompt under the ported
+/// llm-space meta-prompt system prompt.
 ///
-/// The harness runs on the shipped PiDelegateService sidecar and is confined
-/// like the chat path and stricter: `--no-tools` always (a
-/// prompt author needs no tool surface; system-prompt text cannot disable
-/// pi's tools — only the flag does), `--thinking off` (the whole budget goes
-/// to the authored prompt text), a pinned 600 s budget, and no session
-/// resume — no `--continue`/`--resume`/`--session`/`--fork` flag is ever
-/// emitted, so every run is self-contained. Model and provider stay pi's own
-/// configuration (empty passthrough from settings); nothing is hardcoded
-/// here, and credentials never touch this process.
+/// The harness runs on the latch sidecar with a pinned 600 s budget and no
+/// session resume — every run is self-contained. Latch's own permission
+/// model confines the run; the prompt-creator role rides as the task's
+/// leading instruction, and credentials never touch this process.
 ///
 /// Result contract: the authored prompt text on success; a bilingual failure
 /// message on failure or empty output — never a silent engine substitution,
@@ -122,7 +117,7 @@ enum MetaPromptService {
     """
 
     /// Bilingual failure text for an empty (or whitespace-only) task
-    /// description. The guard runs before pi is ever launched — there is
+    /// description. The guard runs before latch is ever launched — there is
     /// nothing to author from, and no silent fallback is allowed.
     static let emptyTaskMessage =
         "La descripción de la tarea está vacía: no hay nada que convertir en prompt. "
@@ -130,33 +125,24 @@ enum MetaPromptService {
             + "empty: there is nothing to turn into a prompt. Describe the task "
             + "and try again."
 
-    /// Bilingual failure text for a clean exit with no visible output (e.g.
-    /// the whole budget went to thinking) — mirrors the chat empty-success
-    /// guard; never a blank result.
+    /// Bilingual failure text for a clean exit with no visible output —
+    /// mirrors the chat empty-success guard; never a blank result.
     static let emptyReplyMessage =
-        "pi completó la creación del prompt sin producir texto visible. / "
-            + "pi completed the prompt-authoring run without producing visible text."
-
-    /// Label for the reasoning captured while nothing visible was produced
-    /// (same convention as the chat empty-success path).
-    static let emptyReplyNote =
-        "Razonamiento capturado del turno / Reasoning captured during the turn:"
+        "latch completó la creación del prompt sin producir texto visible. / "
+            + "latch completed the prompt-authoring run without producing visible text."
 
     /// Bilingual failure text for an abnormal exit (mirrors the chat path).
     static func exitMessage(status: Int32) -> String {
-        "pi terminó de forma anómala (estado \(status)). / pi exited abnormally (status \(status))."
+        "latch terminó de forma anómala (estado \(status)). / latch exited abnormally (status \(status))."
     }
 
-    /// Builds the confined pi argv for one prompt-authoring run by delegating
-    /// to PiDelegateService.argv with the meta-prompt confinement: agent mode
-    /// off (emits `--no-tools`), thinking off (emits `--thinking off`), and
-    /// the verbatim prompt-creator system prompt on `--system-prompt`. No
-    /// resume flag is ever added, so the run is self-contained; provider and
-    /// model ride only when configured in settings (pi's own configuration —
-    /// empty passthrough here, never hardcoded).
+    /// Builds the latch argv for one prompt-authoring run: the prompt-creator
+    /// system prompt leads the task so the authored output is the prompt
+    /// itself, and the assembled task variables follow it. No resume flag is
+    /// ever added, so the run is self-contained.
     static func argv(prompt: String) -> [String] {
-        PiDelegateService.argv(prompt: prompt, thinking: false, agentMode: false,
-                               systemPrompt: systemPrompt)
+        [LatchDelegateService.binaryPath, "-p",
+         systemPrompt + "\n\n" + prompt]
     }
 
     /// Feeds the run's variables the way LLM Space feeds its prompt-space
@@ -180,19 +166,17 @@ enum MetaPromptService {
     }
 
     /// Runs the task description (plus optional existing prompt and the
-    /// resolved skills markdown list) through pi confined: `--no-tools`,
-    /// `--system-prompt MetaPromptService.systemPrompt`, `--thinking off`,
-    /// 600 s budget, no session resume. Returns the authored prompt text, or
-    /// a bilingual failure message on failure or empty — never a silent
-    /// fallback.
+    /// resolved skills markdown list) through latch with the prompt-creator
+    /// system prompt leading the task and a 600 s budget. Returns the
+    /// authored prompt text, or a bilingual failure message on failure or
+    /// empty — never a silent fallback.
     ///
     /// Deltas stream through `onOutput` into a StreamBuffer — the same
-    /// snapshot-replace buffer the chat's pi path pumps into its live view
-    /// (ChatNative.sendPiMode) — so the latest (reasoning, visible) snapshot
-    /// is always the replaced-whole buffer state, never an append-only pile.
-    /// There is no UI pump here (the pinned contract returns a single
-    /// String), so the buffer's final snapshot supplies the captured
-    /// reasoning when a run ends without visible text.
+    /// snapshot-replace buffer the chat's latch path pumps into its live
+    /// view — so the latest visible snapshot is always the replaced-whole
+    /// buffer state, never an append-only pile. There is no UI pump here
+    /// (the pinned contract returns a single String), so the buffer exists
+    /// only to keep the pump contract identical to the chat turn.
     static func run(taskDescription: String, existingPrompt: String?,
                     skillsList: String) async -> String {
         let task = taskDescription.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,33 +185,23 @@ enum MetaPromptService {
                                           existingPrompt: existingPrompt,
                                           skillsList: skillsList)
         let buffer = StreamBuffer()
-        // Same as the chat path: argv carries --session-dir (llm-space trace
-        // convention — one JSONL trace per run, written for inspection; this
-        // run never resumes any of them).
-        PiDelegateService.ensureSessionsDirectory()
-        let outcome = await PiDelegateService.runStreaming(
+        let outcome = await LatchDelegateService.runStreaming(
             argv: Self.argv(prompt: prompt),
-            // --no-tools run: no conversation working directory to bind.
+            // Prompt authoring binds no working directory: the run must not
+            // touch any folder the caller did not name in the task.
             workingDirectory: nil,
             timeout: Self.defaultTimeoutSeconds,
             onLaunch: nil,
-            onOutput: { reasoning, visible in
-                buffer.write(reasoning: reasoning, visible: visible, speed: nil)
+            onOutput: { _, fullSoFar in
+                buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
             })
         buffer.finish()
-        let streamed = buffer.take()
-        switch outcome.outcome {
+        switch outcome {
         case .completed(let output):
             let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
             if produced.isEmpty {
-                // Empty-success guard: surface the failure with
-                // the reasoning the buffer captured — never a blank result.
-                let captured = (streamed?.reasoning ?? outcome.reasoning)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                return captured.isEmpty
-                    ? Self.emptyReplyMessage
-                    : Self.emptyReplyMessage + "\n\n" + Self.emptyReplyNote
-                        + "\n\n" + captured
+                // Empty-success guard: surface the failure — never a blank result.
+                return Self.emptyReplyMessage
             }
             return output
         case .exited(let status, let output):

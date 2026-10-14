@@ -6,12 +6,14 @@ import Darwin
 import Foundation
 import os
 
-/// Delegates a self-contained task to the latch harness as an app-side tool.
-/// The model never talks to latch's model directly; it hands off a task string
-/// and receives latch's finished report. The binary path and timeout live in
+/// The latch harness as Kestrel's agent, in two roles: the `latch_delegate`
+/// app-side tool (the model hands off a self-contained task and receives the
+/// finished report) and the direct chat agent (a conversation turn runs
+/// through `runStreaming`, stdout streaming live into the chat, the final
+/// report as the assistant reply). The binary path and timeout live in
 /// settings. Latch's provider config is owned by Kestrel (LatchBridge): it is
 /// generated from Settings → Providers with the local engine as the default,
-/// so delegation stays on this machine unless an active remote route says
+/// so agent turns stay on this machine unless an active remote route says
 /// otherwise.
 enum LatchDelegateService {
     static let toolName = "latch_delegate"
@@ -45,6 +47,14 @@ enum LatchDelegateService {
     static var timeoutSeconds: Int {
         let stored = UserDefaults.standard.integer(forKey: SettingsKeys.latchDelegateTimeout)
         return stored > 0 ? min(stored, maximumTimeoutSeconds) : defaultTimeoutSeconds
+    }
+
+    /// Budget for a direct chat turn through the harness: the configured
+    /// delegation timeout, floored at the agent minimum (below it a
+    /// multi-step turn can only die mid-work) and capped at the hard
+    /// maximum.
+    static var chatTurnTimeoutSeconds: Int {
+        min(max(timeoutSeconds, minimumTimeoutSeconds), maximumTimeoutSeconds)
     }
 
     static let tool: BuiltinToolInfo = BuiltinToolInfo(

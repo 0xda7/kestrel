@@ -7,6 +7,16 @@
 // Foundation-only, UI-free, and free of Kestrel app types. CryptoKit supplies
 // SHA-256 for the hash mode (first-party system framework, no package
 // dependency).
+//
+// v0.2 technique ports credited to OpenMed (openmed.life, Apache-2.0), whose
+// Presidio-inspired pipeline demonstrated these at scale in Python:
+// context-boosted labeled identifiers (NPI, patient/account/insurance IDs),
+// smart entity merging (space-split SSNs after a label), a fifth redaction
+// mode — deterministic surrogates in reserved fictional ranges — and a
+// per-document redaction report for release gating. Deliberately NOT ported
+// yet: check-digit (Luhn) validation — every bare 10-digit run here is
+// already claimed by the phone detector, so it would gate nothing; it
+// arrives with the v1 NER pass.
 
 import CryptoKit
 import Foundation
@@ -20,6 +30,12 @@ enum DeIdMode: Sendable {
     case hash
     /// Dates shifted by one consistent random offset per run, within ±30 days.
     case dateShift
+    /// OpenMed-inspired surrogates: fictional values in reserved ranges
+    /// (555-01xx phones, 900-90-xxxx SSNs, example.com mail) that keep
+    /// teaching-file realism. Deterministic per entity string — the same
+    /// entity always maps to the same surrogate — so documents stay
+    /// internally consistent across re-runs. Unreal by construction.
+    case surrogate
 }
 
 /// Safe Harbor identifier classes handled by the v0 detector set.
@@ -36,6 +52,12 @@ enum DeIdKind: String, Sendable {
     case zip
     case age
     case personName
+    /// National Provider Identifier, labeled context only ("NPI: …").
+    case npi
+    /// Street address (house number + named street + suffix word).
+    case streetAddress
+    /// Patient/account/insurance/member identifier after an explicit label.
+    case patientID
     /// Flagged for human review but deliberately NOT scrubbed: v0 trades
     /// recall for precision on ambiguous capitalized tokens.
     case reviewCandidate
@@ -60,8 +82,19 @@ struct DeIdentifier {
         // offset and relative ordering survives. Zero is excluded: a 0-day
         // shift would silently make the mode a no-op.
         let offsetDays: Int = {
-            guard mode == .dateShift else { return 0 }
-            return (1...30).randomElement()! * (Bool.random() ? 1 : -1)
+            if mode == .dateShift {
+                return (1...30).randomElement()! * (Bool.random() ? 1 : -1)
+            }
+            if mode == .surrogate {
+                // Surrogate mode is deterministic end to end, dates included:
+                // the offset derives from the document's own hash, so the
+                // same document always shifts its dates identically on every
+                // re-run — the contract that makes surrogate output diffable.
+                let digest = hash8(text)
+                let value = Int(digest.prefix(4), radix: 16) ?? 1
+                return (value % 30) + 1
+            }
+            return 0
         }()
 
         var candidates = detect(text: text)
@@ -95,7 +128,7 @@ struct DeIdentifier {
             return "[AGE>89]"
         case .reviewCandidate:
             return finding.original
-        case .date where mode == .dateShift:
+        case .date where mode == .dateShift || mode == .surrogate:
             return shifted(finding.original, offsetDays: offsetDays)
         default:
             switch mode {
@@ -105,6 +138,8 @@ struct DeIdentifier {
                 return "████"
             case .hash:
                 return hash8(finding.original)
+            case .surrogate:
+                return surrogate(for: finding)
             }
         }
     }
@@ -123,6 +158,9 @@ struct DeIdentifier {
         case .zip: "[ZIP]"
         case .age: "[AGE>89]"
         case .personName: "[NAME]"
+        case .npi: "[NPI]"
+        case .streetAddress: "[ADDRESS]"
+        case .patientID: "[ID]"
         case .reviewCandidate: ""
         }
     }
@@ -131,6 +169,57 @@ struct DeIdentifier {
         SHA256.hash(data: Data(entity.utf8)).prefix(4)
             .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    // MARK: - Deterministic surrogates (OpenMed-inspired, v0.2)
+
+    /// Every surrogate derives from the entity's SHA-256 — no RNG — so the
+    /// same original always yields the same fake, per document and per
+    /// re-run. Fakes live in ranges reserved as fictional (555-01xx, the
+    /// 900-90 SSN block, example.com, RFC1918 10.x.x.x), so a surrogate can
+    /// never collide with a real identifier or be mistaken for one.
+    private static let surrogateSurnames = [
+        "Alvarez", "Bennett", "Carver", "Dawson", "Ellis", "Foster", "Grant",
+        "Hayes", "Ibarra", "Jensen", "Kim", "Larsen", "Mercer", "Novak",
+        "Okafor", "Patel",
+    ]
+
+    private static func surrogate(for finding: DeIdFinding) -> String {
+        let digest = hash8(finding.original)
+        // Two hex chars of the digest → a stable index; offsets spread the
+        // entropy across the entity's classes so phone and SSN fakes for the
+        // same entity still differ.
+        func slot(_ offset: Int, _ count: Int) -> Int {
+            let start = digest.index(digest.startIndex, offsetBy: min(offset * 2, digest.count - 2))
+            let hex = digest[start...].prefix(2)
+            return Int(hex, radix: 16).map { $0 % count } ?? 0
+        }
+        switch finding.kind {
+        case .personName:
+            let index = slot(0, surrogateSurnames.count)
+            let initial = UnicodeScalar(("A" as Character).asciiValue! + UInt8(index % 26))
+            return "\(Character(initial)). \(surrogateSurnames[index])"
+        case .phone:
+            return "555-01" + String(format: "%04d", slot(1, 10_000))
+        case .fax:
+            return "555-02" + String(format: "%04d", slot(2, 10_000))
+        case .ssn:
+            return "900-90-" + String(format: "%04d", slot(3, 10_000))
+        case .email:
+            return "patient\(digest)@example.com"
+        case .mrn, .patientID:
+            return "SYN-" + digest
+        case .deviceSerial:
+            return "DEV-" + digest
+        case .ip:
+            return "10.\(slot(4, 256)).\(slot(5, 256)).1"
+        case .url:
+            return "https://example.com/\(digest)"
+        case .date, .zip, .age, .npi, .streetAddress, .reviewCandidate:
+            // Pinned classes keep their deterministic rules; NPI/address
+            // degrade to labels until the v1 NER pass.
+            return maskLabel(for: finding.kind)
+        }
     }
 
     // MARK: - Date shifting
@@ -180,6 +269,24 @@ struct DeIdentifier {
         }
 
         for range in allMatches(ssnPattern, in: text) { append(.ssn, range) }
+        // OpenMed-style context boost runs BEFORE the bare patterns: a
+        // labeled identifier outranks a bare digit run claiming the same
+        // span ("NPI: 1234567893" is an NPI, not a phone number), because
+        // the resolver breaks exact-span ties by detection order.
+        for match in labeledSpaceSSNPattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let digits = Range(match.range(at: 1), in: text) else { continue }
+            append(.ssn, digits)
+        }
+        for match in npiPattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            // Only the 10 digits are the finding; the "NPI" label stays in
+            // the text, same contract as labeled ZIP.
+            guard let digits = Range(match.range(at: 1), in: text) else { continue }
+            append(.npi, digits)
+        }
+        for match in patientIDPattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let identifier = Range(match.range(at: 1), in: text) else { continue }
+            append(.patientID, identifier)
+        }
         for range in allMatches(phonePattern, in: text) {
             let start = text.index(range.lowerBound, offsetBy: -14, limitedBy: text.startIndex) ?? text.startIndex
             append(text[start..<range.lowerBound].lowercased().contains("fax") ? .fax : .phone, range)
@@ -188,6 +295,7 @@ struct DeIdentifier {
         for range in allMatches(ipPattern, in: text) where isValidIPv4(String(text[range])) { append(.ip, range) }
         for range in allMatches(urlPattern, in: text) { append(.url, range) }
         for range in allMatches(mrnPattern, in: text) { append(.mrn, range) }
+        for range in allMatches(streetPattern, in: text) { append(.streetAddress, range) }
         for range in allMatches(serialPattern, in: text) { append(.deviceSerial, range) }
         for range in allMatches(lotPattern, in: text) { append(.deviceSerial, range) }
         // Labeled ZIP: only the digits are the finding; the label stays.
@@ -275,11 +383,19 @@ struct DeIdentifier {
     }
 
     /// Longest span wins at equal starts; otherwise the earlier span wins.
+    /// Exact-span ties break by detection order (enumeration index), so the
+    /// priority encoded in detect() — context-labeled before bare — is the
+    /// deterministic winner; Swift's sort carries no stability guarantee.
     private static func resolveOverlaps(_ candidates: [DeIdFinding]) -> [DeIdFinding] {
-        let ordered = candidates.sorted {
-            let a = $0.range.lowerBound, b = $1.range.lowerBound
-            return a == b ? $0.range.upperBound > $1.range.upperBound : a < b
-        }
+        let ordered = candidates.enumerated().sorted { a, b in
+            let (lhs, rhs) = (a.element, b.element)
+            let x = lhs.range.lowerBound, y = rhs.range.lowerBound
+            if x != y { return x < y }
+            if lhs.range.upperBound != rhs.range.upperBound {
+                return lhs.range.upperBound > rhs.range.upperBound
+            }
+            return a.offset < b.offset
+        }.map(\.element)
         var accepted: [DeIdFinding] = []
         for finding in ordered where !accepted.contains(where: { finding.range.overlaps($0.range) }) {
             accepted.append(finding)
@@ -315,6 +431,19 @@ struct DeIdentifier {
         pattern: "(?<!\\d)(\\d{2,3})[-\\s]*(?:y/o|year[- ]old|years?[\\s]+old)\\b")
     private static let personPattern = NSRegularExpression.literal(
         pattern: "(?i:(?:Mrs|Mr|Ms|Dr|Pt))\\.?\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?")
+    // OpenMed/Presidio-style context-boosted detectors (v0.2). The labeled
+    // space-split SSN merges what the bare pattern misses; NPI and the
+    // patient/account/insurance ID capture only the identifier after the
+    // label. The street pattern deliberately omits "Dr" as a suffix: in
+    // clinical text "Dr." is a person's title far more often than a Drive.
+    private static let labeledSpaceSSNPattern = NSRegularExpression.literal(
+        pattern: "(?i)\\bSSN\\b\\s*[:#]?\\s*(\\d{3}[\\s-]\\d{2}[\\s-]\\d{4})(?!\\d)")
+    private static let npiPattern = NSRegularExpression.literal(
+        pattern: "(?i)\\bNPI\\b\\s*[:#]?\\s*(\\d{10})(?!\\d)")
+    private static let patientIDPattern = NSRegularExpression.literal(
+        pattern: "(?i)\\b(?:patient|account|insurance|member)\\s+(?:id|number|#)\\s*[:#]?\\s*([A-Za-z0-9][A-Za-z0-9-]{2,})(?!\\w)")
+    private static let streetPattern = NSRegularExpression.literal(
+        pattern: "(?<!\\d)\\d{1,5}\\s+(?:[A-Z][a-z]+\\.?\\s+)?(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Court|Ct|Way|Terrace|Ter|Place|Pl|Circle|Cir)\\b\\.?")
     private static let capitalizedTokenPattern = NSRegularExpression.literal(
         pattern: "[A-Z][a-z]{2,}")
 
@@ -331,4 +460,57 @@ struct DeIdentifier {
         (NSRegularExpression.literal(pattern: "(?<![A-Za-z\\d])([A-Za-z]+\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?)(?!\\s*,?\\s*\\d{4})(?!\\d)"),
          ["MMMM d", "MMM. d", "MMM d"], true),
     ]
+}
+
+// MARK: - Redaction report (OpenMed-inspired auditability, v0.2)
+
+extension DeIdResult {
+    /// Findings grouped and counted per class.
+    var findingsByKind: [DeIdKind: Int] {
+        findings.reduce(into: [:]) { counts, finding in
+            counts[finding.kind, default: 0] += 1
+        }
+    }
+
+    /// Tokens left in the text that a human must adjudicate before the
+    /// document may leave the machine — the release-gate input. Residual-PII
+    /// release requires this count to be acknowledged, never ignored.
+    var reviewCandidates: [DeIdFinding] {
+        findings.filter { $0.kind == .reviewCandidate }
+    }
+
+    /// One audit line for the export log: what was replaced per class, and
+    /// what still needs human sign-off. Deterministic; safe to persist
+    /// alongside the export (contains no original text).
+    func redactionReport() -> String {
+        let replaced = findingsByKind
+            .filter { $0.key != .reviewCandidate }
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { "\($0.value)x[\(reportLabel($0.key))]" }
+        let replacedLine = replaced.isEmpty
+            ? "replaced: none" : "replaced: " + replaced.joined(separator: " ")
+        return "De-ID report — \(replacedLine); "
+            + "review candidates: \(reviewCandidates.count) (human sign-off required)."
+    }
+
+    private func reportLabel(_ kind: DeIdKind) -> String {
+        switch kind {
+        case .ssn: "SSN"
+        case .phone: "PHONE"
+        case .fax: "FAX"
+        case .email: "EMAIL"
+        case .ip: "IP"
+        case .url: "URL"
+        case .mrn: "MRN"
+        case .date: "DATE"
+        case .deviceSerial: "DEVICE"
+        case .zip: "ZIP"
+        case .age: "AGE>89"
+        case .personName: "NAME"
+        case .npi: "NPI"
+        case .streetAddress: "ADDRESS"
+        case .patientID: "ID"
+        case .reviewCandidate: "REVIEW"
+        }
+    }
 }

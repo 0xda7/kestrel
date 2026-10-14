@@ -103,21 +103,6 @@ enum SettingsKeys {
     /// When on, new conversations answer through the latch harness instead of
     /// the model engine. Per-conversation overrides can still flip back.
     static let latchPrimaryEnabled = "latchPrimaryEnabled"
-    /// pi sidecar (llm-space / earendil-works engine): binary path, model
-    /// pattern, provider, and timeout. All runtime-selectable — nothing
-    /// model-specific is compiled in.
-    static let piBinaryPath = "piBinaryPath"
-    static let piPrimaryEnabled = "piPrimaryEnabled"
-    static let piModel = "piModel"
-    static let piProvider = "piProvider"
-    static let piTimeout = "piTimeout"
-    /// Char budget of the transcript pi sees per turn (oldest messages drop
-    /// first; the newest user message is always kept whole). Bounds the
-    /// per-turn token cost of the one-shot sidecar.
-    static let piContextCharacters = "piContextCharacters"
-    /// Thinking level passed to `pi --thinking` when thinking is on
-    /// (off|minimal|low|medium|high|xhigh|max; empty = pi's own default).
-    static let piThinkingLevel = "piThinkingLevel"
     /// Stop sequences for chat sampling, comma/newline separated.
     static let chatStopSequences = "chatStopSequences"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
@@ -276,7 +261,6 @@ enum SettingsKeys {
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
         latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
-        piBinaryPath, piPrimaryEnabled, piModel, piProvider, piTimeout, piThinkingLevel,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
