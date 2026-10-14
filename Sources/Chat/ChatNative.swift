@@ -361,7 +361,7 @@ final class StreamBuffer: @unchecked Sendable {
     }
 }
 
-private struct AgentRunContext {
+struct AgentRunContext {
     let port: Int
     let temperature: Double
     let maxTokens: Int
@@ -447,7 +447,10 @@ final class ChatStore: ObservableObject {
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
-    private var agentContext: AgentRunContext?
+    // Internal (not private) so the check suite can arrange a pending agent
+    // run and pin the queued-steering delivery across the continuation-card
+    // boundary; production code touches it exactly as before.
+    var agentContext: AgentRunContext?
 
     var agentFlowActive: Bool {
         generating || pendingToolPermission != nil || pendingAgentContinuation != nil || agentContext != nil
@@ -1597,7 +1600,20 @@ final class ChatStore: ObservableObject {
         lastError = nil
         guard shouldContinue, var context = agentContext,
               let conversationIndex = conversations.firstIndex(where: { $0.id == pending.conversationID }) else {
-            agentContext = nil
+            // Declining ends the agent run here. A steering message queued
+            // while the continuation card waited must not be orphaned by
+            // that: the next manual send() clears queuedMessage — the exact
+            // silent drop the turn-end delivery exists to prevent — so it
+            // starts its own turn now with this run's parameters, the same
+            // delivery the latch stop path performs. With nothing queued (or
+            // no conversation left to deliver into) this reduces to the old
+            // behavior: clear the context and stop.
+            if let context = agentContext,
+               conversations.contains(where: { $0.id == pending.conversationID }) {
+                deliverQueuedMessage(conversation: pending.conversationID, context: context)
+            } else {
+                agentContext = nil
+            }
             return
         }
         context.remainingTurns = Self.configuredAgentTurnLimit

@@ -3540,6 +3540,66 @@ final class EnterpriseHardeningTests: CheckCase {
                        "the delivered message must start a second latch turn")
     }
 
+    /// Companion pin to testQueuedSteeringMessageStartsANewLatchTurn, for the
+    /// other agent-turn boundary: a steering message queued while the
+    /// continuation card waited must survive the operator DECLINING
+    /// continuation — the run ends there, so the queued message starts its
+    /// own turn (the same delivery every other turn boundary performs)
+    /// instead of being silently cleared by the next manual send(). The
+    /// operator's conversations.json is backed up and restored byte-exact in
+    /// the defer; the delivered turn aims at a closed port so it fails fast
+    /// after the assertions.
+    @MainActor func testDeclinedContinuationDeliversQueuedSteeringMessage() async throws {
+        let conversationsURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Kestrel/conversations.json")
+        let priorBytes = try? Data(contentsOf: conversationsURL)
+        let hadFile = FileManager.default.fileExists(atPath: conversationsURL.path)
+        defer {
+            if let priorBytes {
+                try? priorBytes.write(to: conversationsURL)
+            } else if !hadFile {
+                try? FileManager.default.removeItem(at: conversationsURL)
+            }
+        }
+
+        let store = ChatStore()
+        guard let conv = store.current else {
+            return XCTFail("ChatStore must open with a conversation")
+        }
+        // Engine branch regardless of the machine's global latch toggle: the
+        // delivered turn must aim at the closed test port, never at a real
+        // latch binary the operator may have installed.
+        store.setConversationAssistantMode(conv, "engine")
+        // Arrange the decline boundary directly: a finished-budget agent run
+        // (continuation card up) with a steering message queued against it.
+        store.agentContext = AgentRunContext(
+            port: 8099, temperature: 0.7, maxTokens: 64, system: "", thinking: false,
+            sampling: ChatSamplingSettings(), modalities: nil,
+            remainingTurns: 0, tools: [], workingDirectory: nil)
+        store.pendingAgentContinuation = PendingAgentContinuation(
+            conversationID: conv.id, turnsUsed: 8, toolsExecuted: 0)
+        store.queueMessage(text: "steering after decline", attachments: [], images: [])
+        XCTAssertNotNil(store.queuedMessage, "the steering message must queue while the card waits")
+
+        store.respondToAgentContinuation(false)
+        XCTAssertNil(store.queuedMessage,
+                     "declining continuation must deliver the queued steering message, not orphan it")
+        let messages = store.conversations.first(where: { $0.id == conv.id })?.messages ?? []
+        XCTAssertEqual(messages.filter { $0.role == "user" }.map(\.content),
+                       ["steering after decline"],
+                       "the delivered steering message must land as its own user turn")
+        XCTAssertTrue(store.generating,
+                      "the delivered message must start its own turn")
+        // Let the doomed request (closed port) fail and finish so no
+        // detached work outlives the check.
+        let deadline = Date().addingTimeInterval(30)
+        while store.generating && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertFalse(store.generating, "the failed turn must release generating")
+    }
+
     /// Answers parse from the engine's response shape into the three typed
     /// lines the agent shows.
     func testLayaAnswerParsingAndSummaryLines() throws {
@@ -3584,5 +3644,6 @@ extension EnterpriseHardeningTests {
             .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
             .init(name: "testAgentToolExposureContract") { $0.testAgentToolExposureContract() },
             .init(name: "testQueuedSteeringMessageStartsANewLatchTurn") { try await $0.testQueuedSteeringMessageStartsANewLatchTurn() },
+            .init(name: "testDeclinedContinuationDeliversQueuedSteeringMessage") { try await $0.testDeclinedContinuationDeliversQueuedSteeringMessage() },
         ])
 }
