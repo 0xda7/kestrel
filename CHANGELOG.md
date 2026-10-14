@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.8] — 2026-10-14
+
+- **Laya served from Kestrel, not from hidden processes.** A one-time
+  "Laya Decisions" server card is seeded on the Servers tab (port 8098,
+  ctx 2048, never auto-started, deletable — deletion sticks). Start and
+  stop it yourself; the app spawns nothing in the background.
+- Companion  CLI no longer self-spawns an engine: it points at the
+  app-managed server and says exactly what to start if it is down.
+
 ## [0.89.7] — 2026-10-14
 
 - **Fix: the latch agent now boots from Kestrel chat.** The harness needs
