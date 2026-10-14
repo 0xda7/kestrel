@@ -339,6 +339,25 @@ struct ServerSettings {
                                           reserveMB: vramReserveMB)
     }
 
+    /// The K/V pair actually launched with. Gemma's attention hits the
+    /// same-type-requiring generic Metal kernel (see kvTypesMustMatch), so
+    /// a mixed pair is equalized on the smaller type at launch; this is
+    /// that post-equalization pair. Benchmark records, labels and shares
+    /// read it so they describe what ran, not what was merely configured
+    /// (the configured pair stays in `cacheTypeK`/`cacheTypeV`).
+    var effectiveCacheTypes: (k: String, v: String) {
+        var effK = cacheTypeK
+        var effV = cacheTypeV
+        if effK != effV, Self.kvTypesMustMatch(forModel: modelPath) {
+            if Estimator.kvTypeScale(effV) < Estimator.kvTypeScale(effK) {
+                effK = effV
+            } else {
+                effV = effK
+            }
+        }
+        return (effK, effV)
+    }
+
     var arguments: [String] {
         if routerMode { return routerArguments }
         // Quantized KV requires FA, so it stays forced. Elsewhere the AMD kernel rides
@@ -347,15 +366,9 @@ struct ServerSettings {
         // Equalize K/V for models whose attention hits the same-type-requiring
         // generic Metal kernel (see kvTypesMustMatch); the smaller type keeps
         // VRAM at or below what the mixed pair already reserved.
-        var effCacheTypeK = cacheTypeK
-        var effCacheTypeV = cacheTypeV
-        if effCacheTypeK != effCacheTypeV, Self.kvTypesMustMatch(forModel: modelPath) {
-            if Estimator.kvTypeScale(effCacheTypeV) < Estimator.kvTypeScale(effCacheTypeK) {
-                effCacheTypeK = effCacheTypeV
-            } else {
-                effCacheTypeV = effCacheTypeK
-            }
-        }
+        let effectiveKV = effectiveCacheTypes
+        let effCacheTypeK = effectiveKV.k
+        let effCacheTypeV = effectiveKV.v
         var args = [
             "-m", modelPath,
             "-ngl", String(ngl),
@@ -631,8 +644,12 @@ struct ServerSettings {
         args += ["-t", String(threads)]
         if let ub = effectiveUbatch { args += ["-ub", String(ub), "-b", String(ub)] }
         if effectiveDynamicMoe { args += ["-ot", Self.dynamicMoeTensorOverride] }
-        if cacheTypeK != "f16" { args += ["-ctk", cacheTypeK] }
-        if cacheTypeV != "f16" { args += ["-ctv", cacheTypeV] }
+        // Same gemma equalization as the server launch (effectiveCacheTypes):
+        // llama-bench hits the same same-type-requiring kernel, so a mixed
+        // pair would abort at load instead of measuring anything.
+        let benchKV = effectiveCacheTypes
+        if benchKV.k != "f16" { args += ["-ctk", benchKV.k] }
+        if benchKV.v != "f16" { args += ["-ctv", benchKV.v] }
         if kvNeedsFlashAttention || flashAttn == "on" {
             args += ["-fa", "1"]
         } else if effectiveFaAmd {
@@ -1697,7 +1714,9 @@ final class ServerManager: ObservableObject {
     /// The instance the chat and benchmark act on.
     @Published var activeID: UUID
 
-    private static let storeKey = "multiServerProfiles"
+    /// Persisted added-server profiles. Also read by
+    /// LayaDecideService.resolvedPort() from nonisolated code.
+    nonisolated static let storeKey = "multiServerProfiles"
     private var pendingPersist: Task<Void, Never>?
 
     private init() {
@@ -1913,11 +1932,12 @@ final class ServerController: ObservableObject {
     var serverURL: URL { URL(string: "http://127.0.0.1:\(currentPort)/")! }
 
     /// Web chat URL carrying the app's language and the real device names, so the
-    /// bundled console reports what's in use instead of guessing.
+    /// bundled console reports what's in use instead of guessing. English is
+    /// the product language (a stale stored "lang" is cleared at launch), so
+    /// the console is always asked for English.
     var webChatURL: URL {
-        let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
         var comps = URLComponents(string: "http://127.0.0.1:\(currentPort)/")!
-        var items = [URLQueryItem(name: "lang", value: lang)]
+        var items = [URLQueryItem(name: "lang", value: "en")]
         if let gpu = ServerController.availableGPUs().max(by: { $0.vramMB < $1.vramMB })?.name {
             items.append(URLQueryItem(name: "gpu", value: gpu))
         }
@@ -1960,10 +1980,7 @@ final class ServerController: ObservableObject {
         // to load; refresh it so latch never sees a stale model id.
         LatchBridge.sync()
         guard FileManager.default.fileExists(atPath: settings.serverBinary) else {
-            let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-            let msg = lang == "es"
-                ? "No se encontró el motor llama-server en:\n\(settings.serverBinary)\nReinstala Kestrel (debe incluir Resources/bin/llama-server) o elige otro motor en Ajustes."
-                : "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
+            let msg = "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
             fileLog.append("[start] \(msg.replacingOccurrences(of: "\n", with: " "))")
             state = .failed(msg)
             return
@@ -1974,17 +1991,13 @@ final class ServerController: ObservableObject {
             // can reach this Mac, over plaintext HTTP where the key is the
             // only gate. Agent tools previously triggered this refusal; the
             // key is now required for ANY non-loopback bind, tools or not.
-            state = .failed(Self.lanWithoutKeyRefusalMessage(
-                language: UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"))
+            state = .failed(Self.lanWithoutKeyRefusalMessage())
             return
         }
         if settings.routerMode {
             let models = LocalModel.scan(in: ServerSettings.modelsDirectory)
             guard !models.isEmpty else {
-                let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-                state = .failed(lang == "es"
-                    ? "No hay modelos descargados en la carpeta de modelos"
-                    : "No models downloaded in the models folder")
+                state = .failed("No models downloaded in the models folder")
                 return
             }
             if settings.usesTurboKV,
@@ -2003,16 +2016,13 @@ final class ServerController: ObservableObject {
             }
         } else {
             guard FileManager.default.fileExists(atPath: settings.modelPath) else {
-                state = .failed("Selecciona un modelo en la pestaña Modelos")
+                state = .failed("Select a model in the Models tab")
                 return
             }
             // TurboQuant weight quants (tq3_1s/tq4_1s) decode to garbage, so refuse
             // rather than serve it.
             if ServerSettings.modelIsTurboQuantWeights(at: settings.modelPath) {
-                let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-                state = .failed(lang == "es"
-                    ? "Modelo TurboQuant no soportado: la cuantización de pesos TurboQuant (tq3_1s/tq4_1s) produce salida incorrecta en este motor, tanto en modelos densos como MoE. Usa un modelo en cuantización estándar (Q4_K, Q5_K, Q6_K, Q8_0…)."
-                    : "TurboQuant model not supported: TurboQuant weight quantization (tq3_1s/tq4_1s) produces incorrect output on this engine, for both dense and MoE models. Use a standard-quant model (Q4_K, Q5_K, Q6_K, Q8_0…).")
+                state = .failed("TurboQuant model not supported: TurboQuant weight quantization (tq3_1s/tq4_1s) produces incorrect output on this engine, for both dense and MoE models. Use a standard-quant model (Q4_K, Q5_K, Q6_K, Q8_0…).")
                 return
             }
             if settings.usesTurboKV &&
@@ -2057,10 +2067,7 @@ final class ServerController: ObservableObject {
     }
 
     private func failTurboKV(model: String) {
-        let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-        state = .failed(lang == "es"
-            ? "TurboQuant KV no es compatible con \(model) o con la combinación elegida: requiere Metal AMD y cabezas con padding 128, 256, 384, 512 o 640; en MLA, Turbo en valores también requiere Turbo en claves; q4_0 no se puede mezclar con Turbo."
-            : "TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
+        state = .failed("TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
     }
 
     /// Masks every `--api-key <secret>` pair in an argv list so logs and
@@ -2082,11 +2089,11 @@ final class ServerController: ObservableObject {
     /// KES-01: any non-loopback bind without an API key is refused — LAN
     /// mode is plaintext HTTP, so the key is the only gate between the LAN
     /// and this machine's engine (and its agent tools). Pure and static so
-    /// the refusal contract is unit-testable.
-    nonisolated static func lanWithoutKeyRefusalMessage(language: String) -> String {
-        language == "es"
-            ? "No se puede iniciar en la red local: el servidor HTTP sin cifrar exige «Proteger la API con clave». Activa la clave en Ajustes o desactiva el descubrimiento local."
-            : "Cannot start on the local network: the plaintext HTTP server requires \"Protect the API with a key\". Enable the key in Settings or turn local discovery off."
+    /// the refusal contract is unit-testable. English only: the product
+    /// language is English and the retired language picker's stored "es" is
+    /// cleared at launch.
+    nonisolated static func lanWithoutKeyRefusalMessage() -> String {
+        "Cannot start on the local network: the plaintext HTTP server requires \"Protect the API with a key\". Enable the key in Settings or turn local discovery off."
     }
 
     /// Header at the top of the server log: version, engine, model, GPUs and the
@@ -2113,10 +2120,15 @@ final class ServerController: ObservableObject {
                        "GGML_METAL_NCB",
                        "KESTREL_MGPU_PEER", "KESTREL_MGPU_PEER_DISABLE", "KESTREL_MGPU_EVENTS"]
         let env = settings.environment
-        // Include user-provided environment variables in diagnostic logs.
+        // KES-03: env tokens typed into the free-form Extra arguments field
+        // ("OPENAI_API_KEY=sk-…") are credentials. Show their NAMES only —
+        // the banner flows into the in-app log and from there into the
+        // shareable diagnostics export, so values are masked exactly like
+        // redactArguments masks `--api-key` pairs. App-set engine vars keep
+        // their values (they carry no secrets).
         let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }.sorted()
-        let envLine = (envKeys + userKeys)
-            .compactMap { k in env[k].map { "\(k)=\($0)" } }
+        let envLine = (envKeys.compactMap { k in env[k].map { "\(k)=\($0)" } }
+                       + userKeys.filter { env[$0] != nil }.map { "\($0)=***" })
             .joined(separator: " ")
         let moeLine = settings.effectiveDynamicMoe
             ? "ncmoe=0 dynamic-moe=K\(settings.effectiveDynamicMoeSlots)"
@@ -2134,7 +2146,7 @@ final class ServerController: ObservableObject {
          GPUs detected:
         \(gpus.isEmpty ? "    (none)" : gpus)
          GPU select: \(gpuSel) | force-VRAM-buffers: \(env["GGML_METAL_SHARED_BUFFERS_DISABLE"] == "1" ? "yes" : "no")
-         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.cacheTypeK) ctv=\(settings.cacheTypeV) cacheRAM=\(settings.cacheRAM)
+         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.effectiveCacheTypes.k) ctv=\(settings.effectiveCacheTypes.v) cacheRAM=\(settings.cacheRAM)
          dflash : \(settings.routerMode ? "per-model router plan" : settings.dflashPlanSummary)
          env: \(envLine)
          args: \(redactArguments(settings.arguments).joined(separator: " "))

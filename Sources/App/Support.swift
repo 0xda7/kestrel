@@ -13,7 +13,6 @@ import Security
 /// and `ProfileStore` all reference these constants, so a typo is a compile
 /// error instead of a silent bug.
 enum SettingsKeys {
-    static let language = "lang"
     /// "bundled" or "custom". Not a path: two installs share this domain.
     static let engineKind = "engineKind"
     /// Only read when engineKind is "custom".
@@ -249,6 +248,13 @@ enum SettingsKeys {
     static let imagenQueueGrid = "imagenQueueGrid"
     static let imagenCanvasGrid = "imagenCanvasGrid"
 
+    /// A stale "lang" value from pre-English-only builds lingers in upgraded
+    /// defaults; Server.swift no longer reads it (English is hardcoded), so a
+    /// stored "es" is ignored rather than honored.
+    static func clearStaleLanguage() {
+        UserDefaults.standard.removeObject(forKey: "lang")
+    }
+
     /// Tunable option keys (engine / GPU / inference / chat). Resetting clears these
     /// so `@AppStorage` falls back to its declared defaults. The models folder, the
     /// selected model and onboarding state are deliberately NOT included, so a reset
@@ -263,6 +269,7 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
+        layaDecideEnabled,
         latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
@@ -411,6 +418,10 @@ final class BenchmarkLog: @unchecked Sendable {
     let directory: URL
     private let queue = DispatchQueue(label: "kestrel.benchlog")
     private let retentionDays: Int
+    /// Last prune time (touched only on the log's serial queue): pruning on
+    /// every append would rewrite the whole file per run; hourly is enough
+    /// to keep a long session from accumulating multi-MB beyond the window.
+    private var lastPrune = Date.distantPast
     static let runMarker = "=== Kestrel benchmark · "
 
     init(retentionDays: Int = 3) {
@@ -430,6 +441,10 @@ final class BenchmarkLog: @unchecked Sendable {
             try? h.write(contentsOf: Data(text.utf8))
             try? h.synchronize()   // survive a machine freeze mid-run
             try? h.close()
+            if Date().timeIntervalSince(lastPrune) > 3600 {
+                lastPrune = Date()
+                prune()
+            }
         }
     }
 
@@ -758,18 +773,27 @@ enum LocalSecretStore {
     @discardableResult
     static func store(_ name: String, _ value: String) -> Bool {
         let fileURL = url(name)
-        try? FileManager.default.createDirectory(atPath: fileURL.deletingLastPathComponent().path,
-                                                 withIntermediateDirectories: true,
-                                                 attributes: [.posixPermissions: 0o700])
-        do {
-            try value.write(to: fileURL, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600],
-                                                  ofItemAtPath: fileURL.path)
+        let dirURL = fileURL.deletingLastPathComponent()
+        let fm = FileManager.default
+        try? fm.createDirectory(atPath: dirURL.path,
+                                withIntermediateDirectories: true,
+                                attributes: [.posixPermissions: 0o700])
+        // Idempotent tighten on every write, not only at creation: a directory
+        // that already existed (0755 from an older build or a restored backup)
+        // must not keep the 0600-files-in-a-0700-folder invariant broken.
+        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dirURL.path)
+        // Created 0600 in the same syscall that materializes it — a
+        // write-then-chmod sequence leaves a world-readable window between
+        // the two. createFile does not re-apply attributes when truncating
+        // an existing file, so the follow-up chmod repairs legacy files only.
+        let wrote = fm.createFile(atPath: fileURL.path, contents: Data(value.utf8),
+                                  attributes: [.posixPermissions: 0o600])
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        if wrote {
             cache.withLock { $0[name] = value }
             return true
-        } catch {
-            return false
         }
+        return false
     }
 
     static func delete(_ name: String) {
@@ -872,5 +896,13 @@ enum ToolRuntimeLocator {
             if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
         }
         return nil
+    }
+}
+
+extension String {
+    /// Blank (whitespace/newline-only) strings collapse to nil — the same
+    /// "unset" meaning as a missing optional.
+    var nilIfBlank: String? {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }

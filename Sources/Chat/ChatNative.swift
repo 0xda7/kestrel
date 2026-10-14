@@ -916,6 +916,17 @@ final class ChatStore: ObservableObject {
                     await MainActor.run {
                         store.finish(conversation: convID, text: trimmed, speed: nil,
                                      model: "latch")
+                        // Same queued-message delivery as the normal latch
+                        // completion below (and the engine path): a stop must
+                        // not silently swallow a steering message the user
+                        // queued during the run.
+                        if store.queuedMessage?.conversationID == convID {
+                            store.deliverQueuedMessage(conversation: convID, context: AgentRunContext(
+                                port: port, temperature: temperature, maxTokens: maxTokens,
+                                system: system, thinking: thinking, sampling: sampling,
+                                modalities: modalities,
+                                remainingTurns: 0, tools: [], workingDirectory: toolCwd))
+                        }
                     }
                     pump.cancel()
                     return
@@ -940,6 +951,19 @@ final class ChatStore: ObservableObject {
                 await MainActor.run {
                     store.finish(conversation: convID, text: reply, speed: nil,
                                  model: "latch")
+                    // Mirror the engine path: a steering message queued while
+                    // this latch turn ran starts its own turn now, instead of
+                    // being silently dropped by the next manual send (send()
+                    // clears queuedMessage). The context carries this turn's
+                    // parameters; latch needs no tools, and stream() re-runs
+                    // the latch branch from scratch.
+                    if store.queuedMessage?.conversationID == convID {
+                        store.deliverQueuedMessage(conversation: convID, context: AgentRunContext(
+                            port: port, temperature: temperature, maxTokens: maxTokens,
+                            system: system, thinking: thinking, sampling: sampling,
+                            modalities: modalities,
+                            remainingTurns: 0, tools: [], workingDirectory: toolCwd))
+                    }
                 }
                 pump.cancel()
             }
@@ -4346,6 +4370,14 @@ struct NativeChatView: View {
         }
         if UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled) {
             tools.append(JavaScriptSandboxService.tool)
+        }
+        // Same enable flags the send path uses, so the per-conversation
+        // picker and the offered tool set are the same list: opening this
+        // popover must never silently strip latch_delegate or laya_decide
+        // from a conversation that had them.
+        if LatchDelegateService.isEnabled { tools.append(LatchDelegateService.tool) }
+        if UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled) {
+            tools.append(LayaDecideService.tool)
         }
         if ChatMemoryService.isEnabled { tools += ChatMemoryService.tools }
         tools += await KestrelMCPService.shared.discoverTools()

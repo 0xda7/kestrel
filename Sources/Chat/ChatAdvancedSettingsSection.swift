@@ -13,6 +13,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.agentToolsEnabled) private var agentToolsEnabled = false
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
+    @AppStorage(SettingsKeys.layaDecideEnabled) private var layaDecideEnabled = false
     @AppStorage(SettingsKeys.latchDelegateEnabled) private var latchDelegateEnabled = false
     @AppStorage(SettingsKeys.latchPrimaryEnabled) private var latchPrimaryEnabled = false
     @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
@@ -276,6 +277,12 @@ struct ChatAdvancedSettingsSection: View {
                                        "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.")) {
                         SettingsToggle(isOn: $jsSandboxEnabled)
                     }
+                    SettingsRow(icon: "checklist",
+                                title: loc.t("Decisiones Laya (laya_decide)", "Laya decisions (laya_decide)"),
+                                help: loc.t("Añade la herramienta laya_decide: clasificación, verificación y puntuación rápidas sobre documentos con el modelo System-1 de la tarjeta «Laya Decisions». Desactivada por defecto; Laya solo entra en una conversación si la activas.",
+                                       "Adds the laya_decide tool: fast classification, verification and scoring over documents using the System-1 model on the 'Laya Decisions' card. Off by default; Laya joins a conversation only when you turn it on.")) {
+                        SettingsToggle(isOn: $layaDecideEnabled)
+                    }
                     SettingsRow(icon: "arrowshape.turn.up.right.circle",
                                 title: loc.t("Delegar a latch", "Delegate to latch"),
                                 help: loc.t("Añade una herramienta que entrega una tarea autónoma al agente latch y espera su informe final. Requiere el binario de latch instalado.",
@@ -516,6 +523,7 @@ struct ChatAdvancedSettingsSection: View {
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
+        layaDecideEnabled = false
         latchDelegateEnabled = false; latchPrimaryEnabled = false
         latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""

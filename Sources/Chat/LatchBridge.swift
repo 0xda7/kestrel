@@ -166,22 +166,28 @@ enum LatchBridge {
         let json = generateJSON(entries: entries, defaultEntryID: defaultEntryID)
         let dir = sidecarDirectory
         let fm = FileManager.default
-        if !fm.fileExists(atPath: dir.path) {
-            try? fm.createDirectory(atPath: dir.path, withIntermediateDirectories: true,
-                                    attributes: [.posixPermissions: 0o700])
-        }
+        try? fm.createDirectory(atPath: dir.path, withIntermediateDirectories: true,
+                                attributes: [.posixPermissions: 0o700])
+        // Idempotent tighten: sandboxHome usually created the directory first
+        // (without attributes), so enforcing 0700 here on every sync — not
+        // only at creation — is what actually holds the invariant for a file
+        // full of provider API keys.
+        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         let changed = (try? String(contentsOf: configFileURL, encoding: .utf8)) != json
         guard changed else { return true }
-        do {
-            try json.write(to: configFileURL, atomically: true, encoding: .utf8)
-            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configFileURL.path)
-            if !fm.fileExists(atPath: markerFileURL.path) {
-                try? Data().write(to: markerFileURL)
-            }
-            return true
-        } catch {
-            return false
+        // Created 0600 in the same syscall that materializes it: this file
+        // carries every configured provider key in plaintext, and a
+        // write-then-chmod sequence leaves a world-readable window between
+        // the two. The follow-up chmod only repairs a legacy looser file
+        // (createFile keeps an existing file's permissions on truncate).
+        let wrote = fm.createFile(atPath: configFileURL.path, contents: Data(json.utf8),
+                                  attributes: [.posixPermissions: 0o600])
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configFileURL.path)
+        guard wrote else { return false }
+        if !fm.fileExists(atPath: markerFileURL.path) {
+            try? Data().write(to: markerFileURL)
         }
+        return true
     }
 
     // MARK: One-time import of a hand-authored config

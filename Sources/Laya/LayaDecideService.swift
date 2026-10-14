@@ -142,8 +142,7 @@ enum LayaDecideService {
             } catch let error as LayaError {
                 throw error
             } catch {
-                lastError = LayaError.unreachable(underlying: error)
-                throw LayaError.unreachable(underlying: error)
+                throw LayaError.unreachable(port: port, underlying: error)
             }
         }
         throw lastError ?? LayaError.emptyDocument
@@ -198,7 +197,7 @@ enum LayaDecideService {
     enum LayaError: LocalizedError {
         case engineDown
         case engineRejected(status: Int)
-        case unreachable(underlying: Error)
+        case unreachable(port: Int, underlying: Error)
         case malformedResponse
         case emptyDocument
 
@@ -208,8 +207,8 @@ enum LayaDecideService {
                 return "Laya engine is not running. Start it yourself: Kestrel → Servers tab → 'Laya Decisions' card → Start. (Nothing starts in the background.)"
             case .engineRejected(let status):
                 return "Laya engine rejected this document (HTTP \(status)) after all retry sizes."
-            case .unreachable:
-                return "Laya engine could not be reached on port \(LayaDecideService.defaultPort)."
+            case .unreachable(let port, _):
+                return "Laya engine could not be reached on port \(port)."
             case .malformedResponse:
                 return "Laya engine returned an unrecognized answer format."
             case .emptyDocument:
@@ -253,6 +252,19 @@ enum LayaDecideService {
             ]
         ])
 
+    /// Port the "Laya Decisions" card actually serves on, resolved at call
+    /// time so an operator's edit of the card's port is honored (the seeded
+    /// card starts at 8098; the fallback covers a deleted or never-seeded
+    /// card). Reads the persisted profiles directly — no MainActor hop —
+    /// which is the same store ServerManager persists on every card change.
+    static func resolvedPort() -> Int {
+        guard let data = UserDefaults.standard.data(forKey: ServerManager.storeKey),
+              let profiles = try? JSONDecoder().decode([Profile].self, from: data),
+              let laya = profiles.first(where: { $0.name == "Laya Decisions" }),
+              laya.port > 0 else { return defaultPort }
+        return laya.port
+    }
+
     /// Tool execution: read the document, resolve questions, run Laya,
     /// format a decision card. Every failure states exactly what the
     /// operator should do — no silent empties.
@@ -274,18 +286,18 @@ enum LayaDecideService {
             return ToolExecutionResult(content: "No document: give document_path or text.", isError: true)
         }
 
-        var questions: [String: QuestionSet.Question]? = nil
+        // Resolve the questions once into a non-optional local: an ad-hoc
+        // set decodes from the arguments, anything else loads a stored set.
         var setName = arguments["question_set"] as? String ?? "Medical Triage"
-        if let raw = arguments["questions"] as? [String: Any] {
-            // Re-encode through the wire shape so both ad-hoc and stored
-            // sets travel the same path.
-            if let data = try? JSONSerialization.data(withJSONObject: raw),
-               let decoded = try? JSONDecoder().decode([String: QuestionSet.Question].self, from: data) {
-                questions = decoded
-                setName = "ad-hoc"
-            }
-        }
-        if questions == nil {
+        let questions: [String: QuestionSet.Question]
+        if let raw = arguments["questions"] as? [String: Any],
+           // Re-encode through the wire shape so both ad-hoc and stored
+           // sets travel the same path.
+           let data = try? JSONSerialization.data(withJSONObject: raw),
+           let decoded = try? JSONDecoder().decode([String: QuestionSet.Question].self, from: data) {
+            questions = decoded
+            setName = "ad-hoc"
+        } else {
             guard let set = set(named: setName) else {
                 let available = loadSets().map { $0.name }.joined(separator: ", ")
                 return ToolExecutionResult(
@@ -296,8 +308,11 @@ enum LayaDecideService {
             setName = set.name
         }
 
+        // The card's port is read now, not at seed time: an operator edit of
+        // the "Laya Decisions" card must steer the tool with it.
+        let port = resolvedPort()
         // Health first: a clear start-it-yourself message beats a timeout.
-        var health = URLRequest(url: healthURL())
+        var health = URLRequest(url: healthURL(port: port))
         health.timeoutInterval = 2
         do {
             let (_, response) = try await URLSession.shared.data(for: health)
@@ -309,11 +324,9 @@ enum LayaDecideService {
         }
 
         do {
-            let answers = try await decide(document: document, questions: questions!)
-            let ordered = questions!.keys.sorted()
+            let answers = try await decide(document: document, questions: questions, port: port)
             var lines = ["Laya decision card — set: \(setName)", ""]
-            for key in ordered {
-                let q = questions![key]!
+            for (key, q) in questions.sorted(by: { $0.key < $1.key }) {
                 let a = answers[key]
                 lines.append("Q: \(q.instructions)")
                 lines.append("   → \(a?.summaryLine(key: key, instructions: q.instructions) ?? "no answer")")
@@ -332,11 +345,5 @@ enum LayaDecideService {
             return ToolExecutionResult(content: (error as? LayaError)?.errorDescription
                 ?? LayaError.malformedResponse.localizedDescription, isError: true)
         }
-    }
-}
-
-private extension String {
-    var nilIfBlank: String? {
-        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }

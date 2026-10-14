@@ -6,36 +6,18 @@ import SwiftUI
 
 /// App localization.
 ///
-/// Spanish and English are the built-in languages, written inline at every call
-/// site as `loc.t("es", "en")`. Additional languages are contributed as overlay
-/// files in `Resources/lang/<code>.json` — a flat `{ "English string":
-/// "translation" }` map keyed by the **English** string. At runtime any language
-/// other than es/en looks the English text up in its overlay, falling back to
-/// English when a key is missing or blank, so the UI never shows an empty label.
-///
-/// Adding a language is therefore drop-in: ship a `<code>.json` and it appears
-/// in the Settings picker automatically. Run `scripts/extract-strings.py` to
-/// regenerate the English key template translators start from.
+/// English is the product language (operator directive 2026-10-14): UI
+/// strings are written inline at every call site as `loc.t("es", "en")`
+/// and the English half always wins — the Settings picker is gone, a
+/// stored "es" is ignored (and cleared at launch). The Spanish halves stay
+/// in the call sites for content that still carries both (catalog details,
+/// relative dates, bilingual engine diagnostics picked by `half`).
 final class Localizer: ObservableObject {
-    /// English is the product language (operator directive 2026-10-14).
-    /// The Settings picker is removed, a stored "es" is ignored, and every
-    /// `loc.t("es", "en")` call site resolves to its English half.
     @Published private(set) var language: String = "en"
 
-    /// English → translated string, for the active community language. Empty for
-    /// the built-in es/en (they need no overlay).
-    private var overlay: [String: String] = [:]
-
-    /// English only — the picker this fed is gone.
-    let availableLanguages: [String] = ["en"]
-
-    init() {
-        loadOverlay()
-    }
-
     /// Kept for the many call sites that pick Spanish vs. English content
-    /// directly (catalog details, relative dates). Community languages fall back
-    /// to the English branch of those.
+    /// directly (catalog details, relative dates). Always false while the
+    /// product language is English, so those sites resolve to English.
     var isSpanish: Bool { language == "es" }
 
     /// Engine diagnostics are built where no Localizer exists, so they carry both
@@ -45,20 +27,11 @@ final class Localizer: ObservableObject {
         return String(isSpanish ? bilingual[..<r.lowerBound] : bilingual[r.upperBound...])
     }
 
-    /// Returns the string for the active language.
-    func t(_ es: String, _ en: String) -> String {
-        switch language {
-        case "es": return es
-        case "en": return en
-        default:
-            if let v = overlay[en], !v.isEmpty { return v }
-            return en
-        }
-    }
+    /// Returns the string for the active language — always the English half.
+    func t(_ es: String, _ en: String) -> String { en }
 
-    /// Same lookup for a string carrying values. Interpolating them into the
-    /// literal makes the key dynamic and the overlay never matches, so the key
-    /// keeps `%@` placeholders and the values go in after the lookup.
+    /// Same lookup for a string carrying values: the `%@` placeholders are
+    /// filled in after the (English) text is chosen.
     func t(_ es: String, _ en: String, _ args: String...) -> String {
         var out = t(es, en)
         for a in args {
@@ -66,44 +39,5 @@ final class Localizer: ObservableObject {
             out.replaceSubrange(r, with: a)
         }
         return out
-    }
-
-    /// Native display name (autonym) for a language code, e.g. "Italiano".
-    func displayName(_ code: String) -> String {
-        switch code {
-        case "es": return "Español"
-        case "en": return "English"
-        default:
-            let name = Locale(identifier: code).localizedString(forLanguageCode: code) ?? code
-            return name.prefix(1).uppercased() + name.dropFirst()
-        }
-    }
-
-    // MARK: - Overlay loading
-
-    private func loadOverlay() {
-        guard language != "es", language != "en",
-              let url = Localizer.langDirectory?.appendingPathComponent("\(language).json"),
-              let data = try? Data(contentsOf: url),
-              let dict = try? JSONDecoder().decode([String: String].self, from: data)
-        else { overlay = [:]; return }
-        overlay = dict
-    }
-
-    private static var langDirectory: URL? {
-        Bundle.main.resourceURL?.appendingPathComponent("lang")
-    }
-
-    private static func discoverLanguages() -> [String] {
-        var langs = ["es", "en"]
-        if let dir = langDirectory,
-           let files = try? FileManager.default.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: nil) {
-            for f in files where f.pathExtension == "json" {
-                let code = f.deletingPathExtension().lastPathComponent
-                if !code.hasPrefix("_"), !langs.contains(code) { langs.append(code) }
-            }
-        }
-        return langs
     }
 }

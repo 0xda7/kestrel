@@ -65,11 +65,21 @@ final class SecretRedactionTests: CheckCase {
         XCTAssertFalse(banner.contains("LEAKED-VIA-BANNER"))
     }
 
+    func testStartupBannerMasksEnvTokensFromExtraArguments() {
+        // KES-03: a KEY=VALUE env token typed into Extra arguments is a
+        // credential; the banner flows into the shareable diagnostics, so
+        // the value must be masked while the app-set engine vars stay whole.
+        var settings = makeSettings()
+        settings.extraArgs = "OPENAI_API_KEY=LEAKED-ENV-TOKEN KESTREL_MOE_UI=1"
+        let banner = ServerController.startupBanner(settings: settings)
+        XCTAssertFalse(banner.contains("LEAKED-ENV-TOKEN"),
+                       "env tokens from Extra arguments must not ride the banner verbatim")
+        XCTAssertTrue(banner.contains("OPENAI_API_KEY=***"), "the name stays for debuggability")
+    }
+
     func testLANRefusalNamesTheKeyRequirement() {
-        XCTAssertTrue(ServerController.lanWithoutKeyRefusalMessage(language: "en")
+        XCTAssertTrue(ServerController.lanWithoutKeyRefusalMessage()
             .localizedCaseInsensitiveContains("key"))
-        XCTAssertTrue(ServerController.lanWithoutKeyRefusalMessage(language: "es")
-            .localizedCaseInsensitiveContains("clave"))
     }
 }
 
@@ -84,6 +94,7 @@ extension SecretRedactionTests {
             .init(name: "testAPIKeyNeverRidesArgvWhenEnabled") { try $0.testAPIKeyNeverRidesArgvWhenEnabled() },
             .init(name: "testDiagnosticsReportOmitsTheKey") { $0.testDiagnosticsReportOmitsTheKey() },
             .init(name: "testStartupBannerOmitsTheKey") { $0.testStartupBannerOmitsTheKey() },
+            .init(name: "testStartupBannerMasksEnvTokensFromExtraArguments") { $0.testStartupBannerMasksEnvTokensFromExtraArguments() },
             .init(name: "testLANRefusalNamesTheKeyRequirement") { $0.testLANRefusalNamesTheKeyRequirement() },
         ])
 }

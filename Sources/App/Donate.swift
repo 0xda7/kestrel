@@ -12,7 +12,7 @@ struct DonateView: View {
         VStack(spacing: 12) {
             Label(loc.t("Apoya el proyecto", "Support the project"), systemImage: "heart.fill")
                 .font(.headline).foregroundStyle(Color.appAccent)
-            Text(loc.isSpanish ? AppInfo.donateNoteES : AppInfo.donateNoteEN)
+            Text(AppInfo.donateNoteEN)
                 .font(.callout).multilineTextAlignment(.center)
                 .frame(width: 300)
 

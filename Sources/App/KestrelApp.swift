@@ -68,6 +68,10 @@ public struct KestrelApp: App {
             UserDefaults.standard.set(extra, forKey: SettingsKeys.extraArgs)
         }
 
+        // A "lang" stored by the removed Settings picker must not leak Spanish
+        // into an English-only product; nothing reads it anymore, so clear it.
+        SettingsKeys.clearStaleLanguage()
+
         // Heal the stored engine path: legacy builds or paths from another machine
         // fall back to the bundled engine.
         let defaults = UserDefaults.standard

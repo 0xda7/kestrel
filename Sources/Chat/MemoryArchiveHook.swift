@@ -48,8 +48,13 @@ actor MemoryArchiveHook {
     nonisolated static var url: URL? {
         guard let raw = UserDefaults.standard.string(forKey: SettingsKeys.memoryArchiveHookURL)?
                 .trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
-              let url = URL(string: raw), url.host != nil,
+              let url = URL(string: raw), let host = url.host, !host.isEmpty,
               url.scheme == "http" || url.scheme == "https" else { return nil }
+        // KES-08: the stored Bearer token rides every delivery, so a
+        // non-loopback receiver must be https — the same rule
+        // InferenceRoute.normalizedURL enforces for provider endpoints. A
+        // plain-http remote would send the credential in cleartext.
+        guard url.scheme == "https" || InferenceRoute.insecureHosts.contains(host) else { return nil }
         return url
     }
 

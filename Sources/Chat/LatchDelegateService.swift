@@ -137,35 +137,60 @@ enum LatchDelegateService {
     /// operator's real ZCode data — chat history showing up inside the ZCode
     /// app and the agent reading that app's settings. Everything the embedded
     /// agent writes now lives under Kestrel's Application Support, seeded
-    /// once with the harness boot config; the two products never share state.
+    /// once with a minimal boot config; the two products never share state.
     static var sandboxHome: URL {
         let home = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Application Support/Kestrel/latch-home")
         let fm = FileManager.default
-        try? fm.createDirectory(at: home.appendingPathComponent(".latch/v2"),
-                                withIntermediateDirectories: true)
+        let latchV2 = home.appendingPathComponent(".latch/v2")
+        try? fm.createDirectory(at: latchV2, withIntermediateDirectories: true,
+                                attributes: [.posixPermissions: 0o700])
+        // Idempotent tighten on every access: the tree holds the plaintext
+        // provider_config.json LatchBridge writes, so a directory created
+        // looser (by an older build or a restored backup) is corrected here,
+        // not only at creation.
+        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: latchV2.path)
         let cli = home.appendingPathComponent(".zcode/cli")
         try? fm.createDirectory(at: cli, withIntermediateDirectories: true)
         let bootConfig = cli.appendingPathComponent("config.json")
         if !fm.fileExists(atPath: bootConfig.path) {
-            let real = NSHomeDirectory() + "/.zcode/cli/config.json"
-            if fm.fileExists(atPath: real) {
-                try? fm.copyItem(atPath: real, toPath: bootConfig.path)
-            }
+            // A minimal empty boot config — deliberately NOT a copy of the
+            // operator's real ~/.zcode/cli/config.json. That file is the
+            // outer product's own state (plugin and per-skill enablement
+            // pointing at the operator's real paths), and seeding the sandbox
+            // from it would bridge credentials and state into the embedded
+            // agent's HOME. Providers and the gateway key reach the harness
+            // only through LatchBridge's provider_config.json and
+            // LATCH_API_KEY; because nothing is copied, there is also nothing
+            // to refresh when the outer config changes.
+            try? Data("{}".utf8).write(to: bootConfig, options: .atomic)
         }
         return home
     }
 
-    /// Environment the harness runs in: its own isolated home (see
-    /// sandboxHome) and nothing else injected. Providers are user-configured
-    /// in Settings → Providers and reach the harness only through the
-    /// provider_config.json LatchBridge generates in that sandbox home — no
-    /// hidden embedded login, no baked-in gateway key. A remote provider the
-    /// user adds (z.ai or any OpenAI-compatible endpoint) carries its own key
-    /// inside that file.
+    /// Environment the harness runs in: an explicit allowlist on top of its
+    /// own isolated home (see sandboxHome) — nothing inherited wholesale.
+    /// Providers are user-configured in Settings → Providers and reach the
+    /// harness only through the provider_config.json LatchBridge generates
+    /// in that sandbox home — no hidden embedded login, no baked-in gateway
+    /// key. A remote provider the user adds (z.ai or any OpenAI-compatible
+    /// endpoint) carries its own key inside that file. Building the child
+    /// environment by allowlist (not inherit-and-subtract) also keeps any
+    /// OTHER provider credential exported by the launching environment
+    /// (OPENAI_API_KEY, ANTHROPIC_API_KEY, …) out of the separate product's
+    /// process.
     static func childEnvironment() -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
-        env["HOME"] = Self.sandboxHome.path
+        let parent = ProcessInfo.processInfo.environment
+        var env: [String: String] = [
+            "HOME": Self.sandboxHome.path,
+            "PATH": parent["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+            "TMPDIR": parent["TMPDIR"] ?? NSTemporaryDirectory(),
+        ]
+        // Locale only: the harness's messages should match the operator's
+        // terminal encoding, and locale carries no credentials.
+        for key in ["LANG", "LC_ALL", "LC_CTYPE"] where parent[key] != nil {
+            env[key] = parent[key]
+        }
         // The harness needs its provider config inside the sandbox; if no
         // server event has written one yet (fresh sandbox), generate it now
         // so a first chat turn can never boot into the 0.89.6 failure shape.
@@ -179,11 +204,6 @@ enum LatchDelegateService {
         if let stored = LocalSecretStore.value("latch-api-key") {
             env["LATCH_API_KEY"] = stored
         }
-        // Still scrub the inherited runtime login and its mirror so an
-        // outer ZCode/latch terminal can never leak its own provider into
-        // the embedded agent.
-        env.removeValue(forKey: "ZCODE_BUILTIN_PROVIDER_CONFIG_FILE")
-        env.removeValue(forKey: "AI_GATEWAY_API_KEY")
         return env
     }
 

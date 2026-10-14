@@ -2363,18 +2363,8 @@ final class BenchAndProfileTests: CheckCase {
 
 @MainActor
 final class LocalizationTests: CheckCase {
-    func testDocsHaveSameSectionsInBothLanguages() {
-        XCTAssertEqual(DocsContent.es.count, DocsContent.en.count)
-        XCTAssertGreaterThanOrEqual(DocsContent.es.count, 10)
-        for (es, en) in zip(DocsContent.es, DocsContent.en) {
-            XCTAssertEqual(es.icon, en.icon, "iconos desalineados: \(es.title) / \(en.title)")
-            XCTAssertFalse(es.body.isEmpty)
-            XCTAssertFalse(en.body.isEmpty)
-        }
-    }
-
     func testDocsNeverMentionForbiddenNames() {
-        for section in DocsContent.es + DocsContent.en {
+        for section in DocsContent.en {
             XCTAssertFalse(section.body.localizedCaseInsensitiveContains("claude"),
                            "la documentación no debe mencionar asistentes de IA")
         }
@@ -3007,7 +2997,6 @@ extension LocalizationTests {
         suite: "LocalizationTests",
         instance: { LocalizationTests() },
         checks: [
-            .init(name: "testDocsHaveSameSectionsInBothLanguages") { $0.testDocsHaveSameSectionsInBothLanguages() },
             .init(name: "testDocsNeverMentionForbiddenNames") { $0.testDocsNeverMentionForbiddenNames() },
             .init(name: "testLocalizerAlwaysResolvesEnglish") { $0.testLocalizerAlwaysResolvesEnglish() },
             .init(name: "testDynamicMoeOptimizationStatesLocalizeInEnglish") { $0.testDynamicMoeOptimizationStatesLocalizeInEnglish() },
@@ -3189,18 +3178,25 @@ final class EnterpriseHardeningTests: CheckCase {
     /// English is the product language: the picker is gone and a stored
     /// "es" must not bring Spanish back.
     func testLocalizerIsEnglishOnly() throws {
-        UserDefaults.standard.set("es", forKey: SettingsKeys.language)
+        UserDefaults.standard.set("es", forKey: "lang")
+        defer { UserDefaults.standard.removeObject(forKey: "lang") }
         let loc = Localizer()
         XCTAssertEqual(loc.language, "en")
         XCTAssertEqual(loc.t("Idioma", "Language"), "Language")
         XCTAssertFalse(loc.isSpanish)
-        XCTAssertEqual(loc.availableLanguages, ["en"])
-        UserDefaults.standard.removeObject(forKey: SettingsKeys.language)
     }
 
     /// The agent's sessions must never land in the operator's real ZCode
-    /// data, and no hidden provider login may ride the environment.
+    /// data, and no hidden provider login may ride the environment. The
+    /// stored latch key is seeded so the "key present" branch runs
+    /// deterministically regardless of the machine's state.
     func testLatchChildEnvironmentIsIsolatedAndProviderNeutral() throws {
+        let prior = LocalSecretStore.value("latch-api-key")
+        XCTAssertTrue(LocalSecretStore.store("latch-api-key", "kestrel-check-sentinel"))
+        defer {
+            if let prior { LocalSecretStore.store("latch-api-key", prior) }
+            else { LocalSecretStore.delete("latch-api-key") }
+        }
         let env = LatchDelegateService.childEnvironment()
         let home = try XCTUnwrap(env["HOME"])
         XCTAssertNotEqual(home, NSHomeDirectory())
@@ -3209,12 +3205,46 @@ final class EnterpriseHardeningTests: CheckCase {
                      "no hidden builtin provider login")
         XCTAssertNil(env["AI_GATEWAY_API_KEY"], "no mirrored gateway key")
         // The operator's own stored key passes through (the harness refuses
-        // to boot without one); anything else must be absent.
-        if let stored = LocalSecretStore.value("latch-api-key") {
-            XCTAssertEqual(env["LATCH_API_KEY"], stored)
-        } else {
-            XCTAssertNil(env["LATCH_API_KEY"])
+        // to boot without one).
+        XCTAssertEqual(env["LATCH_API_KEY"], "kestrel-check-sentinel")
+        // Allowlist, not inherit-and-subtract: nothing outside the known
+        // keys may ride into the separate product's process — a provider
+        // credential exported by the launching environment (OPENAI_API_KEY,
+        // ANTHROPIC_API_KEY, …) included.
+        let allowed: Set<String> = ["HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE",
+                                    "LATCH_API_KEY"]
+        let leaked = Set(env.keys).subtracting(allowed).sorted()
+        XCTAssertTrue(leaked.isEmpty, "unexpected environment keys leaked: \(leaked)")
+    }
+
+    /// Defect-register item 1: a fresh sandbox (no provider_config.json yet,
+    /// e.g. a first launch before any server event fired) must be healed by
+    /// childEnvironment() itself, so the harness can never boot into the
+    /// 0.89.6 no-config failure shape. Machine state is saved and restored;
+    /// a model path is seeded so LatchBridge has an entry to write.
+    func testChildEnvironmentMaterializesProviderConfigForFreshSandbox() throws {
+        let configURL = LatchBridge.configFileURL
+        let priorModel = UserDefaults.standard.string(forKey: SettingsKeys.modelPath)
+        let priorConfig = try? Data(contentsOf: configURL)
+        let hadConfig = FileManager.default.fileExists(atPath: configURL.path)
+        UserDefaults.standard.set("/tmp/kestrel-check-model.gguf", forKey: SettingsKeys.modelPath)
+        try? FileManager.default.removeItem(at: configURL)
+        defer {
+            if let priorModel {
+                UserDefaults.standard.set(priorModel, forKey: SettingsKeys.modelPath)
+            } else {
+                UserDefaults.standard.removeObject(forKey: SettingsKeys.modelPath)
+            }
+            if let priorConfig {
+                try? priorConfig.write(to: configURL)
+            } else if !hadConfig {
+                // Leave the machine as found: drop the config this check made.
+                try? FileManager.default.removeItem(at: configURL)
+            }
         }
+        _ = LatchDelegateService.childEnvironment()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: configURL.path),
+                      "childEnvironment() must materialize provider_config.json in a fresh sandbox")
     }
 
     /// Laya integration (0.89.11): the medical triage set seeds on first
@@ -3265,6 +3295,7 @@ extension EnterpriseHardeningTests {
             .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
             .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
             .init(name: "testLatchChildEnvironmentIsIsolatedAndProviderNeutral") { try await $0.testLatchChildEnvironmentIsIsolatedAndProviderNeutral() },
+            .init(name: "testChildEnvironmentMaterializesProviderConfigForFreshSandbox") { try await $0.testChildEnvironmentMaterializesProviderConfigForFreshSandbox() },
             .init(name: "testLayaQuestionSetSeedsAndWireShape") { try await $0.testLayaQuestionSetSeedsAndWireShape() },
             .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
         ])
