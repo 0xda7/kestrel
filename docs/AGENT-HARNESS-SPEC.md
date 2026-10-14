@@ -11,11 +11,12 @@ depends on a cloud or an external harness binary.
   plan → act → observe → verify → report, with bounded iterations.
   One orchestrator, N sessions. UI: a mission view showing every step,
   every diff, every command, live — plus a hard stop button.
-- **Models are swappable data (the ruling).** Any tool-calling model on
-  any running server card drives the loop; a second card can host a
-  decision model for 33 ms gating between steps. Multi-server is the
-  foundation: reasoner, decision gate, and draft model may be three
-  different cards.
+- **One model, one server — the design center (operator ruling,
+  2026-10-14).** The machine is not asked to host parallel models: the
+  harness runs at full capability on exactly ONE running server card with
+  ONE loaded model. Every feature — loop, tools, gates, autonomy — works
+  completely in that configuration. Additional cards are optional, never
+  required, never assumed.
 - **Tools (app-mediated, jailed):** read, write, edit (exact-match
   replace), glob, grep, shell — all scoped to the mission's working
   directory. File ops cannot escape the jail; shell runs with an
@@ -47,16 +48,20 @@ depends on a cloud or an external harness binary.
   code and passes its declared test command.
 - **Phase B — Trust:** L2 autonomy, gate enforcement with receipts,
   budgets (steps/time/tokens), escalation questions surfaced in-app.
-- **Phase C — Routing:** decision-model gating between steps (route/
-  verify/continue) per the model-agnostic ruling; model fallback chains
-  across cards.
-- **Phase D — Fleet:** parallel worktree missions, queue, shared pool.
+- **Phase C — Depth on one model:** better prompts/memory so a single
+  local model reasons deeper across long missions (compaction, scratch
+  memory, retry strategies) — no extra hardware assumed.
+- **Phase D — Sequential fleet:** multiple missions queued and run one at
+  a time on the same single server, each in its own git worktree; the
+  queue, not the GPU, provides parallelism.
 
 ## 4. Non-negotiables
 
 1. Nothing embedded or hardcoded; models, ports, gates, and tools
    configuration are operator data.
-2. Multi-server composition in every feature.
+2. Perfect with ONE running server and ONE loaded model — that is the
+   product. Anything needing a second model is optional and clearly
+   marked, never load-bearing.
 3. No external harness binary; the loop is Kestrel's own code.
 4. English only. No dead code (deep-clean baseline maintained).
 5. Every capability: UI-reachable, documented in the operator manual,
