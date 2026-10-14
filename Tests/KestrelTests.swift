@@ -3360,6 +3360,86 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertEqual(args[v + 1], "q4_0")
     }
 
+    /// The router preset is the third place the gemma equalization must hold:
+    /// the instance `effectiveCacheTypes` keys on `modelPath`, which is empty
+    /// in router mode, so each INI section has to equalize against its own
+    /// path. A mixed pair written raw aborted that model's child engine at
+    /// load — the same GGML_ASSERT class the launch/bench pins cover.
+    func testRouterPresetEqualizesGemmaMixedKVPerModel() {
+        var s = makeSettings(cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        s.routerMode = true
+        let ini = s.routerPresetINI(
+            modelPaths: ["/models/gemma-4-12b-it-Q4_K_M.gguf", "/models/Qwen3.5-9B.gguf"],
+            ncmoeByPath: [:])
+        let sections = ini.components(separatedBy: "\n\n")
+        let gemma = sections.first { $0.contains("[gemma-4-12b-it-q4-k-m]") } ?? ""
+        XCTAssertTrue(gemma.contains("cache-type-k = q4_0"),
+                      "gemma section must carry the equalized K, got:\n\(gemma)")
+        XCTAssertTrue(gemma.contains("cache-type-v = q4_0"),
+                      "gemma section must carry the equalized V, got:\n\(gemma)")
+        let qwen = sections.first { $0.contains("[qwen3-5-9b]") } ?? ""
+        XCTAssertTrue(qwen.contains("cache-type-k = q8_0"),
+                      "a non-gemma section keeps its tuned K mix, got:\n\(qwen)")
+        XCTAssertTrue(qwen.contains("cache-type-v = q4_0"),
+                      "a non-gemma section keeps its tuned V mix, got:\n\(qwen)")
+    }
+
+    /// The per-path pair helper is the one shared source: the instance
+    /// property delegates to it, gemma equalizes on the smaller type and a
+    /// non-gemma mixed pair passes through untouched.
+    func testEffectiveCacheTypesDelegateToPerPathHelper() {
+        let gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.k, "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.v, "q4_0")
+        XCTAssertEqual(
+            ServerSettings.effectiveCacheTypes(forModel: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                               k: "q8_0", v: "q4_0").k, "q4_0")
+        // Equalized on the SMALLER type in both directions.
+        XCTAssertEqual(
+            ServerSettings.effectiveCacheTypes(forModel: "/tmp/gemma-4-12b.gguf",
+                                               k: "q4_0", v: "q8_0").v, "q4_0")
+        // Non-gemma keeps the tuned mix.
+        let tuned = ServerSettings.effectiveCacheTypes(forModel: "/tmp/Qwen3.5-9B.gguf",
+                                                       k: "q8_0", v: "q4_0")
+        XCTAssertEqual(tuned.k, "q8_0")
+        XCTAssertEqual(tuned.v, "q4_0")
+    }
+
+    /// `ModelSpec.kvBytesPerToken` counts K+V bytes combined, so a pair's
+    /// scale is the mean of both types — the formula Hardware.swift's
+    /// estimator and the DFlash planner already use. Scaling by K alone
+    /// mis-estimates every mixed pair, which is how the auto-context solver
+    /// could hand the engine a window that spills KV out of VRAM.
+    func testKVPairScaleIsTheMeanOfBothTypes() {
+        XCTAssertEqual(ServerSettings.kvScale(k: "f16", v: "f16"), 1.0)
+        XCTAssertEqual(ServerSettings.kvScale(k: "f16", v: "q8_0"),
+                       (Estimator.kvTypeScale("f16") + Estimator.kvTypeScale("q8_0")) / 2)
+        // K quantized, V f16: the mean is ~0.65 — K alone would claim 0.30
+        // and under-reserve half the cache's bytes.
+        XCTAssertEqual(ServerSettings.kvScale(k: "q8_0", v: "f16"), 0.765)
+        XCTAssertNotEqual(ServerSettings.kvScale(k: "q8_0", v: "f16"),
+                          Estimator.kvTypeScale("q8_0"),
+                          "the pair scale must not collapse to K's scale alone")
+    }
+
+    /// The engine check's launch failure must surface, not vanish: the old
+    /// catch only flipped `running` off, leaving no result and no verdict.
+    func testEngineCheckLaunchFailureIsStated() {
+        var r = EngineCheckResult()
+        r.launchError = "Operation not permitted (errno 1)"
+        XCTAssertFalse(r.ok, "a failed launch is not a clean run")
+        let verdict = EngineCheck.verdict(r) { $1 }
+        XCTAssertTrue(verdict.contains("failed to launch"),
+                      "the verdict must state the launch error, got: \(verdict)")
+        XCTAssertTrue(verdict.contains("Operation not permitted"))
+        let report = EngineCheck.report(r) { _, en in en }
+        XCTAssertTrue(report.contains("FAILED TO LAUNCH: Operation not permitted"),
+                      "the diagnostics report must carry the launch error")
+        // The clean-run shape is unchanged for results without a launch error.
+        XCTAssertFalse(EngineCheck.report(EngineCheckResult()) { _, en in en }.contains("FAILED TO LAUNCH"))
+    }
+
     /// Audit fix (77de404, KES-08): the archive hook's Bearer token rides
     /// every delivery, so a non-loopback receiver must be https. Loopback
     /// http stays allowed (no credential leaves the machine).
@@ -3496,6 +3576,10 @@ extension EnterpriseHardeningTests {
             .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
             .init(name: "testLayaPortFollowsTheDecisionsCard") { try await $0.testLayaPortFollowsTheDecisionsCard() },
             .init(name: "testBenchmarkArgumentsEqualizeGemmaMixedKV") { try await $0.testBenchmarkArgumentsEqualizeGemmaMixedKV() },
+            .init(name: "testRouterPresetEqualizesGemmaMixedKVPerModel") { $0.testRouterPresetEqualizesGemmaMixedKVPerModel() },
+            .init(name: "testEffectiveCacheTypesDelegateToPerPathHelper") { $0.testEffectiveCacheTypesDelegateToPerPathHelper() },
+            .init(name: "testKVPairScaleIsTheMeanOfBothTypes") { $0.testKVPairScaleIsTheMeanOfBothTypes() },
+            .init(name: "testEngineCheckLaunchFailureIsStated") { $0.testEngineCheckLaunchFailureIsStated() },
             .init(name: "testMemoryArchiveHookRequiresHTTPSOffLoopback") { $0.testMemoryArchiveHookRequiresHTTPSOffLoopback() },
             .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
             .init(name: "testAgentToolExposureContract") { $0.testAgentToolExposureContract() },

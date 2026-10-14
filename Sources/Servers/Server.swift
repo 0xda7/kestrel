@@ -333,10 +333,14 @@ struct ServerSettings {
     /// pushes KV out of VRAM and drops generation ~20×) at launch.
     var resolvedCtx: Int {
         guard contextAutomatic else { return ctx }
+        // Scale by the pair the launch actually runs with (post-gemma
+        // equalization), so the solver budgets the KV bytes that will really
+        // be allocated — not one type's scale of them.
+        let kv = effectiveCacheTypes
         return Self.routerCtx(forModel: modelPath, requested: ctx,
-                                          ncmoe: ncmoe,
-                                          kvScale: Estimator.kvTypeScale(cacheTypeK),
-                                          reserveMB: vramReserveMB)
+                              ncmoe: ncmoe,
+                              kvScale: Self.kvScale(k: kv.k, v: kv.v),
+                              reserveMB: vramReserveMB)
     }
 
     /// The K/V pair actually launched with. Gemma's attention hits the
@@ -346,16 +350,25 @@ struct ServerSettings {
     /// read it so they describe what ran, not what was merely configured
     /// (the configured pair stays in `cacheTypeK`/`cacheTypeV`).
     var effectiveCacheTypes: (k: String, v: String) {
-        var effK = cacheTypeK
-        var effV = cacheTypeV
-        if effK != effV, Self.kvTypesMustMatch(forModel: modelPath) {
-            if Estimator.kvTypeScale(effV) < Estimator.kvTypeScale(effK) {
-                effK = effV
-            } else {
-                effV = effK
-            }
-        }
-        return (effK, effV)
+        Self.effectiveCacheTypes(forModel: modelPath, k: cacheTypeK, v: cacheTypeV)
+    }
+
+    /// `effectiveCacheTypes` keyed by an explicit model path, so callers that
+    /// serve many models at once (the router preset) equalize each section
+    /// against its own model — the instance property keys on `modelPath`,
+    /// which is empty in router mode and would never equalize anything.
+    static func effectiveCacheTypes(forModel path: String, k: String, v: String) -> (k: String, v: String) {
+        guard k != v, kvTypesMustMatch(forModel: path) else { return (k, v) }
+        return Estimator.kvTypeScale(v) < Estimator.kvTypeScale(k) ? (v, v) : (k, k)
+    }
+
+    /// Average scale of a K/V pair. `ModelSpec.kvBytesPerToken` counts K and V
+    /// bytes combined at f16, so a pair's true footprint scales by the mean of
+    /// both types — the same formula Hardware.swift's estimator and the DFlash
+    /// planner already use. Scaling by K alone mis-estimates every mixed pair
+    /// (K=f16/V=q4 under-fits, K=q4/V=f16 over-fits and can spill).
+    nonisolated static func kvScale(k: String, v: String) -> Double {
+        (Estimator.kvTypeScale(k) + Estimator.kvTypeScale(v)) / 2
     }
 
     var arguments: [String] {
@@ -552,8 +565,14 @@ struct ServerSettings {
             if seenAliases.contains(alias) { alias += "-\(abs(path.hashValue) % 1000)" }
             seenAliases.insert(alias)
 
+            // Same gemma equalization as `arguments` and `benchmarkArguments`,
+            // applied per path: the router serves many models and only its
+            // gemma sections hit the same-type-requiring generic Metal kernel.
+            // A mixed pair written raw here aborts that model's child engine
+            // at load — the same GGML_ASSERT the launch path equalizes away.
+            let kv = Self.effectiveCacheTypes(forModel: path, k: cacheTypeK, v: cacheTypeV)
             let modelCtx = Self.routerCtx(forModel: path, requested: ctx, ncmoe: ncmoeByPath[path] ?? 0,
-                                          kvScale: Estimator.kvTypeScale(cacheTypeK),
+                                          kvScale: Self.kvScale(k: kv.k, v: kv.v),
                                           reserveMB: vramReserveMB)
             var lines = ["[\(alias)]", "model = \(path)", "n-gpu-layers = \(ngl)",
                          "ctx-size = \(modelCtx)", "threads = \(threads)", "flash-attn = \(faValue)"]
@@ -566,8 +585,8 @@ struct ServerSettings {
                 if imageMaxTokens > 0 { lines.append("image-max-tokens = \(imageMaxTokens)") }
             }
             if jinja || mmproj != nil { lines.append("jinja = true") }
-            if cacheTypeK != "f16" { lines.append("cache-type-k = \(cacheTypeK)") }
-            if cacheTypeV != "f16" { lines.append("cache-type-v = \(cacheTypeV)") }
+            if kv.k != "f16" { lines.append("cache-type-k = \(kv.k)") }
+            if kv.v != "f16" { lines.append("cache-type-v = \(kv.v)") }
             lines.append("cache-ram = \(cacheRAM)")
             if cacheReuse && mmproj == nil { lines.append("cache-reuse = 256") }
             if parallelSlots > 0 { lines.append("parallel = \(parallelSlots)") }
@@ -2165,7 +2184,18 @@ final class ServerController: ObservableObject {
                 ($0, Estimator.ncmoeForSelection(path: $0, models: models))
             })
             let ini = settings.routerPresetINI(modelPaths: paths, ncmoeByPath: ncmoeByPath)
-            try? ini.write(to: ServerSettings.routerPresetPath(port: settings.port), atomically: true, encoding: .utf8)
+            let presetURL = ServerSettings.routerPresetPath(port: settings.port)
+            do {
+                try ini.write(to: presetURL, atomically: true, encoding: .utf8)
+            } catch {
+                // A failed write would launch against the STALE preset file —
+                // the engine would come up serving the wrong models, silently.
+                // Fail the launch with the exact cause instead.
+                let msg = "No se pudo escribir el preset del router (\(presetURL.lastPathComponent)): \(error.localizedDescription) / could not write the router preset: the engine is not started against a stale model list"
+                fileLog.append("[start] \(msg)")
+                state = .failed(msg)
+                return
+            }
         }
 
         prewarmActive = !settings.routerMode && settings.persistCache && settings.effectiveFaAmd
@@ -2495,10 +2525,13 @@ final class ServerController: ObservableObject {
                 try? await Task.sleep(for: .seconds(2))
             }
             await MainActor.run {
-                self?.state = .failed("El servidor no respondió al health check")
+                self?.state = .failed("El servidor no respondió al health check / the server did not answer the health check — see the log in Settings")
                 self?.stopDiscovery()
                 if let p = self?.process {
                     let pid = p.processIdentifier
+                    // Record the PID like stop() does: a restart must wait for
+                    // this engine to release the port instead of racing it.
+                    self?.lastStoppedPID = pid
                     Self.reapChildren(of: pid)
                     p.terminate()
                     DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {

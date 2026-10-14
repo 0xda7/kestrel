@@ -95,6 +95,42 @@ enum LayaDecideService {
         loadSets().first { $0.name.lowercased() == name.lowercased() }
     }
 
+    /// File-name-safe form of a set name. The decoded `name` field is the
+    /// lookup key (`set(named:)`), so a sanitized file name never breaks a
+    /// set the operator already has.
+    static func setFileName(for name: String) -> String {
+        let safe = name.map { $0.isLetter || $0.isNumber || $0 == " " || $0 == "-" || $0 == "_" ? $0 : "-" }
+        let trimmed = String(safe).trimmingCharacters(in: CharacterSet(charactersIn: "- "))
+        return (trimmed.isEmpty ? "set" : trimmed) + ".json"
+    }
+
+    /// Persists a set, replacing the stored file of the same name.
+    static func saveSet(_ set: QuestionSet) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(set)
+        try data.write(to: setsDirectory.appendingPathComponent(setFileName(for: set.name)),
+                       options: .atomic)
+    }
+
+    /// Deletes every stored file whose decoded set matches `name`
+    /// (case-insensitive — the same matching `set(named:)` uses). Returns
+    /// true when anything was removed.
+    @discardableResult
+    static func deleteSet(named name: String) -> Bool {
+        let fm = FileManager.default
+        var removed = false
+        let files = (try? fm.contentsOfDirectory(at: setsDirectory, includingPropertiesForKeys: nil)) ?? []
+        for file in files where file.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: file),
+                  let set = try? JSONDecoder().decode(QuestionSet.self, from: data),
+                  set.name.lowercased() == name.lowercased() else { continue }
+            try? fm.removeItem(at: file)
+            removed = true
+        }
+        return removed
+    }
+
     // MARK: - Client
 
     /// Document slices tried in order when the engine rejects content —
@@ -107,6 +143,17 @@ enum LayaDecideService {
 
     static func systemOneURL(port: Int = defaultPort) -> URL {
         URL(string: "http://127.0.0.1:\(port)/v1/systemone")!
+    }
+
+    /// True when the engine answers `/health` with 200. Shared by the agent
+    /// tool and the Decisions section so both agree the engine is up before
+    /// spending a request on it.
+    static func engineHealth(port: Int = defaultPort) async -> Bool {
+        var req = URLRequest(url: healthURL(port: port))
+        req.timeoutInterval = 2
+        guard let (_, response) = try? await URLSession.shared.data(for: req),
+              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
+        return true
     }
 
     /// One decision pass: strips fenced code blocks, then posts
@@ -150,7 +197,7 @@ enum LayaDecideService {
 
     // MARK: - Answers
 
-    struct Answer: Equatable {
+    struct Answer: Equatable, Codable {
         let type: String
         let choice: String?
         let confidence: Double
@@ -312,38 +359,48 @@ enum LayaDecideService {
         // the "Laya Decisions" card must steer the tool with it.
         let port = resolvedPort()
         // Health first: a clear start-it-yourself message beats a timeout.
-        var health = URLRequest(url: healthURL(port: port))
-        health.timeoutInterval = 2
-        do {
-            let (_, response) = try await URLSession.shared.data(for: health)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                return ToolExecutionResult(content: LayaError.engineDown.localizedDescription, isError: true)
-            }
-        } catch {
+        guard await engineHealth(port: port) else {
             return ToolExecutionResult(content: LayaError.engineDown.localizedDescription, isError: true)
         }
 
         do {
             let answers = try await decide(document: document, questions: questions, port: port)
-            var lines = ["Laya decision card — set: \(setName)", ""]
-            for (key, q) in questions.sorted(by: { $0.key < $1.key }) {
-                let a = answers[key]
-                lines.append("Q: \(q.instructions)")
-                lines.append("   → \(a?.summaryLine(key: key, instructions: q.instructions) ?? "no answer")")
-                if let a, a.type == "choice", !a.probabilities.isEmpty {
-                    let ranked = a.probabilities.sorted { $0.value > $1.value }
-                    for (label, p) in ranked {
-                        let bar = String(repeating: "█", count: max(0, min(20, Int(p * 20))))
-                        let padded = label.padding(toLength: 24, withPad: " ", startingAt: 0)
-                        lines.append("   \(padded) \(String(format: "%5.1f%%", p * 100)) \(bar)")
-                    }
-                }
-                lines.append("")
-            }
-            return ToolExecutionResult(content: lines.joined(separator: "\n"), isError: false)
+            return ToolExecutionResult(content: cardText(setName: setName, questions: questions,
+                                                          answers: answers),
+                                       isError: false)
         } catch {
             return ToolExecutionResult(content: (error as? LayaError)?.errorDescription
                 ?? LayaError.malformedResponse.localizedDescription, isError: true)
         }
+    }
+
+    /// First line of every plain-text decision card. `cardText` emits it and
+    /// `LayaDecisionCardModel.parse` requires it — one constant so the two
+    /// can never drift apart.
+    static let cardHeader = "Laya decision card — set: "
+
+    /// The plain-text decision card `laya_decide` returns to the model and
+    /// the transcript. Pure so the chat's card view
+    /// (`LayaDecisionCardModel.parse`) and its check can round-trip the
+    /// exact shipped shape.
+    static func cardText(setName: String,
+                         questions: [String: QuestionSet.Question],
+                         answers: [String: Answer]) -> String {
+        var lines = [cardHeader + setName, ""]
+        for (key, q) in questions.sorted(by: { $0.key < $1.key }) {
+            let a = answers[key]
+            lines.append("Q: \(q.instructions)")
+            lines.append("   → \(a?.summaryLine(key: key, instructions: q.instructions) ?? "no answer")")
+            if let a, a.type == "choice", !a.probabilities.isEmpty {
+                let ranked = a.probabilities.sorted { $0.value > $1.value }
+                for (label, p) in ranked {
+                    let bar = String(repeating: "█", count: max(0, min(20, Int(p * 20))))
+                    let padded = label.padding(toLength: 24, withPad: " ", startingAt: 0)
+                    lines.append("   \(padded) \(String(format: "%5.1f%%", p * 100)) \(bar)")
+                }
+            }
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
     }
 }
