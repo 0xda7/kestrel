@@ -5,6 +5,6 @@
     "mission",
     "step3"
   ],
-  "status": "in_progress",
+  "status": "completed",
   "created_at": "2026-10-14T04:34:29.892Z"
 }

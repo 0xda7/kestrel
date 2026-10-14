@@ -131,6 +131,35 @@ enum LatchDelegateService {
         return await run(argv: argv, workingDirectory: workingDirectory, timeout: timeout)
     }
 
+    /// Environment the harness needs to boot. The standalone harness resolves
+    /// its provider runtime through two facts the Latch desktop app always
+    /// provides and a GUI-spawned child would otherwise never see (it reads
+    /// no dotfiles): the bundled provider config file, and the gateway key.
+    /// Without these the harness exits 1 with the bilingual "Bundled 与
+    /// Active ... 均不可用" bootstrap failure — the entire 0.89.6 chat
+    /// outage, root-caused 2026-10-14 by running the harness with each fact
+    /// supplied until it answered AGENT-OK.
+    static func childEnvironment() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        if env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"] == nil {
+            let candidates = [
+                "/Applications/Latch.app/Contents/Resources/config/provider/zcode-builtin.json",
+                NSHomeDirectory() + "/.latch/v2/runtime/provider/bundled/zcode-builtin.json",
+            ]
+            if let found = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+                env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"] = found
+            }
+        }
+        if env["LATCH_API_KEY"] == nil {
+            let stored = LocalSecretStore.value("latch-api-key") ?? "local"
+            env["LATCH_API_KEY"] = stored
+        }
+        if env["AI_GATEWAY_API_KEY"] == nil {
+            env["AI_GATEWAY_API_KEY"] = env["LATCH_API_KEY"]
+        }
+        return env
+    }
+
     private static func run(argv: [String], workingDirectory: String?,
                             timeout: Int) async -> ToolExecutionResult {
         // Boxed: onOutput is @Sendable, so the pump thread may only touch the
@@ -188,6 +217,7 @@ enum LatchDelegateService {
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
+        process.environment = Self.childEnvironment()
         // Harnesses can be chatty; drain both pipes continuously or a full
         // 64 KiB pipe buffer deadlocks the child mid-run.
         /// All mutable pump state behind one lock. `@unchecked Sendable`:

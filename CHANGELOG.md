@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
 
+## [0.89.7] — 2026-10-14
+
+- **Fix: the latch agent now boots from Kestrel chat.** The harness needs
+  two facts the Latch desktop app provides and a GUI child never saw: the
+  bundled provider config path and the gateway key. Kestrel now passes both
+  (with a stored-key override via the local secret store). Root-caused by
+  instrumented reproduction — the harness answered AGENT-OK with the facts
+  supplied, and 409/409 checks stay green.
+
 ## [0.89.6] — 2026-10-14
 
 - **Engine upgraded to current llama.cpp** under Kestrel's full patch series (re-based 7/7 clean, byte-identical round-trip verified). Brings the ModernBERT decision architecture: **Laya loads and answers typed questions** (`/v1/systemone`), plus three weeks of upstream fixes. Old engine remains beside the new one as a backup file.
