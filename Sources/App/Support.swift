@@ -94,6 +94,9 @@ enum SettingsKeys {
     static let memoryArchiveHookSecret = "memoryArchiveHookSecret"
     static let embeddings = "embeddings"
     static let agentToolsEnabled = "agentToolsEnabled"
+    /// laya_decide tool: opt-in, default off — Laya joins a conversation
+    /// only when the operator turns it on in Chat advanced settings.
+    static let layaDecideEnabled = "layaDecideEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
     /// latch_delegate tool: path to the latch harness binary, on/off, timeout.

@@ -1138,7 +1138,12 @@ final class ChatStore: ObservableObject {
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
                     if LatchDelegateService.isEnabled { availableTools.append(LatchDelegateService.tool) }
-                    availableTools.append(LayaDecideService.tool)
+                    // Laya is opt-in (default off): the operator adds the
+                    // decision tool to a conversation by choice, never by
+                    // installation.
+                    if UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled) {
+                        availableTools.append(LayaDecideService.tool)
+                    }
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
                     availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
