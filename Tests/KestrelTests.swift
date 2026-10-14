@@ -3207,8 +3207,14 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertTrue(home.hasSuffix("Kestrel/latch-home"))
         XCTAssertNil(env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"],
                      "no hidden builtin provider login")
-        XCTAssertNil(env["LATCH_API_KEY"], "no baked-in gateway key")
         XCTAssertNil(env["AI_GATEWAY_API_KEY"], "no mirrored gateway key")
+        // The operator's own stored key passes through (the harness refuses
+        // to boot without one); anything else must be absent.
+        if let stored = LocalSecretStore.value("latch-api-key") {
+            XCTAssertEqual(env["LATCH_API_KEY"], stored)
+        } else {
+            XCTAssertNil(env["LATCH_API_KEY"])
+        }
     }
 
     /// Laya integration (0.89.11): the medical triage set seeds on first

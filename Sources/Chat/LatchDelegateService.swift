@@ -166,12 +166,17 @@ enum LatchDelegateService {
     static func childEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = Self.sandboxHome.path
-        // Scrub any provider credentials inherited from whatever launched the
-        // app (a terminal with ZCode/latch runtime vars set would otherwise
-        // leak its login into the agent): the agent's ONLY provider source is
-        // the LatchBridge-generated file inside its sandbox home.
+        // The harness refuses to boot without a gateway key (the entire
+        // 0.89.6 outage). Only a key the operator actually stored passes
+        // through — never a baked-in default, never a hidden login; every
+        // provider route itself still comes from LatchBridge's file.
+        if let stored = LocalSecretStore.value("latch-api-key") {
+            env["LATCH_API_KEY"] = stored
+        }
+        // Still scrub the inherited runtime login and its mirror so an
+        // outer ZCode/latch terminal can never leak its own provider into
+        // the embedded agent.
         env.removeValue(forKey: "ZCODE_BUILTIN_PROVIDER_CONFIG_FILE")
-        env.removeValue(forKey: "LATCH_API_KEY")
         env.removeValue(forKey: "AI_GATEWAY_API_KEY")
         return env
     }

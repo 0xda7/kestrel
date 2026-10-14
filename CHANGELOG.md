@@ -1,3 +1,10 @@
+## [0.89.12] — 2026-10-14
+
+- Fix: pass the operator-stored gateway key to the embedded agent again —
+  the harness refuses to boot without it (0.89.10 over-scrubbed it, killing
+  every agent turn: no tools, no answers, empty context bar). Isolation and
+  hidden-login removal unchanged; 415/415 checks.
+
 # Changelog
 
 All notable changes to Kestrel are documented here.
