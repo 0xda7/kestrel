@@ -3266,6 +3266,200 @@ final class EnterpriseHardeningTests: CheckCase {
                        LayaDecideService.sliceSizes.sorted(by: >), "sizes must descend")
     }
 
+    /// Audit fix (77de404): provider_config.json carries every configured
+    /// provider key in plaintext, so the sidecar file must land owner-only
+    /// (0600) inside an owner-only directory (0700) — created atomically at
+    /// write time, not by a write-then-chmod sequence. Machine state is
+    /// saved and restored around the sync.
+    func testLatchSidecarConfigLandsOwnerOnly() throws {
+        let configURL = LatchBridge.configFileURL
+        let dirURL = LatchBridge.sidecarDirectory
+        let priorModel = UserDefaults.standard.string(forKey: SettingsKeys.modelPath)
+        let priorConfig = try? Data(contentsOf: configURL)
+        let hadConfig = FileManager.default.fileExists(atPath: configURL.path)
+        UserDefaults.standard.set("/tmp/kestrel-check-model.gguf", forKey: SettingsKeys.modelPath)
+        // Force the write path (sync() skips identical content).
+        try? FileManager.default.removeItem(at: configURL)
+        defer {
+            if let priorModel {
+                UserDefaults.standard.set(priorModel, forKey: SettingsKeys.modelPath)
+            } else {
+                UserDefaults.standard.removeObject(forKey: SettingsKeys.modelPath)
+            }
+            if let priorConfig {
+                try? priorConfig.write(to: configURL)
+            } else if !hadConfig {
+                try? FileManager.default.removeItem(at: configURL)
+            }
+        }
+        XCTAssertTrue(LatchBridge.sync())
+        let fm = FileManager.default
+        let fileMode = try fm.attributesOfItem(atPath: configURL.path)[.posixPermissions] as? Int
+        let dirMode = try fm.attributesOfItem(atPath: dirURL.path)[.posixPermissions] as? Int
+        XCTAssertEqual(fileMode, 0o600, "provider_config.json must be owner-only")
+        XCTAssertEqual(dirMode, 0o700, "the .latch/v2 sidecar directory must be owner-only")
+    }
+
+    /// Audit fix (77de404): every LocalSecretStore write (engine key,
+    /// provider route keys, archive token) must land 0600 inside a 0700
+    /// directory — atomically at creation.
+    func testLocalSecretStoreLandsOwnerOnly() throws {
+        let prior = LocalSecretStore.value("kestrel-check-perm-sentinel")
+        XCTAssertTrue(LocalSecretStore.store("kestrel-check-perm-sentinel", "perm-check"))
+        defer {
+            if let prior { LocalSecretStore.store("kestrel-check-perm-sentinel", prior) }
+            else { LocalSecretStore.delete("kestrel-check-perm-sentinel") }
+        }
+        let fm = FileManager.default
+        let fileURL = LocalSecretStore.url("kestrel-check-perm-sentinel")
+        let fileMode = try fm.attributesOfItem(atPath: fileURL.path)[.posixPermissions] as? Int
+        let dirMode = try fm.attributesOfItem(atPath: fileURL.deletingLastPathComponent().path)[.posixPermissions] as? Int
+        XCTAssertEqual(fileMode, 0o600, "secret files must be owner-only")
+        XCTAssertEqual(dirMode, 0o700, "the secrets directory must be owner-only")
+    }
+
+    /// Audit fix (77de404, defect register #2): the laya_decide tool must
+    /// call the port the "Laya Decisions" card actually serves on — read at
+    /// call time from the persisted profiles — and fall back to 8098 only
+    /// when the card is absent.
+    func testLayaPortFollowsTheDecisionsCard() throws {
+        let key = ServerManager.storeKey
+        let priorData = UserDefaults.standard.data(forKey: key)
+        defer {
+            if let priorData { UserDefaults.standard.set(priorData, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        let card = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/laya.gguf",
+                                  port: 9998, ngl: 99, ncmoe: 0, ctx: 2048, threads: 6,
+                                  flashAttn: "auto", noMmap: true, jinja: true,
+                                  vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                                  cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        let data = try JSONEncoder().encode([card.makeProfile(name: "Laya Decisions")])
+        UserDefaults.standard.set(data, forKey: key)
+        XCTAssertEqual(LayaDecideService.resolvedPort(), 9998,
+                       "an operator edit of the card's port must steer the tool")
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertEqual(LayaDecideService.resolvedPort(), LayaDecideService.defaultPort,
+                       "a deleted or never-seeded card falls back to 8098")
+    }
+
+    /// Audit fix (77de404, defect register #6): llama-bench hits the same
+    /// same-type-requiring Metal kernel as the server launch, so a mixed
+    /// gemma K/V pair must equalize in benchmarkArguments exactly as the
+    /// launch does — and effectiveCacheTypes is that shared pair.
+    func testBenchmarkArgumentsEqualizeGemmaMixedKV() throws {
+        var gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        gemma.embeddings = false
+        XCTAssertEqual(gemma.effectiveCacheTypes.k, "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.v, "q4_0")
+        let args = gemma.benchmarkArguments
+        let k = try XCTUnwrap(args.firstIndex(of: "-ctk"))
+        XCTAssertEqual(args[k + 1], "q4_0", "bench must measure the pair the launch uses")
+        let v = try XCTUnwrap(args.firstIndex(of: "-ctv"))
+        XCTAssertEqual(args[v + 1], "q4_0")
+    }
+
+    /// Audit fix (77de404, KES-08): the archive hook's Bearer token rides
+    /// every delivery, so a non-loopback receiver must be https. Loopback
+    /// http stays allowed (no credential leaves the machine).
+    func testMemoryArchiveHookRequiresHTTPSOffLoopback() {
+        let key = SettingsKeys.memoryArchiveHookURL
+        let prior = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let prior { UserDefaults.standard.set(prior, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.set("http://archive.example.com/hook", forKey: key)
+        XCTAssertNil(MemoryArchiveHook.url, "plain-http remote would send the token in cleartext")
+        UserDefaults.standard.set("https://archive.example.com/hook", forKey: key)
+        XCTAssertEqual(MemoryArchiveHook.url?.host, "archive.example.com")
+        UserDefaults.standard.set("http://127.0.0.1:9911/hook", forKey: key)
+        XCTAssertEqual(MemoryArchiveHook.url?.host, "127.0.0.1", "loopback http carries no network exposure")
+        UserDefaults.standard.set("http://192.168.1.9/hook", forKey: key)
+        XCTAssertNil(MemoryArchiveHook.url, "LAN hosts are not loopback-insecure; https required")
+    }
+
+    /// Audit fix (77de404): a "lang" stored by the removed Settings picker
+    /// must not linger — nothing reads it and launch clears it.
+    func testStaleStoredLanguageIsCleared() {
+        UserDefaults.standard.set("es", forKey: "lang")
+        SettingsKeys.clearStaleLanguage()
+        XCTAssertNil(UserDefaults.standard.string(forKey: "lang"))
+    }
+
+    /// Audit fix (77de404): laya_decide is opt-in — off unless the Chat
+    /// advanced toggle is set — and the tool identities the send path and
+    /// the per-conversation tools popover expose are exactly these names.
+    func testAgentToolExposureContract() {
+        UserDefaults.standard.removeObject(forKey: SettingsKeys.layaDecideEnabled)
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled),
+                       "laya_decide must default to off (opt-in)")
+        XCTAssertEqual(LatchDelegateService.tool.name, "latch_delegate")
+        XCTAssertEqual(LayaDecideService.tool.name, "laya_decide")
+    }
+
+    /// Audit fix (77de404): a steering message the user queued while a latch
+    /// turn ran must start its own turn when that turn completes — not be
+    /// silently dropped by the next manual send (send() clears
+    /// queuedMessage). Full ChatStore integration against a stub harness
+    /// binary; the operator's conversations.json is backed up and restored
+    /// byte-exact in the defer.
+    @MainActor func testQueuedSteeringMessageStartsANewLatchTurn() async throws {
+        let stubURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("kestrel-latch-queue-\(UUID().uuidString).sh")
+        try "#!/bin/sh\nsleep 1\nprintf 'stub latch reply'\n"
+            .write(to: stubURL, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                               ofItemAtPath: stubURL.path)
+        defer { try? FileManager.default.removeItem(at: stubURL) }
+
+        let conversationsURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Kestrel/conversations.json")
+        let priorBytes = try? Data(contentsOf: conversationsURL)
+        let hadFile = FileManager.default.fileExists(atPath: conversationsURL.path)
+        let priorBinary = UserDefaults.standard.string(forKey: SettingsKeys.latchBinaryPath)
+        UserDefaults.standard.set(stubURL.path, forKey: SettingsKeys.latchBinaryPath)
+        defer {
+            if let priorBinary {
+                UserDefaults.standard.set(priorBinary, forKey: SettingsKeys.latchBinaryPath)
+            } else {
+                UserDefaults.standard.removeObject(forKey: SettingsKeys.latchBinaryPath)
+            }
+            if let priorBytes {
+                try? priorBytes.write(to: conversationsURL)
+            } else if !hadFile {
+                try? FileManager.default.removeItem(at: conversationsURL)
+            }
+        }
+
+        let store = ChatStore()
+        guard let conv = store.current else {
+            return XCTFail("ChatStore must open with a conversation")
+        }
+        store.setConversationAssistantMode(conv, "latch")
+        store.send(text: "first turn", port: 8099, temperature: 0.7, maxTokens: 64,
+                   system: "", thinking: false)
+        XCTAssertTrue(store.generating, "the latch turn must be running")
+        store.queueMessage(text: "steering follow-up", attachments: [], images: [])
+        XCTAssertNotNil(store.queuedMessage, "the steering message must be queued mid-run")
+
+        let deadline = Date().addingTimeInterval(90)
+        while store.generating && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        if store.generating { store.stop() }
+        XCTAssertNil(store.queuedMessage,
+                     "a queued steering message must be delivered when the latch turn ends, not dropped")
+        let messages = store.conversations.first(where: { $0.id == conv.id })?.messages ?? []
+        XCTAssertEqual(messages.filter { $0.role == "user" }.map(\.content),
+                       ["first turn", "steering follow-up"],
+                       "the steering message must land as its own user turn")
+        XCTAssertEqual(messages.filter { $0.role == "assistant" && !$0.content.isEmpty }.count, 2,
+                       "the delivered message must start a second latch turn")
+    }
+
     /// Answers parse from the engine's response shape into the three typed
     /// lines the agent shows.
     func testLayaAnswerParsingAndSummaryLines() throws {
@@ -3298,5 +3492,13 @@ extension EnterpriseHardeningTests {
             .init(name: "testChildEnvironmentMaterializesProviderConfigForFreshSandbox") { try await $0.testChildEnvironmentMaterializesProviderConfigForFreshSandbox() },
             .init(name: "testLayaQuestionSetSeedsAndWireShape") { try await $0.testLayaQuestionSetSeedsAndWireShape() },
             .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
+            .init(name: "testLatchSidecarConfigLandsOwnerOnly") { try await $0.testLatchSidecarConfigLandsOwnerOnly() },
+            .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
+            .init(name: "testLayaPortFollowsTheDecisionsCard") { try await $0.testLayaPortFollowsTheDecisionsCard() },
+            .init(name: "testBenchmarkArgumentsEqualizeGemmaMixedKV") { try await $0.testBenchmarkArgumentsEqualizeGemmaMixedKV() },
+            .init(name: "testMemoryArchiveHookRequiresHTTPSOffLoopback") { $0.testMemoryArchiveHookRequiresHTTPSOffLoopback() },
+            .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
+            .init(name: "testAgentToolExposureContract") { $0.testAgentToolExposureContract() },
+            .init(name: "testQueuedSteeringMessageStartsANewLatchTurn") { try await $0.testQueuedSteeringMessageStartsANewLatchTurn() },
         ])
 }
