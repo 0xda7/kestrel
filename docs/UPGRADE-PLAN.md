@@ -1,5 +1,11 @@
 # Kestrel Upgrade Plan — The Decision-Native AI Workbench
 
+Architecture ruling (operator, 2026-10-14): **decision models are an engine
+capability, not a product foundation.** The engine speaks /v1/systemone;
+any decision model (Laya, Jev, Julia-1, Kev-4B, lev, or one you train) is
+selected by the operator like any other GGUF. No model brand appears in
+product code, seeding, or naming.
+
 Supervision model: the Atomic agent builds; the supervisor (this session's
 lead) approves every proposal before implementation and accepts nothing
 that is not suite-green, built, and installed. Standard: code an outside
@@ -24,10 +30,11 @@ tool). Build the full UI:
 - Acceptance: checks for set CRUD, run persistence, port resolution,
   export shape; suite green; tab reachable and usable by hand.
 
-## Phase 2 — Laya as the router (the cost engine)
+## Phase 2 — The decision model as the router (the cost engine)
 
-- Incoming chat message → one Laya pass (~33 ms) decides: answer directly,
-  local big model, or a remote provider route.
+- Incoming chat message → one decision pass (~33 ms) on the operator's
+  chosen decision model: answer directly, local big model, or a remote
+  provider route.
 - Router question set is data (JSON), not code; the operator can retune
   routing without a build.
 - Every routing decision logged beside the run (audit trail).
@@ -57,7 +64,9 @@ tool). Build the full UI:
 
 ## Standing engineering rules (every phase)
 
-1. No hardcoded values that a user can change in the UI — read the truth.
+1. Model-agnostic: no model brand in product code — capabilities bind to
+   engine endpoints; models are data the operator chooses.
+2. No hardcoded values that a user can change in the UI — read the truth.
 2. Every new capability: reachable from the UI, documented in the manual,
    pinned by at least one check that fails without it.
 3. Nothing ships red: scripts/test.sh is the gate; make-app.sh + install
