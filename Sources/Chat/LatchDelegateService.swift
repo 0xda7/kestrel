@@ -166,6 +166,12 @@ enum LatchDelegateService {
     static func childEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = Self.sandboxHome.path
+        // The harness needs its provider config inside the sandbox; if no
+        // server event has written one yet (fresh sandbox), generate it now
+        // so a first chat turn can never boot into the 0.89.6 failure shape.
+        if !FileManager.default.fileExists(atPath: LatchBridge.configFileURL.path) {
+            _ = LatchBridge.sync()
+        }
         // The harness refuses to boot without a gateway key (the entire
         // 0.89.6 outage). Only a key the operator actually stored passes
         // through — never a baked-in default, never a hidden login; every
