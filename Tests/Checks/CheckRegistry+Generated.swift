@@ -18,6 +18,7 @@ enum CheckRegistry {
         ("WhisperTranscriptTests", WhisperTranscriptTests.__checkSet),
         ("DynamicMoeOptimizationTests", DynamicMoeOptimizationTests.__checkSet),
         ("EngineHTTPTests", EngineHTTPTests.__checkSet),
+        ("EngineToolTemplateTests", EngineToolTemplateTests.__checkSet),
         ("EstimatorTests", EstimatorTests.__checkSet),
         ("ResumableDownloadTests", ResumableDownloadTests.__checkSet),
         ("DflashPolicyTests", DflashPolicyTests.__checkSet),

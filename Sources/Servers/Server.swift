@@ -451,6 +451,17 @@ struct ServerSettings {
             // /cors-proxy relay, so it stays loopback-only unless the LAN
             // refusal above has been satisfied with an API key.
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
+            // Re-authored LFM2-family templates defeat the engine's static
+            // tool-format detectors, and the generic fallback emits a grammar
+            // the engine itself rejects ("expecting newline or end at ::=",
+            // the 2026-10-14 Agent Tools outage). When the model's embedded
+            // template speaks the LFM2 call syntax without a detectable
+            // marker, hand the engine a copy carrying the inert marker
+            // comment so its specialized LFM2 parser/grammar drives the
+            // tools (see EngineToolTemplate for the full chain).
+            if let derivedTemplate = EngineToolTemplate.derivedTemplateFile(forModel: modelPath) {
+                args += ["--chat-template-file", derivedTemplate]
+            }
         }
         if (uiMcpProxy || agentToolsEnabled) && !chatToolingBlocked { args.append("--ui-mcp-proxy") }
         if persistCache && effectiveFaAmd {
