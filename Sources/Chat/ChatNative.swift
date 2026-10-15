@@ -922,12 +922,6 @@ final class ChatStore: ObservableObject {
                         }
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
-                    // Laya is opt-in (default off): the operator adds the
-                    // decision tool to a conversation by choice, never by
-                    // installation.
-                    if UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled) {
-                        availableTools.append(LayaDecideService.tool)
-                    }
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
                     availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
@@ -1411,8 +1405,6 @@ final class ChatStore: ObservableObject {
                         serverID: serverID, name: remoteName, arguments: arguments)
                 } else if request.name == JavaScriptSandboxService.toolName {
                     result = await JavaScriptSandboxService.execute(arguments: arguments)
-                } else if request.name == LayaDecideService.toolName {
-                    result = await LayaDecideService.execute(arguments: arguments)
                 } else if ChatMemoryService.toolNames.contains(request.name) {
                     result = await MainActor.run {
                         self?.runMemoryTool(request.name, arguments: arguments)
@@ -4028,12 +4020,7 @@ struct NativeChatView: View {
             tools.append(JavaScriptSandboxService.tool)
         }
         // Same enable flags the send path uses, so the per-conversation
-        // picker and the offered tool set are the same list: opening this
-        // popover must never silently strip laya_decide
-        // from a conversation that had them.
-        if UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled) {
-            tools.append(LayaDecideService.tool)
-        }
+        // picker and the offered tool set are the same list.
         if ChatMemoryService.isEnabled { tools += ChatMemoryService.tools }
         tools += await KestrelMCPService.shared.discoverTools()
         var seen = Set<String>()

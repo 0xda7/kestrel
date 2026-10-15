@@ -3243,24 +3243,6 @@ final class EnterpriseHardeningTests: CheckCase {
 
 
 
-    /// Laya integration (0.89.11): the medical triage set seeds on first
-    /// use, questions serialize to the exact /v1/systemone wire shape, and
-    /// the retry ladder is the reference CLI's descending sizes.
-    func testLayaQuestionSetSeedsAndWireShape() throws {
-        let sets = LayaDecideService.loadSets()
-        let triage = try XCTUnwrap(sets.first { $0.name == "Medical Triage" })
-        let choice = try XCTUnwrap(triage.questions["study_type"])
-        XCTAssertEqual(choice.wireJSON()["type"] as? String, "choice")
-        let criteria = try XCTUnwrap(choice.wireJSON()["criteria"] as? [String: String])
-        XCTAssertEqual(criteria.count, 5)
-        let score = try XCTUnwrap(triage.questions["clinical_relevance"])
-        let anchors = try XCTUnwrap(score.wireJSON()["criteria"] as? [String])
-        XCTAssertEqual(anchors, ["background interest only", "moderately useful", "directly changes practice"])
-        XCTAssertEqual(LayaDecideService.sliceSizes.first, 12000)
-        XCTAssertEqual(LayaDecideService.sliceSizes.last, 350)
-        XCTAssertEqual(LayaDecideService.sliceSizes,
-                       LayaDecideService.sliceSizes.sorted(by: >), "sizes must descend")
-    }
 
 
     /// Audit fix (77de404): every LocalSecretStore write (engine key,
@@ -3381,30 +3363,6 @@ final class EnterpriseHardeningTests: CheckCase {
                        ["--host", "0.0.0.0"])
     }
 
-    /// Audit fix (77de404, defect register #2): the laya_decide tool must
-    /// call the port the "Laya Decisions" card actually serves on — read at
-    /// call time from the persisted profiles — and fall back to 8098 only
-    /// when the card is absent.
-    func testLayaPortFollowsTheDecisionsCard() throws {
-        let key = ServerManager.storeKey
-        let priorData = UserDefaults.standard.data(forKey: key)
-        defer {
-            if let priorData { UserDefaults.standard.set(priorData, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
-        }
-        let card = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/laya.gguf",
-                                  port: 9998, ngl: 99, ncmoe: 0, ctx: 2048, threads: 6,
-                                  flashAttn: "auto", noMmap: true, jinja: true,
-                                  vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
-                                  cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
-        let data = try JSONEncoder().encode([card.makeProfile(name: "Laya Decisions")])
-        UserDefaults.standard.set(data, forKey: key)
-        XCTAssertEqual(LayaDecideService.resolvedPort(), 9998,
-                       "an operator edit of the card's port must steer the tool")
-        UserDefaults.standard.removeObject(forKey: key)
-        XCTAssertEqual(LayaDecideService.resolvedPort(), LayaDecideService.defaultPort,
-                       "a deleted or never-seeded card falls back to 8098")
-    }
 
     /// Audit fix (77de404, defect register #6): llama-bench hits the same
     /// same-type-requiring Metal kernel as the server launch, so a mixed
@@ -3531,15 +3489,6 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "lang"))
     }
 
-    /// Audit fix (77de404): laya_decide is opt-in — off unless the Chat
-    /// advanced toggle is set — and the tool identities the send path and
-    /// the per-conversation tools popover expose are exactly these names.
-    func testAgentToolExposureContract() {
-        UserDefaults.standard.removeObject(forKey: SettingsKeys.layaDecideEnabled)
-        XCTAssertFalse(UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled),
-                       "laya_decide must default to off (opt-in)")
-        XCTAssertEqual(LayaDecideService.tool.name, "laya_decide")
-    }
 
 
     /// A steering message queued while the
@@ -3599,24 +3548,6 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertFalse(store.generating, "the failed turn must release generating")
     }
 
-    /// Answers parse from the engine's response shape into the three typed
-    /// lines the agent shows.
-    func testLayaAnswerParsingAndSummaryLines() throws {
-        let sample = """
-        {"answers":{"study_type":{"type":"choice","choice":"clinical trial",
-        "confidence":0.82,"probabilities":{"clinical trial":0.82,"review":0.11,"other":0.07}},
-        "reports_complications":{"type":"noul","noul":0.91},
-        "clinical_relevance":{"type":"score","score":64}}}
-        """
-        let answers = try LayaDecideService.parseAnswers(Data(sample.utf8))
-        XCTAssertEqual(answers.count, 3)
-        XCTAssertEqual(answers["study_type"]?.summaryLine(key: "study_type", instructions: ""),
-                       "study_type → clinical trial (82%)")
-        XCTAssertEqual(answers["reports_complications"]?.summaryLine(key: "reports_complications", instructions: ""),
-                       "reports_complications → YES (91%)")
-        XCTAssertEqual(answers["clinical_relevance"]?.summaryLine(key: "clinical_relevance", instructions: ""),
-                       "clinical_relevance → score 64")
-    }
 }
 
 extension EnterpriseHardeningTests {
@@ -3629,13 +3560,10 @@ extension EnterpriseHardeningTests {
             .init(name: "testChatErrorTextIsCopyable") { try $0.testChatErrorTextIsCopyable() },
             .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
             .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
-            .init(name: "testLayaQuestionSetSeedsAndWireShape") { try await $0.testLayaQuestionSetSeedsAndWireShape() },
-            .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
             .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
             .init(name: "testEverySecretPathLandsOwnerOnly") { try await $0.testEverySecretPathLandsOwnerOnly() },
             .init(name: "testOwnerOnlyWriterCoversCreationAndLooseOverwrite") { try await $0.testOwnerOnlyWriterCoversCreationAndLooseOverwrite() },
             .init(name: "testLoopbackBindCannotBeOverriddenByExtraArguments") { try await $0.testLoopbackBindCannotBeOverriddenByExtraArguments() },
-            .init(name: "testLayaPortFollowsTheDecisionsCard") { try await $0.testLayaPortFollowsTheDecisionsCard() },
             .init(name: "testBenchmarkArgumentsEqualizeGemmaMixedKV") { try await $0.testBenchmarkArgumentsEqualizeGemmaMixedKV() },
             .init(name: "testRouterPresetEqualizesGemmaMixedKVPerModel") { $0.testRouterPresetEqualizesGemmaMixedKVPerModel() },
             .init(name: "testEffectiveCacheTypesDelegateToPerPathHelper") { $0.testEffectiveCacheTypesDelegateToPerPathHelper() },
@@ -3643,7 +3571,6 @@ extension EnterpriseHardeningTests {
             .init(name: "testEngineCheckLaunchFailureIsStated") { $0.testEngineCheckLaunchFailureIsStated() },
             .init(name: "testMemoryArchiveHookRequiresHTTPSOffLoopback") { $0.testMemoryArchiveHookRequiresHTTPSOffLoopback() },
             .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
-            .init(name: "testAgentToolExposureContract") { $0.testAgentToolExposureContract() },
             .init(name: "testDeclinedContinuationDeliversQueuedSteeringMessage") { try await $0.testDeclinedContinuationDeliversQueuedSteeringMessage() },
         ])
 }

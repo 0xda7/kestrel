@@ -1800,8 +1800,7 @@ final class ServerManager: ObservableObject {
     /// The instance the chat and benchmark act on.
     @Published var activeID: UUID
 
-    /// Persisted added-server profiles. Also read by
-    /// LayaDecideService.resolvedPort() from nonisolated code.
+    /// Persisted added-server profiles.
     nonisolated static let storeKey = "multiServerProfiles"
     private var pendingPersist: Task<Void, Never>?
 
@@ -1825,29 +1824,6 @@ final class ServerManager: ObservableObject {
                 c.profile = p
                 list.append(c)
             }
-        }
-        // One-time seed of the "Laya Decisions" server card: the local
-        // decision model as its own stoppable server on 8098, so Laya is
-        // served from Kestrel — visible, user-started, user-stopped — never
-        // a hidden background process. Skipped when the model file is
-        // absent, the card already exists (by name or port), or the user
-        // deleted it (remembered explicitly).
-        let layaModel = NSHomeDirectory() + "/models/Laya-Q8_0.gguf"
-        let layaDeletedKey = "layaDecisionsServerDeleted"
-        if FileManager.default.fileExists(atPath: layaModel),
-           !UserDefaults.standard.bool(forKey: layaDeletedKey),
-           !list.contains(where: { $0.name == "Laya Decisions" || $0.profile?.port == 8098 }) {
-            var p = ServerSettings.fromDefaults().makeProfile(name: "Laya Decisions")
-            p.name = "Laya Decisions"
-            p.port = 8098
-            p.ctx = 2048
-            p.pinned = [Profile.Pin.model, Profile.Pin.ctx]
-            p.selectInstanceModel(path: layaModel, ncmoe: p.ncmoe)
-            let c = ServerController()
-            c.name = "Laya Decisions"
-            c.profile = p
-            list.append(c)
-            UserDefaults.standard.set(false, forKey: layaDeletedKey)
         }
         servers = list
         activeID = first.id
@@ -1891,9 +1867,6 @@ final class ServerManager: ObservableObject {
         guard let i = servers.firstIndex(where: { $0.id == id }), i != 0 else { return }
         servers[i].stop()
         let wasActive = servers[i].id == activeID
-        if servers[i].name == "Laya Decisions" {
-            UserDefaults.standard.set(true, forKey: "layaDecisionsServerDeleted")
-        }
         servers.remove(at: i)
         if wasActive { activeID = servers[0].id }
         persist()

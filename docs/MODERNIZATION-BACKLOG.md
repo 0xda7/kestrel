@@ -1,4 +1,4 @@
-# Modernization & Security Backlog — executed next, after the in-flight Laya build lands
+# Modernization & Security Backlog
 
 Worklist, not report. Each item = one agent batch, suite-gated, shipped.
 
@@ -13,7 +13,7 @@ Worklist, not report. Each item = one agent batch, suite-gated, shipped.
    ObservableObject usage causes stale-UI bugs (context bar class).
 3. **URLSession consolidation**: one shared session with sane timeouts
    instead of ad-hoc URLRequest construction scattered across services
-   (Laya client, MemoryArchiveHook, update checker, remote providers).
+   (MemoryArchiveHook, update checker, remote providers).
 4. **Error typing**: replace stringly-typed failure states with typed
    errors surfaced uniformly in the UI (no silent try?).
 5. **Toolchain**: build against the newest installed Swift; adopt new

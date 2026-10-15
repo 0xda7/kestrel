@@ -13,7 +13,6 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.agentToolsEnabled) private var agentToolsEnabled = false
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
-    @AppStorage(SettingsKeys.layaDecideEnabled) private var layaDecideEnabled = false
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
@@ -273,12 +272,6 @@ struct ChatAdvancedSettingsSection: View {
                                        "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.")) {
                         SettingsToggle(isOn: $jsSandboxEnabled)
                     }
-                    SettingsRow(icon: "checklist",
-                                title: loc.t("Decisiones Laya (laya_decide)", "Laya decisions (laya_decide)"),
-                                help: loc.t("Añade la herramienta laya_decide: clasificación, verificación y puntuación rápidas sobre documentos con el modelo System-1 de la tarjeta «Laya Decisions». Desactivada por defecto; Laya solo entra en una conversación si la activas.",
-                                       "Adds the laya_decide tool: fast classification, verification and scoring over documents using the System-1 model on the 'Laya Decisions' card. Off by default; Laya joins a conversation only when you turn it on.")) {
-                        SettingsToggle(isOn: $layaDecideEnabled)
-                    }
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
                                    help: loc.t("Máximo de rondas herramienta→respuesta que el agente encadena en un turno antes de detenerse.",
@@ -490,7 +483,6 @@ struct ChatAdvancedSettingsSection: View {
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
-        layaDecideEnabled = false
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; MemoryArchiveHook.setReceiverToken("")
     }

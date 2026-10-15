@@ -94,9 +94,6 @@ enum SettingsKeys {
     static let memoryArchiveHookSecret = "memoryArchiveHookSecret"
     static let embeddings = "embeddings"
     static let agentToolsEnabled = "agentToolsEnabled"
-    /// laya_decide tool: opt-in, default off — Laya joins a conversation
-    /// only when the operator turns it on in Chat advanced settings.
-    static let layaDecideEnabled = "layaDecideEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
     /// Stop sequences for chat sampling, comma/newline separated.
@@ -263,7 +260,6 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
-        layaDecideEnabled,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
