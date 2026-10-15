@@ -34,7 +34,7 @@ final class LatchDelegateChatTurnTests: CheckCase {
         let snapshots = OSAllocatedUnfairLock<[String]>(initialState: [])
         let outcome = await LatchDelegateService.runStreaming(
             argv: [stub], workingDirectory: nil, timeout: 30, onLaunch: nil,
-            onOutput: { _, fullSoFar in snapshots.withLock { $0.append(fullSoFar) } })
+            onOutput: { fullSoFar in snapshots.withLock { $0.append(fullSoFar) } })
         guard case .completed(let output) = outcome else {
             return XCTFail("expected a completed turn, got \(outcome)")
         }
@@ -86,6 +86,25 @@ final class LatchDelegateChatTurnTests: CheckCase {
                           "the escalation must not wait the full 60 s child")
     }
 
+    /// A multi-byte UTF-8 character split across two stderr chunks (a harness
+    /// writing a non-ASCII diagnostic byte-by-byte through a pipe) must reach
+    /// the failure tail reassembled — the same sequence-boundary rule the
+    /// stdout incremental decode uses — not as U+FFFD replacement characters.
+    @MainActor func testSplitStderrCharacterReassemblesInTheFailureTail() async throws {
+        let stub = makeStub("printf '\\360\\237\\230' >&2\nsleep 1\nprintf '\\200 some error' >&2\nexit 3")
+        defer { removeStub(stub) }
+        let outcome = await LatchDelegateService.runStreaming(
+            argv: [stub], workingDirectory: nil, timeout: 30, onLaunch: nil, onOutput: nil)
+        guard case .exited(let status, let output) = outcome else {
+            return XCTFail("expected an abnormal exit, got \(outcome)")
+        }
+        XCTAssertEqual(status, 3)
+        XCTAssertTrue(output.contains("\u{1F600}"),
+                      "the character split across chunks must reassemble: \(output)")
+        XCTAssertFalse(output.contains("\u{FFFD}"),
+                       "a boundary-split sequence must not decode to U+FFFD: \(output)")
+    }
+
     /// The chat-turn budget contract: the stored latch timeout floored at
     /// 60 s and capped at 900 s.
     func testChatTurnBudgetClampsToFloorAndCap() {
@@ -117,6 +136,7 @@ extension LatchDelegateChatTurnTests {
             .init(name: "testChatTurnStreamsGrowingSnapshotsAndCompletes") { await try $0.testChatTurnStreamsGrowingSnapshotsAndCompletes() },
             .init(name: "testEmptyTurnSurfacesFailureText") { await try $0.testEmptyTurnSurfacesFailureText() },
             .init(name: "testBudgetStopsARunawayTurn") { await try $0.testBudgetStopsARunawayTurn() },
+            .init(name: "testSplitStderrCharacterReassemblesInTheFailureTail") { try await $0.testSplitStderrCharacterReassemblesInTheFailureTail() },
             .init(name: "testChatTurnBudgetClampsToFloorAndCap") { $0.testChatTurnBudgetClampsToFloorAndCap() },
         ])
 }

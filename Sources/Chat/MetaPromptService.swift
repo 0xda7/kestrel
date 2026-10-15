@@ -192,7 +192,7 @@ enum MetaPromptService {
             workingDirectory: nil,
             timeout: Self.defaultTimeoutSeconds,
             onLaunch: nil,
-            onOutput: { _, fullSoFar in
+            onOutput: { fullSoFar in
                 buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
             })
         buffer.finish()

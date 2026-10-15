@@ -2359,6 +2359,20 @@ final class ServerController: ObservableObject {
         }
     }
 
+    /// SIGKILL escalation shared by the engine-kill paths: `terminate()` was
+    /// already sent; if the child ignores it past the grace period, take the
+    /// process down and sweep the router's orphaned model children. Detached
+    /// with a structured sleep (the same shape as the latch budget's
+    /// escalation) so the caller's own verdict never waits on the grace
+    /// period.
+    nonisolated static func escalateKill(pid: pid_t, after grace: TimeInterval) {
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(grace))
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            EngineLock.reapStrayEngines()
+        }
+    }
+
     func stop() {
         AudioStudioController.shared.shutdown()
         SpeechDictationController.shared.shutdown()
@@ -2379,11 +2393,7 @@ final class ServerController: ObservableObject {
             let port = currentPort
             // SIGKILL fallback in case the deferred terminate stalls: the engine's
             // working set has to be freed.
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
-                if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-                // children that outlived their engine are adopted by launchd by now
-                EngineLock.reapStrayEngines()
-            }
+            Self.escalateKill(pid: pid, after: 6)
             if prewarm {
                 // Snapshot slot 0 to disk before killing the engine, so the next
                 // launch can restore the fixed external-client prefix. Best-effort,
@@ -2455,30 +2465,19 @@ final class ServerController: ObservableObject {
     /// POST /slots/0?action=save|restore (best-effort, short timeout). Used to
     /// pre-warm the external-client prefix across engine restarts.
     nonisolated static func slotAction(_ action: String, port: Int, file: String) async {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: action)]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url, timeoutInterval: 30)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() { req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": file])
-        _ = try? await URLSession.shared.data(for: req)
+        // 30 s: a save flushes the whole slot KV through loopback to disk.
+        guard let req = EngineHTTP.slotRequest(port: port, action: action,
+                                               filename: file, timeout: 30) else { return }
+        _ = try? await EngineHTTP.session.data(for: req)
     }
 
     /// Same request on the way out, where an await would never resume. Bounded so
     /// a busy engine cannot hold the quit open.
     nonisolated static func slotSaveBlocking(port: Int, file: String, timeout: TimeInterval) {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: "save")]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url, timeoutInterval: timeout)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() { req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": file])
+        guard let req = EngineHTTP.slotRequest(port: port, action: "save",
+                                               filename: file, timeout: timeout) else { return }
         let done = DispatchSemaphore(value: 0)
-        let task = URLSession.shared.dataTask(with: req) { _, _, _ in done.signal() }
+        let task = EngineHTTP.session.dataTask(with: req) { _, _, _ in done.signal() }
         task.resume()
         if done.wait(timeout: .now() + timeout) == .timedOut { task.cancel() }
     }
@@ -2506,7 +2505,9 @@ final class ServerController: ObservableObject {
                 // The engine answers {"status":"ok"} — parse it exactly. A
                 // substring check flipped a port collision with any foreign
                 // service whose body happened to contain "ok" into "running".
-                if let (data, response) = try? await URLSession.shared.data(from: url),
+                // Control session: a wedged engine fails this probe in 10 s
+                // instead of stalling the 2 s poll loop for a minute.
+                if let (data, response) = try? await EngineHTTP.session.data(from: url),
                    (response as? HTTPURLResponse)?.statusCode == 200,
                    let body = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                    body["status"] == "ok" {
@@ -2534,10 +2535,7 @@ final class ServerController: ObservableObject {
                     self?.lastStoppedPID = pid
                     Self.reapChildren(of: pid)
                     p.terminate()
-                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
-                        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-                        EngineLock.reapStrayEngines()
-                    }
+                    Self.escalateKill(pid: pid, after: 6)
                 }
             }
         }

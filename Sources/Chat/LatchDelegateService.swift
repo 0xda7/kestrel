@@ -214,7 +214,7 @@ enum LatchDelegateService {
         let report = OSAllocatedUnfairLock<String>(initialState: "")
         let outcome = await runStreaming(argv: argv, workingDirectory: workingDirectory,
                                          timeout: timeout, onLaunch: nil,
-                                         onOutput: { _, fullSoFar in report.withLock { $0 = fullSoFar } })
+                                         onOutput: { fullSoFar in report.withLock { $0 = fullSoFar } })
         switch outcome {
         case .failed(let reason): return ToolExecutionResult(content: reason, isError: true)
         case .exited(let status, let output):
@@ -245,15 +245,15 @@ enum LatchDelegateService {
     /// Streams a latch run: mirrors `run()`'s Process/Pipe machinery, but hands
     /// the accumulated stdout to `onOutput` as it arrives so the UI can render
     /// the reply live while latch's agent loop works. `onOutput` receives the
-    /// raw chunk and then the FULL output so far (copied under the same lock),
-    /// so callers can snapshot-replace instead of racing accumulation of their
-    /// own. The pipe still accumulates under a lock — a full 64 KiB pipe
-    /// deadlocks the child mid-run. Stderr is drained into a bounded tail and
-    /// surfaced on failure (provider auth errors, missing model), but never
-    /// mixed into a successful reply — the reply is stdout only.
+    /// FULL output so far (copied under the same lock), so callers can
+    /// snapshot-replace instead of racing accumulation of their own. The pipe
+    /// still accumulates under a lock — a full 64 KiB pipe deadlocks the child
+    /// mid-run. Stderr is drained into a bounded tail and surfaced on failure
+    /// (provider auth errors, missing model), but never mixed into a
+    /// successful reply — the reply is stdout only.
     static func runStreaming(argv: [String], workingDirectory: String?, timeout: Int,
                              onLaunch: (@Sendable (Process) -> Void)?,
-                             onOutput: (@Sendable (String, String) -> Void)?) async -> RunOutcome {
+                             onOutput: (@Sendable (String) -> Void)?) async -> RunOutcome {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: argv[0])
         process.arguments = Array(argv.dropFirst())
@@ -274,6 +274,9 @@ enum LatchDelegateService {
             let lock = NSLock()
             var outData = Data()
             var stderrTail = ""
+            /// Bytes of an incomplete trailing UTF-8 sequence read from stderr;
+            /// at most 3, held until the sequence's remainder arrives.
+            var stderrRemainder = Data()
             // Incremental decode state: `decoded` grows by only the NEW bytes each
             // chunk, instead of re-decoding the whole accumulation per chunk
             // (which is O(n²) — a 512 KB reply with line-sized chunks re-decoded
@@ -286,11 +289,12 @@ enum LatchDelegateService {
             /// Last offset in `data` that ends on a complete UTF-8 sequence: scan
             /// back at most 3 bytes (the longest continuation run) for an ASCII or
             /// leading byte; a truncated sequence tail stays undecoded until its
-            /// remainder arrives.
-            func utf8SafeEnd(_ data: Data) -> Int {
+            /// remainder arrives. `from` is the offset the decode has already
+            /// consumed (0 for the stderr remainder buffer).
+            static func utf8SafeEnd(_ data: Data, from offset: Int) -> Int {
                 let count = data.count
                 var back = 0
-                while back < 3, count - back > decodeOffset {
+                while back < 3, count - back > offset {
                     let byte = data[data.startIndex + count - back - 1]
                     if byte & 0x80 == 0 { return count - back }
                     if byte & 0xC0 != 0x80 { return count - back - 1 }
@@ -311,7 +315,7 @@ enum LatchDelegateService {
             // also bounds the decode.
             if state.outData.count < LatchDelegateService.maximumReplyCharacters {
                 state.outData.append(chunk)
-                let safeEnd = state.utf8SafeEnd(state.outData)
+                let safeEnd = PumpState.utf8SafeEnd(state.outData, from: state.decodeOffset)
                 if safeEnd > state.decodeOffset {
                     state.decoded += String(decoding: state.outData[state.decodeOffset..<safeEnd], as: UTF8.self)
                     state.decodeOffset = safeEnd
@@ -320,14 +324,21 @@ enum LatchDelegateService {
             let snapshot = state.decoded
             state.lock.unlock()
             if let onOutput {
-                onOutput(String(decoding: chunk, as: UTF8.self), snapshot)
+                onOutput(snapshot)
             }
         }
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             guard !chunk.isEmpty else { handle.readabilityHandler = nil; return }
             state.lock.lock()
-            state.stderrTail += String(decoding: chunk, as: UTF8.self)
+            // Same UTF-8 sequence boundary as stdout: a multi-byte character
+            // split across pipe chunks stays in the remainder buffer until it
+            // completes, instead of decoding to U+FFFD in the failure tail.
+            let pending = state.stderrRemainder + chunk
+            let safeEnd = PumpState.utf8SafeEnd(pending, from: 0)
+            state.stderrTail += String(decoding: pending.prefix(safeEnd), as: UTF8.self)
+            state.stderrRemainder = safeEnd < pending.count
+                ? Data(pending.dropFirst(safeEnd)) : Data()
             if state.stderrTail.count > 4000 {
                 state.stderrTail = String(state.stderrTail.suffix(2000))
             }
@@ -374,6 +385,8 @@ enum LatchDelegateService {
             state.lock.lock()
             var tail = state.stderrTail
             state.stderrTail = ""
+            let stderrRemainder = state.stderrRemainder
+            state.stderrRemainder = Data()
             state.lock.unlock()
             stdout.fileHandleForReading.readabilityHandler = nil
             stderr.fileHandleForReading.readabilityHandler = nil
@@ -382,7 +395,10 @@ enum LatchDelegateService {
             state.lock.lock()
             let output = String(decoding: state.outData + stdoutLeftover, as: UTF8.self)
             state.outData.removeAll()
-            tail += String(decoding: stderrLeftover, as: UTF8.self)
+            // The pending remainder joins the post-exit leftover, so a
+            // sequence split across the last chunk and the drain still
+            // completes.
+            tail += String(decoding: stderrRemainder + stderrLeftover, as: UTF8.self)
             if tail.count > 4000 { tail = String(tail.suffix(2000)) }
             state.lock.unlock()
             return (output, tail)

@@ -901,7 +901,7 @@ final class ChatStore: ObservableObject {
                         store.latchProcessBox.store(proc)
                         Task { @MainActor in store.latchProcess = proc }
                     },
-                    onOutput: { _, fullSoFar in
+                    onOutput: { fullSoFar in
                         // StreamBuffer is snapshot-replace: hand it the full
                         // text so far, never a fragment.
                         streamedText.withLock { $0 = fullSoFar }
@@ -1751,19 +1751,12 @@ final class ChatStore: ObservableObject {
     nonisolated private static func slotFile(_ id: UUID) -> String { "\(id.uuidString).bin" }
 
     /// POST /slots/0?action=save|restore (best-effort; a missing file on restore
-    /// just means a cold prefill, which is harmless).
+    /// just means a cold prefill, which is harmless). Same shared request the
+    /// server controller issues, with the same 30 s bound.
     nonisolated private func slotAction(_ action: String, convID: UUID, port: Int) async {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: action)]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() {
-            req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-        }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": Self.slotFile(convID)])
-        _ = try? await URLSession.shared.data(for: req)
+        guard let req = EngineHTTP.slotRequest(port: port, action: action,
+                                               filename: Self.slotFile(convID), timeout: 30) else { return }
+        _ = try? await EngineHTTP.session.data(for: req)
     }
 
     /// Before a turn: if slot 0 doesn't already hold this conversation, restore
@@ -2172,12 +2165,13 @@ final class ChatStore: ObservableObject {
     /// Non-streamed completion that condenses old turns. Returns nil on any
     /// failure; compaction is then retried after the next exchange.
     nonisolated private static func summarize(prompt: String, port: Int) async -> String? {
-        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() {
-            req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-        }
+        guard let url = URL(string: "http://127.0.0.1:\(port)/v1/chat/completions") else { return nil }
+        // Explicit 60 s idle bound — the same one URLSession.shared gave this
+        // request before it moved to the shared control session: a summarize
+        // prefill of a long history legitimately takes tens of seconds on a
+        // busy engine, which the session's 10 s probe default must not cut off.
+        var req = EngineHTTP.request(url: url, method: "POST", timeout: 60,
+                                     apiKey: ServerSettings.activeAPIKey())
         let instructions = "You summarize conversations. Write a compact summary (at most ~250 words) of the conversation below, in the same language the conversation itself uses. Preserve key facts, decisions, names, numbers, code references and pending questions. Reply with the summary only."
         var body: [String: Any] = [
             "messages": [["role": "system", "content": instructions],
@@ -2189,7 +2183,7 @@ final class ChatStore: ObservableObject {
         ]
         if let model = ServerSettings.activeRouterModel() { body["model"] = model }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
+        guard let (data, response) = try? await EngineHTTP.session.data(for: req),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
@@ -2261,13 +2255,12 @@ final class ChatStore: ObservableObject {
         if let stream = activeStream, !activeStreamRemote,
            let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
-            var req = URLRequest(url: url)
-            req.httpMethod = "DELETE"
-            req.timeoutInterval = 5
-            if let key = ServerSettings.activeAPIKey() {
-                req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-            }
-            Task.detached { _ = try? await URLSession.shared.data(for: req) }
+            // Fire-and-forget on purpose: stop() runs synchronously from the UI
+            // and must not suspend; the 5 s bound keeps the detached task from
+            // outliving the turn by much.
+            let req = EngineHTTP.request(url: url, method: "DELETE", timeout: 5,
+                                         apiKey: ServerSettings.activeAPIKey())
+            Task.detached { _ = try? await EngineHTTP.session.data(for: req) }
         }
     }
 
