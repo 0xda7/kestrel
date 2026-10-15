@@ -2408,18 +2408,17 @@ final class ChatStore: ObservableObject {
         let pURL = projectsURL
         Self.saveQueue.async {
             // conversations.json holds the full chat history; projects.json the
-            // project config. Both are written user-only (0600) — the enclosing
-            // Application Support folder is already 0700, so this keeps the
-            // store unreadable to other local accounts even if the folder
-            // permission drifts.
-            let permissions: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+            // project config. Both are written owner-only (0600) via the one
+            // atomic owner-only writer — the previous write-then-chmod pair
+            // left a window (default-mode temp renamed in, chmod after) where
+            // the history sat world-readable. The enclosing Application
+            // Support folder is already 0700; this keeps the store unreadable
+            // to other local accounts even if the folder permission drifts.
             if let data = try? JSONEncoder().encode(snapshot) {
-                try? data.write(to: url, options: .atomic)
-                try? FileManager.default.setAttributes(permissions, ofItemAtPath: url.path)
+                _ = OwnerOnlyFile.write(data, to: url)
             }
             if let data = try? JSONEncoder().encode(projectsSnapshot) {
-                try? data.write(to: pURL, options: .atomic)
-                try? FileManager.default.setAttributes(permissions, ofItemAtPath: pURL.path)
+                _ = OwnerOnlyFile.write(data, to: pURL)
             }
         }
     }

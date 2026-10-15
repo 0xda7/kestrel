@@ -179,7 +179,10 @@ actor MemoryArchiveHook {
             default:        return .retry
             }
         } catch {
-            AppLog.chat.warning("memory archive hook could not deliver: \(error.localizedDescription)")
+            // The one URL-bearing log line: transport errors can embed the
+            // full request URL, so the text passes through the shared
+            // redactor (userinfo and token query values) before os_log.
+            AppLog.chat.warning("memory archive hook could not deliver: \(SecretRedactor.url(error.localizedDescription))")
             return .retry
         }
     }

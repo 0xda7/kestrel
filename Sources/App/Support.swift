@@ -4,6 +4,7 @@
 
 import Foundation
 import CryptoKit
+import Darwin
 import os
 import Security
 
@@ -734,6 +735,34 @@ enum Keychain {
 
 // MARK: - Local secret store (machine-generated, machine-local secrets)
 
+/// The one way secret-bearing files are written (engine key, provider route
+/// keys, latch sidecar config, chat history): the destination must never
+/// exist with permissions looser than 0600 at ANY instant — not at creation
+/// (the open must carry the mode), and not on overwrite (a truncate-rewrite
+/// of a legacy looser file is world-readable until a follow-up chmod, and
+/// `.atomic` writes rename a default-mode temp into place first). Both hold
+/// here because the content lands in a fresh 0600 temp file inside the same
+/// directory, which then replaces the target in one rename(2) — the rename
+/// keeps the temp's mode, so the final file is 0600 on every path, and a
+/// crash mid-write can never leave a half-written secret behind.
+enum OwnerOnlyFile {
+    @discardableResult
+    static func write(_ data: Data, to url: URL) -> Bool {
+        let fm = FileManager.default
+        let temp = url.deletingLastPathComponent()
+            .appendingPathComponent(".owner-only-\(UUID().uuidString).tmp")
+        guard fm.createFile(atPath: temp.path, contents: data,
+                            attributes: [.posixPermissions: 0o600]) else { return false }
+        // rename(2) atomically replaces an existing target or moves over a
+        // missing one; either way the inode (and its 0600 mode) is the temp's.
+        guard rename(temp.path, url.path) == 0 else {
+            try? fm.removeItem(at: temp)
+            return false
+        }
+        return true
+    }
+}
+
 /// File-backed storage for machine-local secrets — the local
 /// engine's API key and the remote provider keys. Unlike the Keychain,
 /// reading a 0600 file in a 0700 Application Support folder never involves an
@@ -782,13 +811,9 @@ enum LocalSecretStore {
         // that already existed (0755 from an older build or a restored backup)
         // must not keep the 0600-files-in-a-0700-folder invariant broken.
         try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dirURL.path)
-        // Created 0600 in the same syscall that materializes it — a
-        // write-then-chmod sequence leaves a world-readable window between
-        // the two. createFile does not re-apply attributes when truncating
-        // an existing file, so the follow-up chmod repairs legacy files only.
-        let wrote = fm.createFile(atPath: fileURL.path, contents: Data(value.utf8),
-                                  attributes: [.posixPermissions: 0o600])
-        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        // OwnerOnlyFile: 0600 with no write-then-chmod window on ANY path —
+        // fresh creation and legacy-loose overwrite alike (see its doc).
+        let wrote = OwnerOnlyFile.write(Data(value.utf8), to: fileURL)
         if wrote {
             cache.withLock { $0[name] = value }
             return true

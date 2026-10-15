@@ -475,7 +475,11 @@ struct ServerSettings {
             }
         }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
-        args += extraArgTokens.cli
+        // Loopback-only bind unless the operator enabled LAN with a key: a
+        // `--host` token from extraArgs would otherwise override the app's
+        // own bind (later duplicates win) and bypass the start() refusal.
+        args += Self.loopbackGuardedCLI(extraArgTokens.cli,
+                                        lanAllowed: localNetworkDiscovery && apiKeyEnabled)
         return args
     }
 
@@ -524,7 +528,11 @@ struct ServerSettings {
             args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
-        args += extraArgTokens.cli
+        // Loopback-only bind unless the operator enabled LAN with a key: a
+        // `--host` token from extraArgs would otherwise override the app's
+        // own bind (later duplicates win) and bypass the start() refusal.
+        args += Self.loopbackGuardedCLI(extraArgTokens.cli,
+                                        lanAllowed: localNetworkDiscovery && apiKeyEnabled)
         return args
     }
 
@@ -622,6 +630,46 @@ struct ServerSettings {
             sections.append(lines.joined(separator: "\n"))
         }
         return sections.joined(separator: "\n\n") + "\n"
+    }
+
+    /// KES-01/KES-06 loopback guard: the engine binds loopback unless the
+    /// operator turned LAN on AND enabled the API key (start() refuses every
+    /// other non-loopback bind). But user extraArgs ride AFTER the app's own
+    /// `--host` token, and getopt lets the LAST duplicate flag win — a typed
+    /// or imported `--host 0.0.0.0` would re-bind the engine to the LAN
+    /// behind that refusal's back. Non-loopback `--host` tokens are therefore
+    /// dropped from the extra-arg stream unless the LAN policy authorized
+    /// them; loopback values always pass (no behavior change for them).
+    /// Pure and static so the guard is unit-testable.
+    nonisolated static func loopbackGuardedCLI(_ tokens: [String], lanAllowed: Bool) -> [String] {
+        guard !lanAllowed else { return tokens }
+        let loopback: Set<String> = ["127.0.0.1", "localhost", "::1"]
+        var out: [String] = []
+        out.reserveCapacity(tokens.count)
+        var i = 0
+        while i < tokens.count {
+            let token = tokens[i]
+            if token == "--host" {
+                // Two-token form: a trailing flag with no value stays (there
+                // is no bind to widen), a pair stays only when loopback.
+                if i + 1 < tokens.count {
+                    if loopback.contains(tokens[i + 1]) { out += [token, tokens[i + 1]] }
+                    i += 2
+                    continue
+                }
+                out.append(token)
+                i += 1
+                continue
+            }
+            if token.hasPrefix("--host=") {
+                if loopback.contains(String(token.dropFirst("--host=".count))) { out.append(token) }
+                i += 1
+                continue
+            }
+            out.append(token)
+            i += 1
+        }
+        return out
     }
 
     /// Splits the Extra arguments field: `KEY=VALUE` with an UPPERCASE name becomes an
@@ -2089,22 +2137,6 @@ final class ServerController: ObservableObject {
         state = .failed("TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
     }
 
-    /// Masks every `--api-key <secret>` pair in an argv list so logs and
-    /// diagnostics can carry the full launch line without leaking the key
-    /// (KES-03). Static and pure so the masking contract is unit-testable.
-    nonisolated static func redactArguments(_ items: [String]) -> [String] {
-        var out = items
-        var i = 0
-        while i < out.count {
-            if out[i] == "--api-key", i + 1 < out.count {
-                out[i + 1] = "***"
-                i += 1
-            }
-            i += 1
-        }
-        return out
-    }
-
     /// KES-01: any non-loopback bind without an API key is refused — LAN
     /// mode is plaintext HTTP, so the key is the only gate between the LAN
     /// and this machine's engine (and its agent tools). Pure and static so
@@ -2142,13 +2174,12 @@ final class ServerController: ObservableObject {
         // KES-03: env tokens typed into the free-form Extra arguments field
         // ("OPENAI_API_KEY=sk-…") are credentials. Show their NAMES only —
         // the banner flows into the in-app log and from there into the
-        // shareable diagnostics export, so values are masked exactly like
-        // redactArguments masks `--api-key` pairs. App-set engine vars keep
-        // their values (they carry no secrets).
-        let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }.sorted()
-        let envLine = (envKeys.compactMap { k in env[k].map { "\(k)=\($0)" } }
-                       + userKeys.filter { env[$0] != nil }.map { "\($0)=***" })
-            .joined(separator: " ")
+        // shareable diagnostics export. argv and env masking both come from
+        // the ONE redaction implementation (SecretRedactor); no parallel
+        // copies, so a rule improved here improves every surface at once.
+        let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }
+        let envLine = SecretRedactor.environmentLine(environment: env, appSetKeys: envKeys,
+                                                     userKeys: Array(userKeys))
         let moeLine = settings.effectiveDynamicMoe
             ? "ncmoe=0 dynamic-moe=K\(settings.effectiveDynamicMoeSlots)"
             : "ncmoe=\(settings.ncmoe)"
@@ -2168,7 +2199,7 @@ final class ServerController: ObservableObject {
          settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.effectiveCacheTypes.k) ctv=\(settings.effectiveCacheTypes.v) cacheRAM=\(settings.cacheRAM)
          dflash : \(settings.routerMode ? "per-model router plan" : settings.dflashPlanSummary)
          env: \(envLine)
-         args: \(redactArguments(settings.arguments).joined(separator: " "))
+         args: \(SecretRedactor.arguments(settings.arguments).joined(separator: " "))
         ========================================================
 
         """

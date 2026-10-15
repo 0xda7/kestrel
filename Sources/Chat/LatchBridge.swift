@@ -175,14 +175,11 @@ enum LatchBridge {
         try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         let changed = (try? String(contentsOf: configFileURL, encoding: .utf8)) != json
         guard changed else { return true }
-        // Created 0600 in the same syscall that materializes it: this file
-        // carries every configured provider key in plaintext, and a
-        // write-then-chmod sequence leaves a world-readable window between
-        // the two. The follow-up chmod only repairs a legacy looser file
-        // (createFile keeps an existing file's permissions on truncate).
-        let wrote = fm.createFile(atPath: configFileURL.path, contents: Data(json.utf8),
-                                  attributes: [.posixPermissions: 0o600])
-        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configFileURL.path)
+        // OwnerOnlyFile write: this file carries every configured provider
+        // key in plaintext, so it must be 0600 with no write-then-chmod
+        // window on any path — fresh creation and legacy-loose overwrite
+        // alike (the write is a fresh 0600 temp renamed over the target).
+        let wrote = OwnerOnlyFile.write(Data(json.utf8), to: configFileURL)
         guard wrote else { return false }
         if !fm.fileExists(atPath: markerFileURL.path) {
             try? Data().write(to: markerFileURL)

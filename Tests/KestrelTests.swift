@@ -3318,6 +3318,118 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertEqual(dirMode, 0o700, "the secrets directory must be owner-only")
     }
 
+    /// Hardening round 2 — one sweep over EVERY secret-bearing path, not one
+    /// known filename: every file in the local secret store (engine key,
+    /// provider route keys, latch key, archive token) must be owner-only
+    /// 0600, the store directory 0700, and the latch sidecar's
+    /// provider_config.json (every provider key in plaintext) 0600 inside a
+    /// 0700 `.latch/v2`. Walking the whole directory is what pins a FUTURE
+    /// writer that adds a new secret file.
+    func testEverySecretPathLandsOwnerOnly() throws {
+        // One write through the public API (restored in defer) so the sweep
+        // always inspects at least one fresh file.
+        let sentinel = "kestrel-check-perm-sentinel"
+        let prior = LocalSecretStore.value(sentinel)
+        XCTAssertTrue(LocalSecretStore.store(sentinel, "perm-sweep"))
+        defer {
+            if let prior { LocalSecretStore.store(sentinel, prior) }
+            else { LocalSecretStore.delete(sentinel) }
+        }
+        let fm = FileManager.default
+        let secretsDir = LocalSecretStore.url(sentinel).deletingLastPathComponent()
+        let dirMode = try fm.attributesOfItem(atPath: secretsDir.path)[.posixPermissions] as? Int
+        XCTAssertEqual(dirMode, 0o700, "the secrets directory must be owner-only")
+        for file in try fm.contentsOfDirectory(atPath: secretsDir.path) {
+            let path = secretsDir.appendingPathComponent(file).path
+            let mode = try fm.attributesOfItem(atPath: path)[.posixPermissions] as? Int
+            XCTAssertEqual(mode, 0o600, "secret file '\(file)' must be owner-only")
+        }
+        // The latch sidecar, when the machine has one (its sync()-write is
+        // pinned by testLatchSidecarConfigLandsOwnerOnly).
+        if fm.fileExists(atPath: LatchBridge.configFileURL.path) {
+            let mode = try fm.attributesOfItem(atPath: LatchBridge.configFileURL.path)[.posixPermissions] as? Int
+            XCTAssertEqual(mode, 0o600, "provider_config.json must be owner-only")
+        }
+        if fm.fileExists(atPath: LatchBridge.sidecarDirectory.path) {
+            let mode = try fm.attributesOfItem(atPath: LatchBridge.sidecarDirectory.path)[.posixPermissions] as? Int
+            XCTAssertEqual(mode, 0o700, "the sidecar directory must be owner-only")
+        }
+    }
+
+    /// The overwrite path is where a write-then-chmod sequence leaves its
+    /// world-readable window: a legacy or foreign file that already exists
+    /// with looser permissions gets truncated and rewritten BEFORE the
+    /// chmod lands. The owner-only writer must end 0600 on that path too —
+    /// its write is a fresh 0600 temp renamed over the target, so the file
+    /// is never readable beyond the owner at any instant. Fresh creation
+    /// and no-window overwrite are both pinned here.
+    func testOwnerOnlyWriterCoversCreationAndLooseOverwrite() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory
+            .appendingPathComponent("kestrel-owner-only-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        // Fresh creation: 0600 from the very first instant.
+        let fresh = dir.appendingPathComponent("fresh")
+        XCTAssertTrue(OwnerOnlyFile.write(Data("x".utf8), to: fresh))
+        XCTAssertEqual(try fm.attributesOfItem(atPath: fresh.path)[.posixPermissions] as? Int,
+                       0o600, "a fresh owner-only file must be 0600")
+
+        // Overwrite of a deliberately loose 0644 file: ends 0600, content
+        // replaced, no truncate-rewrite of the loose inode.
+        let loose = dir.appendingPathComponent("loose")
+        XCTAssertTrue(fm.createFile(atPath: loose.path, contents: Data("old".utf8),
+                                    attributes: [.posixPermissions: 0o644]))
+        XCTAssertTrue(OwnerOnlyFile.write(Data("new-secret".utf8), to: loose))
+        XCTAssertEqual(try fm.attributesOfItem(atPath: loose.path)[.posixPermissions] as? Int,
+                       0o600, "an overwrite of a loose file must end owner-only")
+        XCTAssertEqual(try String(contentsOf: loose, encoding: .utf8), "new-secret")
+    }
+
+    /// Loopback-only engine endpoints (hardening round 2): user extraArgs
+    /// ride AFTER the app's own `--host` token and getopt lets the LAST
+    /// duplicate win, so a typed or imported `--host 0.0.0.0` would re-bind
+    /// the engine to the LAN behind the start() LAN refusal's back. The
+    /// non-loopback bind must be dropped unless the operator enabled LAN
+    /// AND the key; loopback values pass untouched.
+    func testLoopbackBindCannotBeOverriddenByExtraArguments() throws {
+        // Both spellings, plus a loopback value that must survive.
+        var offline = makeSettings()
+        offline.localNetworkDiscovery = false
+        offline.apiKeyEnabled = false
+        offline.extraArgs = "--host 0.0.0.0 --host=[::] --host 127.0.0.1"
+        let args = offline.arguments
+        XCTAssertFalse(args.contains("0.0.0.0"),
+                       "an extraArgs LAN bind must not reach the engine while LAN is off")
+        XCTAssertFalse(args.contains("--host=[::]"),
+                       "the = spelling must be guarded too")
+        XCTAssertTrue(args.contains("127.0.0.1"),
+                      "loopback binds are the policy, not a violation")
+        // The app's own bind is still there exactly once.
+        XCTAssertEqual(args.filter { $0 == "--host" }.count, 2,
+                       "app bind + the user's loopback token")
+        // LAN on WITH the key: the operator's explicit choice stands.
+        var lan = makeSettings()
+        lan.localNetworkDiscovery = true
+        lan.apiKeyEnabled = true
+        lan.extraArgs = "--host 0.0.0.0"
+        XCTAssertTrue(lan.arguments.contains("0.0.0.0"),
+                      "an authorized LAN bind is the operator's to make")
+        // The pure helper, form by form.
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "0.0.0.0"], lanAllowed: false), [])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host=192.168.1.5"], lanAllowed: false), [])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "localhost"], lanAllowed: false),
+                       ["--host", "localhost"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "::1"], lanAllowed: false),
+                       ["--host", "::1"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host"], lanAllowed: false), ["--host"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["-t", "8", "--host", "0.0.0.0", "--jinja"], lanAllowed: false),
+                       ["-t", "8", "--jinja"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "0.0.0.0"], lanAllowed: true),
+                       ["--host", "0.0.0.0"])
+    }
+
     /// Audit fix (77de404, defect register #2): the laya_decide tool must
     /// call the port the "Laya Decisions" card actually serves on — read at
     /// call time from the persisted profiles — and fall back to 8098 only
@@ -3634,6 +3746,9 @@ extension EnterpriseHardeningTests {
             .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
             .init(name: "testLatchSidecarConfigLandsOwnerOnly") { try await $0.testLatchSidecarConfigLandsOwnerOnly() },
             .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
+            .init(name: "testEverySecretPathLandsOwnerOnly") { try await $0.testEverySecretPathLandsOwnerOnly() },
+            .init(name: "testOwnerOnlyWriterCoversCreationAndLooseOverwrite") { try await $0.testOwnerOnlyWriterCoversCreationAndLooseOverwrite() },
+            .init(name: "testLoopbackBindCannotBeOverriddenByExtraArguments") { try await $0.testLoopbackBindCannotBeOverriddenByExtraArguments() },
             .init(name: "testLayaPortFollowsTheDecisionsCard") { try await $0.testLayaPortFollowsTheDecisionsCard() },
             .init(name: "testBenchmarkArgumentsEqualizeGemmaMixedKV") { try await $0.testBenchmarkArgumentsEqualizeGemmaMixedKV() },
             .init(name: "testRouterPresetEqualizesGemmaMixedKVPerModel") { $0.testRouterPresetEqualizesGemmaMixedKVPerModel() },

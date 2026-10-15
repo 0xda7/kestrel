@@ -26,14 +26,50 @@ final class SecretRedactionTests: CheckCase {
     func testRedactArgumentsMasksEveryAPIKey() {
         let args = ["-m", "/tmp/m.gguf", "--api-key", "SECRET-ONE", "--port", "8080",
                     "--api-key", "SECRET-TWO"]
-        let redacted = ServerController.redactArguments(args).joined(separator: " ")
+        let redacted = SecretRedactor.arguments(args).joined(separator: " ")
         XCTAssertFalse(redacted.contains("SECRET-ONE"))
         XCTAssertFalse(redacted.contains("SECRET-TWO"))
         XCTAssertEqual(redacted.components(separatedBy: "***").count - 1, 2)
     }
 
     func testRedactArgumentsKeepsTrailingFlagIntact() {
-        XCTAssertEqual(ServerController.redactArguments(["--api-key"]), ["--api-key"])
+        XCTAssertEqual(SecretRedactor.arguments(["--api-key"]), ["--api-key"])
+    }
+
+    /// The `=` spelling of the same flag is the same credential: the unified
+    /// redactor masks both forms (the old helper missed the `=` form).
+    func testRedactorMasksEqualsFormToo() {
+        XCTAssertEqual(SecretRedactor.arguments(["--api-key=EQUALS-FORM-SECRET", "-m", "/tmp/m.gguf"]),
+                       ["--api-key=***", "-m", "/tmp/m.gguf"])
+    }
+
+    /// env: app-set engine vars keep their values; user-typed KEY=VALUE
+    /// tokens (Extra arguments) show names only; nothing else from the
+    /// inherited environment rides the line.
+    func testEnvironmentLineMasksUserTokensOnly() {
+        let line = SecretRedactor.environmentLine(
+            environment: ["GGML_METAL_NCB": "8", "OPENAI_API_KEY": "sk-live",
+                          "HOME": "/Users/operator"],
+            appSetKeys: ["GGML_METAL_NCB"],
+            userKeys: ["OPENAI_API_KEY"])
+        XCTAssertFalse(line.contains("sk-live"))
+        XCTAssertFalse(line.contains("/Users/operator"),
+                       "keys the app neither set nor was handed are omitted entirely")
+        XCTAssertEqual(line, "GGML_METAL_NCB=8 OPENAI_API_KEY=***")
+    }
+
+    /// URLs: userinfo (`user:pass@`) and credential-bearing query values are
+    /// masked; the rest of the URL survives for debuggability, and clean
+    /// text passes through unchanged.
+    func testURLRedactionMasksUserinfoAndTokenQuery() {
+        let masked = SecretRedactor.url("delivery to https://agent:hunter2@example.com/v1?token=abc123&x=2 failed")
+        XCTAssertFalse(masked.contains("agent:"))
+        XCTAssertFalse(masked.contains("hunter2"))
+        XCTAssertFalse(masked.contains("abc123"))
+        XCTAssertTrue(masked.contains("***@example.com/v1?token=***&x=2"),
+                      "host, path and non-credential params survive: \(masked)")
+        XCTAssertEqual(SecretRedactor.url("plain error text, no URL"),
+                       "plain error text, no URL")
     }
 
     func testAPIKeyNeverRidesArgvWhenEnabled() throws {
@@ -91,6 +127,9 @@ extension SecretRedactionTests {
         checks: [
             .init(name: "testRedactArgumentsMasksEveryAPIKey") { $0.testRedactArgumentsMasksEveryAPIKey() },
             .init(name: "testRedactArgumentsKeepsTrailingFlagIntact") { $0.testRedactArgumentsKeepsTrailingFlagIntact() },
+            .init(name: "testRedactorMasksEqualsFormToo") { $0.testRedactorMasksEqualsFormToo() },
+            .init(name: "testEnvironmentLineMasksUserTokensOnly") { $0.testEnvironmentLineMasksUserTokensOnly() },
+            .init(name: "testURLRedactionMasksUserinfoAndTokenQuery") { $0.testURLRedactionMasksUserinfoAndTokenQuery() },
             .init(name: "testAPIKeyNeverRidesArgvWhenEnabled") { try $0.testAPIKeyNeverRidesArgvWhenEnabled() },
             .init(name: "testDiagnosticsReportOmitsTheKey") { $0.testDiagnosticsReportOmitsTheKey() },
             .init(name: "testStartupBannerOmitsTheKey") { $0.testStartupBannerOmitsTheKey() },

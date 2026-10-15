@@ -463,8 +463,9 @@ struct ServerLogView: View {
 
 /// Pure builder for the shareable diagnostics report (KES-03): the report is
 /// what users paste into issues, so secrets must be masked at the source —
-/// the same `redactArguments` contract the startup banner uses. Kept free of
-/// UI dependencies so the masking is unit-testable.
+/// by the ONE redaction implementation (SecretRedactor), the same contract
+/// the startup banner uses. Kept free of UI dependencies so the masking is
+/// unit-testable.
 enum DiagnosticsExport {
     static func report(settings: ServerSettings, hardware: HardwareInfo, logText: String, extra: String?) -> String {
         let gpu = hardware.bestGPU.map { "\($0.name) (\($0.vramMB) MB VRAM)" } ?? "—"
@@ -481,7 +482,7 @@ enum DiagnosticsExport {
         ## Configuration
         model: \(URL(fileURLWithPath: settings.modelPath).lastPathComponent)
         engine: \(settings.serverBinary)
-        args: \(ServerController.redactArguments(settings.arguments).joined(separator: " "))
+        args: \(SecretRedactor.arguments(settings.arguments).joined(separator: " "))
         \(extra.map { "\n\($0)\n" } ?? "")
         ## Recent log
         \(logText)
