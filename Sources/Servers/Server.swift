@@ -405,7 +405,15 @@ struct ServerSettings {
             if Self.projectorNeedsCPU(mmproj) { args.append("--no-mmproj-offload") }
             if imageMaxTokens > 0 { args += ["--image-max-tokens", String(imageMaxTokens)] }
         }
-        if jinja || mmproj != nil { args.append("--jinja") }
+        // Chat tooling is mutually exclusive with --embeddings by construction:
+        // an embeddings-dedicated context has no sampler chain or grammar
+        // support, so any chat/tool request against it fails with HTTP 400
+        // "Failed to initialize samplers, failed to parse grammar" (the
+        // 2026-10-14 incident: an added decision-model card launched with
+        // --embeddings --jinja --tools all --ui-mcp-proxy). Applies to any
+        // server whose embeddings toggle is on, primary or added.
+        let chatToolingBlocked = embeddings
+        if (jinja || mmproj != nil) && !chatToolingBlocked { args.append("--jinja") }
         if effCacheTypeK != "f16" { args += ["-ctk", effCacheTypeK] }
         if effCacheTypeV != "f16" { args += ["-ctv", effCacheTypeV] }
         // localhost-only endpoint; feeds the speculative-decoding readout in Diagnostics
@@ -433,7 +441,7 @@ struct ServerSettings {
         if embeddings && port != Self.fromDefaults().port {
             args.append("--embeddings")
         }
-        if agentToolsEnabled {
+        if agentToolsEnabled && !chatToolingBlocked {
             if !args.contains("--jinja") { args.append("--jinja") }
             args += ["--tools", "all"]
             // The MCP proxy endpoint is REQUIRED for agent tools: without it
@@ -444,7 +452,7 @@ struct ServerSettings {
             // refusal above has been satisfied with an API key.
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
-        if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
+        if (uiMcpProxy || agentToolsEnabled) && !chatToolingBlocked { args.append("--ui-mcp-proxy") }
         if persistCache && effectiveFaAmd {
             args += ["--slot-save-path", Self.slotCacheDir(port: port).path]
         }

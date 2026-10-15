@@ -818,22 +818,49 @@ final class ChatStore: ObservableObject {
             prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
         }
         if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
-        prompt += "Answer as the assistant directly; your reply becomes the next assistant message."
+        prompt += Self.latchStandingInstruction
         return prompt
     }
 
+    /// The standing instruction every latch prompt ends with. English-only:
+    /// these words and the transcript steer the agent's reply language, and
+    /// the product is English-only (a bilingual status message re-entering
+    /// this transcript is what made replies mix languages).
+    nonisolated static let latchStandingInstruction =
+        "Answer as the assistant directly, in English only; your reply becomes the next assistant message."
+
     nonisolated static var latchUnavailableMessage: String {
-        "latch no está disponible: no se encontró el binario latch-harness (ruta por omisión ~/.latch/bin/latch-harness). No se ha usado el motor como sustituto silencioso; cambia el modo de este chat o instala latch. / latch is unavailable: the latch-harness binary was not found (default path ~/.latch/bin/latch-harness). The engine was not silently used instead; switch this chat's mode or install latch."
+        "latch is unavailable: the latch-harness binary was not found (default path ~/.latch/bin/latch-harness). The engine was not silently used instead; switch this chat's mode or install latch."
     }
 
     nonisolated static func latchExitMessage(status: Int32) -> String {
-        "latch terminó de forma anómala (estado \(status)). / latch exited abnormally (status \(status))."
+        "latch exited abnormally (status \(status))."
     }
 
     /// Empty-success guard for the latch primary path: the run ended cleanly
     /// but stdout carried nothing, so this surfaces instead of a blank bubble.
     nonisolated static var latchEmptyReplyMessage: String {
-        "latch completó el turno sin producir salida visible. / latch completed the turn without producing visible output."
+        "latch completed the turn without producing visible output."
+    }
+
+    /// Loopback /health probe before an agent turn (the same pattern
+    /// LayaDecideService.engineHealth uses, over the shared EngineHTTP
+    /// control-plane session): true when the engine answers with 200.
+    nonisolated static func engineReachable(port: Int) async -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else { return false }
+        let req = EngineHTTP.request(url: url, method: "GET", timeout: 3,
+                                     apiKey: ServerSettings.activeAPIKey())
+        guard let (_, response) = try? await EngineHTTP.session.data(for: req),
+              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
+        return true
+    }
+
+    /// Pre-flight failure text for an agent turn whose chat engine is not
+    /// answering. Says the one actionable thing instead of letting the
+    /// harness stack-dump a provider error (the 2026-10-14 chain: builtin
+    /// 404, then an embeddings-mode server's sampler 400).
+    nonisolated static func latchEngineDownMessage(port: Int) -> String {
+        "The agent's chat engine (port \(port)) is not running — start your main model server on the Home/Servers tab, then send again."
     }
 
     private func stream(into i: Int, port: Int, temperature: Double, maxTokens: Int,
@@ -890,23 +917,35 @@ final class ChatStore: ObservableObject {
                 // the accumulator is only touched through a lock — which also
                 // fixes the unfenced read below.
                 let streamedText = OSAllocatedUnfairLock<String>(initialState: "")
-                let outcome = await LatchDelegateService.runStreaming(
-                    argv: [LatchDelegateService.binaryPath, "-p", prompt],
-                    workingDirectory: toolCwd,
-                    timeout: LatchDelegateService.chatTurnTimeoutSeconds,
-                    onLaunch: { proc in
-                        // Synchronous publish closes the stop() race window;
-                        // the MainActor hop below is only for the UI-facing
-                        // property.
-                        store.latchProcessBox.store(proc)
-                        Task { @MainActor in store.latchProcess = proc }
-                    },
-                    onOutput: { fullSoFar in
-                        // StreamBuffer is snapshot-replace: hand it the full
-                        // text so far, never a fragment.
-                        streamedText.withLock { $0 = fullSoFar }
-                        buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
-                    })
+                // Pre-flight (2026-10-14 routing incident): the harness's
+                // kestrel-local provider must point at a chat-capable engine,
+                // and that engine must answer /health before the agent runs —
+                // otherwise the harness stack-dumps its provider chain
+                // (builtin bootstrap 404, then an embeddings server's sampler
+                // 400) instead of the operator seeing the one actionable fix.
+                let outcome: LatchDelegateService.RunOutcome
+                if let target = LatchBridge.chatCapableLocalTarget(),
+                   await !ChatStore.engineReachable(port: target.port) {
+                    outcome = .failed(reason: ChatStore.latchEngineDownMessage(port: target.port))
+                } else {
+                    outcome = await LatchDelegateService.runStreaming(
+                        argv: [LatchDelegateService.binaryPath, "-p", prompt],
+                        workingDirectory: toolCwd,
+                        timeout: LatchDelegateService.chatTurnTimeoutSeconds,
+                        onLaunch: { proc in
+                            // Synchronous publish closes the stop() race window;
+                            // the MainActor hop below is only for the UI-facing
+                            // property.
+                            store.latchProcessBox.store(proc)
+                            Task { @MainActor in store.latchProcess = proc }
+                        },
+                        onOutput: { fullSoFar in
+                            // StreamBuffer is snapshot-replace: hand it the full
+                            // text so far, never a fragment.
+                            streamedText.withLock { $0 = fullSoFar }
+                            buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
+                        })
+                }
                 if Task.isCancelled {
                     // stop() terminated the process; keep whatever streamed.
                     // The partial comes from the buffer's last snapshot — the
@@ -3249,9 +3288,16 @@ struct NativeChatView: View {
                     .flippedUpsideDown()
             }
             if let err = chat.lastError {
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.red)
-                    .flippedUpsideDown()
+                // Selectable so the exact engine error text (the HTTP 400
+                // "Failed to initialize samplers" line of 2026-10-14) can be
+                // copied straight out of the conversation.
+                Label {
+                    Text(err).textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .font(.caption).foregroundStyle(.red)
+                .flippedUpsideDown()
             }
             ForEach(messages.reversed()) { msg in
                 messageRow(msg, isNewest: msg.id == newestID)

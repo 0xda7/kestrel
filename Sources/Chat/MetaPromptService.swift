@@ -116,24 +116,22 @@ enum MetaPromptService {
     [optional: edge cases, details, and an area to call or repeat out specific important considerations]
     """
 
-    /// Bilingual failure text for an empty (or whitespace-only) task
-    /// description. The guard runs before latch is ever launched — there is
-    /// nothing to author from, and no silent fallback is allowed.
+    /// Failure text for an empty (or whitespace-only) task description. The
+    /// guard runs before latch is ever launched — there is nothing to author
+    /// from, and no silent fallback is allowed. English-only: it renders in
+    /// the conversation like every other agent-path string.
     static let emptyTaskMessage =
-        "La descripción de la tarea está vacía: no hay nada que convertir en prompt. "
-            + "Describe la tarea y vuelve a intentarlo. / The task description is "
-            + "empty: there is nothing to turn into a prompt. Describe the task "
-            + "and try again."
+        "The task description is empty: there is nothing to turn into a prompt. "
+            + "Describe the task and try again."
 
-    /// Bilingual failure text for a clean exit with no visible output —
+    /// Failure text for a clean exit with no visible output —
     /// mirrors the chat empty-success guard; never a blank result.
     static let emptyReplyMessage =
-        "latch completó la creación del prompt sin producir texto visible. / "
-            + "latch completed the prompt-authoring run without producing visible text."
+        "latch completed the prompt-authoring run without producing visible text."
 
-    /// Bilingual failure text for an abnormal exit (mirrors the chat path).
+    /// Failure text for an abnormal exit (mirrors the chat path).
     static func exitMessage(status: Int32) -> String {
-        "latch terminó de forma anómala (estado \(status)). / latch exited abnormally (status \(status))."
+        "latch exited abnormally (status \(status))."
     }
 
     /// Builds the latch argv for one prompt-authoring run: the prompt-creator

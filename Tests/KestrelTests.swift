@@ -3152,6 +3152,114 @@ final class EnterpriseHardeningTests: CheckCase {
                       "a dedicated second server keeps the RAG flag")
     }
 
+    /// The HTTP 400 incident: an added decision-model card launched with
+    /// --embeddings --jinja --tools all --ui-mcp-proxy, and every chat/tool
+    /// request failed with "Failed to initialize samplers, failed to parse
+    /// grammar" — an embeddings-dedicated context has no sampler chain, so
+    /// the four chat flags are impossible on it by construction. A
+    /// non-embeddings card with tools on keeps every one of them.
+    func testEmbeddingsCardsCannotCarryChatToolFlags() throws {
+        let primaryPort = ServerSettings.fromDefaults().port
+        let cardPort = primaryPort == 8099 ? 8098 : 8099
+        var embeddingsCard = makeSettings(port: cardPort)
+        embeddingsCard.embeddings = true
+        embeddingsCard.agentToolsEnabled = true
+        embeddingsCard.uiMcpProxy = true
+        embeddingsCard.toolsRuntime = "docker:tools"
+        embeddingsCard.jinja = true
+        let blocked = embeddingsCard.arguments
+        XCTAssertTrue(blocked.contains("--embeddings"))
+        for flag in ["--tools", "--tools-runtime", "--jinja", "--ui-mcp-proxy"] {
+            XCTAssertFalse(blocked.contains(flag), "\(flag) must not ride an embeddings server")
+        }
+
+        var chatCard = makeSettings(port: cardPort)
+        chatCard.embeddings = false
+        chatCard.agentToolsEnabled = true
+        chatCard.uiMcpProxy = true
+        chatCard.toolsRuntime = "docker:tools"
+        chatCard.jinja = true
+        let allowed = chatCard.arguments
+        XCTAssertFalse(allowed.contains("--embeddings"))
+        for flag in ["--tools", "--tools-runtime", "--jinja", "--ui-mcp-proxy"] {
+            XCTAssertTrue(allowed.contains(flag), "a non-embeddings card with tools keeps \(flag)")
+        }
+        let toolsIndex = try XCTUnwrap(allowed.firstIndex(of: "--tools"))
+        XCTAssertEqual(allowed[toolsIndex + 1], "all")
+    }
+
+    /// The transcript's error row is the exact line that showed the operator
+    /// "HTTP 400: Failed to initialize samplers, failed to parse grammar".
+    /// Its text must be selectable/copyable like the rest of the chat. The
+    /// harness renders no SwiftUI, so the pin reads the view source.
+    func testChatErrorTextIsCopyable() throws {
+        let viewURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Chat/ChatNative.swift")
+        let view = try String(contentsOf: viewURL, encoding: .utf8)
+        guard let range = view.range(of: "if let err = chat.lastError") else {
+            return XCTFail("the transcript's error row (chat.lastError) must exist in ChatNative.swift")
+        }
+        let block = view[range.lowerBound...].prefix(500)
+        XCTAssertTrue(block.contains(".textSelection(.enabled)"),
+                      "the error row's text must be selectable so engine errors are copyable")
+    }
+
+    /// English-only agent replies. The bilingual "es / en" status messages
+    /// landed as assistant messages and re-entered the next latch prompt's
+    /// transcript, so the agent answered with both languages mixed in one
+    /// reply. Every agent-reaching string must be English-only (" / " is
+    /// this codebase's bilingual-pair marker), and the standing instruction
+    /// at the prompt seam must say so explicitly.
+    func testLatchAgentStringsAreEnglishOnly() {
+        XCTAssertTrue(ChatStore.latchStandingInstruction.contains("English"))
+        XCTAssertTrue(ChatStore.latchEngineDownMessage(port: 8080)
+                      .contains("start your main model server"),
+                      "the pre-flight failure must name the one actionable fix")
+        for text in [ChatStore.latchStandingInstruction as String,
+                     ChatStore.latchUnavailableMessage,
+                     ChatStore.latchExitMessage(status: 1),
+                     ChatStore.latchEmptyReplyMessage,
+                     ChatStore.latchEngineDownMessage(port: 8080),
+                     LatchDelegateService.engineDownPrefix,
+                     MetaPromptService.emptyTaskMessage,
+                     MetaPromptService.emptyReplyMessage,
+                     MetaPromptService.exitMessage(status: 1)] {
+            XCTAssertFalse(text.contains(" / "),
+                           "agent-reaching text must be English-only, got: \(text.prefix(60))…")
+        }
+    }
+
+    /// The sandbox boot config must carry no language preference: a stale
+    /// config copied verbatim by a pre-minimal-seed build (the operator's
+    /// sandbox still holds one) would leak a language hint into every agent
+    /// reply. Accessing sandboxHome scrubs such keys in place, and the pure
+    /// helper leaves a clean or non-JSON config untouched.
+    func testLatchSandboxConfigCarriesNoLanguagePreference() throws {
+        let dirty = Data(#"{"language":"es","locale":"es_ES","chat":{"responseLanguage":"Spanish"},"theme":"dark"}"#.utf8)
+        let scrubbed = try XCTUnwrap(LatchDelegateService.scrubbingLanguagePreferences(from: dirty))
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: scrubbed) as? [String: Any])
+        XCTAssertNil(obj["language"])
+        XCTAssertNil(obj["locale"])
+        let chat = try XCTUnwrap(obj["chat"] as? [String: Any])
+        XCTAssertNil(chat["responseLanguage"], "nested language keys must be scrubbed too")
+        XCTAssertTrue(chat.isEmpty, "the nested object keeps nothing but scrubbed keys")
+        XCTAssertEqual(obj["theme"] as? String, "dark", "unrelated keys survive the scrub")
+        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: Data(#"{"theme":"dark"}"#.utf8)),
+                     "a config without language keys is left alone")
+        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: Data("not json".utf8)),
+                     "non-JSON data is left alone")
+
+        // The live sandbox: after accessing sandboxHome, the boot config on
+        // disk carries none of the language-preference keys (the helper
+        // returns nil exactly when there is nothing left to scrub).
+        let bootConfig = LatchDelegateService.sandboxHome
+            .appendingPathComponent(".zcode/cli/config.json")
+        let live = try XCTUnwrap(try? Data(contentsOf: bootConfig))
+        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: live),
+                     "the seeded sandbox config must not carry any language preference")
+    }
+
     /// The double engine abort: gemma + mixed K/V hits the same-type-requiring
     /// generic Metal kernel. Mixed pairs for gemma must be equalized on the
     /// smaller type; tuned mixes for other models (q8_0/turbo4) stay as set.
@@ -3738,6 +3846,10 @@ extension EnterpriseHardeningTests {
         instance: { EnterpriseHardeningTests() },
         checks: [
             .init(name: "testPrimaryServerNeverLaunchesEmbeddingsOnly") { try await $0.testPrimaryServerNeverLaunchesEmbeddingsOnly() },
+            .init(name: "testEmbeddingsCardsCannotCarryChatToolFlags") { try $0.testEmbeddingsCardsCannotCarryChatToolFlags() },
+            .init(name: "testChatErrorTextIsCopyable") { try $0.testChatErrorTextIsCopyable() },
+            .init(name: "testLatchAgentStringsAreEnglishOnly") { $0.testLatchAgentStringsAreEnglishOnly() },
+            .init(name: "testLatchSandboxConfigCarriesNoLanguagePreference") { try $0.testLatchSandboxConfigCarriesNoLanguagePreference() },
             .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
             .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
             .init(name: "testLatchChildEnvironmentIsIsolatedAndProviderNeutral") { try await $0.testLatchChildEnvironmentIsIsolatedAndProviderNeutral() },

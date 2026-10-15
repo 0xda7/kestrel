@@ -98,6 +98,79 @@ final class LatchBridgeTests: CheckCase {
     func testImportIgnoresGarbage() {
         XCTAssertTrue(LatchBridge.importableRoutes(from: Data("not json".utf8)).isEmpty)
     }
+
+    // MARK: Chat-capable local target (the 2026-10-14 routing incident)
+
+    private func settings(port: Int, model: String, embeddings: Bool = false) -> ServerSettings {
+        ServerSettings(serverBinary: "/usr/bin/true", modelPath: model, port: port,
+                       ngl: 99, ncmoe: 0, ctx: 2048, threads: 6, flashAttn: "auto",
+                       noMmap: true, jinja: false, vramReserveMB: 1024, gpuIndex: -1,
+                       extraArgs: "", embeddings: embeddings,
+                       cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+    }
+
+    /// The agent's local provider must never point at an embeddings-dedicated
+    /// or decision-model server: an embeddings context answers every chat
+    /// request with the sampler 400, and the Laya card serves forced-choice
+    /// JSON, not conversation. Given the incident's fixture list — the
+    /// decision card's config applied as the primary, an embeddings card and
+    /// a real chat card added — the target is the chat server, never 8098.
+    func testLocalTargetExcludesEmbeddingsAndDecisionServers() {
+        let chat = settings(port: 8080, model: "/Users/x/models/chat.gguf")
+        XCTAssertEqual(LatchBridge.chatCapableLocalTarget(primary: chat, addedProfiles: [])?.port,
+                       8080, "a chat-capable primary is the agent's target unchanged")
+
+        let chatCard = settings(port: 8081, model: "/Users/x/models/chat2.gguf")
+            .makeProfile(name: "Second")
+        var embeddingsCard = settings(port: 8099, model: "/Users/x/models/embed.gguf")
+            .makeProfile(name: "RAG")
+        embeddingsCard.pinned = [Profile.Pin.model, Profile.Pin.embeddings]
+        embeddingsCard.embeddings = true
+
+        // The incident shape: the flat primary keys describe the embeddings-
+        // mode decision card on 8098 (an applied card's port is written into
+        // the primary port key), while a chat-capable server exists as a card.
+        let incident = LatchBridge.chatCapableLocalTarget(
+            primary: settings(port: 8098, model: "/Users/x/models/Laya-Q8_0.gguf", embeddings: true),
+            addedProfiles: [embeddingsCard, chatCard])
+        XCTAssertEqual(incident?.port, 8081,
+                       "the agent routes to the chat-capable card, never the embeddings/decision primary")
+
+        // The decision model alone (embeddings off) is still not a chat target.
+        let decisionOnly = LatchBridge.chatCapableLocalTarget(
+            primary: settings(port: 8098, model: "/Users/x/models/Laya-Q8_0.gguf"),
+            addedProfiles: [embeddingsCard])
+        XCTAssertNil(decisionOnly,
+                     "with no chat-capable server there is no local provider target at all")
+
+        XCTAssertFalse(LatchBridge.isChatCapableTarget(modelPath: "/m/Laya-Q8_0.gguf", embeddings: false),
+                       "the decisions model does not generate conversational text")
+        XCTAssertFalse(LatchBridge.isChatCapableTarget(modelPath: "/m/chat.gguf", embeddings: true),
+                       "an embeddings-dedicated process has no sampler chain")
+        XCTAssertTrue(LatchBridge.isChatCapableTarget(modelPath: "/m/chat.gguf", embeddings: false))
+    }
+
+    /// The generated config's default is the primary chat port, and no
+    /// embeddings/decision server appears as a provider target.
+    func testGeneratedConfigDefaultsToPrimaryChatPort() throws {
+        let target = try XCTUnwrap(LatchBridge.chatCapableLocalTarget(
+            primary: settings(port: 8080, model: "/Users/x/models/chat.gguf"),
+            addedProfiles: []))
+        XCTAssertEqual(target.port, 8080)
+        let entry = LatchBridge.ProviderEntry(
+            id: "kestrel-local",
+            baseURL: "http://127.0.0.1:\(target.port)/v1",
+            apiKey: "engine",
+            models: [(target.modelPath as NSString).lastPathComponent])
+        let json = LatchBridge.generateJSON(entries: [entry], defaultEntryID: entry.id)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        let config = try XCTUnwrap(object["config"] as? [String: Any])
+        let selection = try XCTUnwrap(config["defaultModelSelection"] as? [String: Any])
+        XCTAssertEqual(selection["providerId"] as? String, "kestrel-local")
+        XCTAssertTrue(json.contains("8080"))
+        XCTAssertFalse(json.contains("8098"), "the decision card's port must not appear as a provider target")
+        XCTAssertFalse(json.contains("8099"), "the embeddings card's port must not appear as a provider target")
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -111,6 +184,8 @@ extension LatchBridgeTests {
             .init(name: "testUnknownDefaultIDFallsBack") { try $0.testUnknownDefaultIDFallsBack() },
             .init(name: "testImportSkipsLoopbackAndKeepsRemote") { try $0.testImportSkipsLoopbackAndKeepsRemote() },
             .init(name: "testImportIgnoresGarbage") { $0.testImportIgnoresGarbage() },
+            .init(name: "testLocalTargetExcludesEmbeddingsAndDecisionServers") { $0.testLocalTargetExcludesEmbeddingsAndDecisionServers() },
+            .init(name: "testGeneratedConfigDefaultsToPrimaryChatPort") { try $0.testGeneratedConfigDefaultsToPrimaryChatPort() },
             .init(name: "testSlugIsKeySafe") { $0.testSlugIsKeySafe() },
         ])
 }

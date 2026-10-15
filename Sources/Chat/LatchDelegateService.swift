@@ -30,6 +30,13 @@ enum LatchDelegateService {
 
     static var defaultBinaryPath: String { "~/.latch/bin/latch-harness" }
 
+    /// Prefix for failure text when stderr carries ECONNREFUSED (see
+    /// `runStreaming`): names the #1 real-world cause with its one-click fix.
+    /// English-only — it lands in the chat and re-enters the next latch
+    /// prompt's transcript.
+    static let engineDownPrefix =
+        "The local engine is not running — press Start on the Home/Servers tab. (ECONNREFUSED)\n\n"
+
     static var binaryPath: String {
         let stored = UserDefaults.standard.string(forKey: SettingsKeys.latchBinaryPath)
             ?? defaultBinaryPath
@@ -164,8 +171,48 @@ enum LatchDelegateService {
             // LATCH_API_KEY; because nothing is copied, there is also nothing
             // to refresh when the outer config changes.
             try? Data("{}".utf8).write(to: bootConfig, options: .atomic)
+        } else if let existing = try? Data(contentsOf: bootConfig),
+                  let scrubbed = Self.scrubbingLanguagePreferences(from: existing) {
+            // Builds before the minimal boot seed copied the operator's real
+            // config verbatim, and the exists-guard above keeps whatever is
+            // on disk — so such a stale copy survives forever. A language
+            // preference in it would steer every agent reply in an
+            // English-only product, so it is scrubbed in place, once.
+            try? scrubbed.write(to: bootConfig, options: .atomic)
         }
         return home
+    }
+
+    /// Keys a harness config may use to pin or hint a reply language. The
+    /// product is English-only, so none of these may survive in the seeded
+    /// sandbox config — one would leak a language preference into every
+    /// agent reply.
+    static let languagePreferenceKeys: Set<String> = [
+        "language", "locale", "lang", "responseLanguage", "preferredLanguage",
+        "outputLanguage",
+    ]
+
+    /// The config rewritten without any language-preference key (recursively,
+    /// so a nested `{"chat": {"language": "es"}}` is scrubbed too). Returns
+    /// nil when the data is not a JSON object or carries none of the keys —
+    /// nothing to change, nothing to rewrite.
+    static func scrubbingLanguagePreferences(from data: Data) -> Data? {
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return nil
+        }
+        func scrub(_ value: Any) -> Any {
+            guard let dict = value as? [String: Any] else { return value }
+            var out: [String: Any] = [:]
+            for (key, child) in dict where !languagePreferenceKeys.contains(key) {
+                out[key] = scrub(child)
+            }
+            return out
+        }
+        let scrubbed = scrub(object)
+        guard JSONSerialization.isValidJSONObject(scrubbed),
+              (scrubbed as? NSDictionary) != (object as NSDictionary) else { return nil }
+        return try? JSONSerialization.data(withJSONObject: scrubbed,
+                                           options: [.prettyPrinted, .sortedKeys])
     }
 
     /// Environment the harness runs in: an explicit allowlist on top of its
@@ -412,11 +459,11 @@ enum LatchDelegateService {
             var prefix = ""
             // The #1 real-world latch failure is the local engine being down;
             // the harness's Node stack hides ECONNREFUSED in a wall of text.
-            // Name it first, in both languages, with the one-click fix.
+            // Name it first, with the one-click fix. English-only: this text
+            // lands in the chat and re-enters the next latch prompt's
+            // transcript (see ChatStore.latchStandingInstruction).
             if trimmed.contains("ECONNREFUSED") {
-                prefix = "El motor local no está en marcha — pulsa Inicio en la pestaña Home/Servers. / "
-                    + "The local engine is not running — press Start on the Home/Servers tab. "
-                    + "(ECONNREFUSED)\n\n"
+                prefix = Self.engineDownPrefix
             }
             return prefix + (trimmed.isEmpty ? headline : headline + "\n\nlatch stderr: " + trimmed.prefix(600))
         }

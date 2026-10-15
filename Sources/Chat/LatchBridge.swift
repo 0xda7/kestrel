@@ -131,25 +131,86 @@ enum LatchBridge {
             entries.append(ProviderEntry(id: id, baseURL: url.absoluteString,
                                          apiKey: key, models: [model]))
         }
+        var localID: String?
         if let local = localEntry() {
             entries.append(local)
+            localID = local.id
         }
         // Default stays on this machine's engine unless an active route says
         // otherwise — delegation of machine-private work must be a choice.
-        return (entries, activeID)
+        // kestrel-local is named explicitly instead of falling back to
+        // entries.first (which a configured-but-inactive remote route would
+        // win); a complete, explicitly-local default selection is also what
+        // keeps the harness from probing its Built-in bootstrap.
+        return (entries, activeID ?? localID)
+    }
+
+    // MARK: Chat-capable local target
+
+    /// True when a server configuration can serve the agent's chat requests.
+    /// False for an embeddings-dedicated process — `--embeddings` leaves the
+    /// context without a sampler chain, so every chat request fails with
+    /// HTTP 400 "Failed to initialize samplers, failed to parse grammar" —
+    /// and for the decisions model (Laya answers forced-choice JSON over
+    /// /v1/systemone; it does not generate conversational text). Identified
+    /// by model filename, the same substring idiom the gemma KV rule uses.
+    static func isChatCapableTarget(modelPath: String, embeddings: Bool) -> Bool {
+        !embeddings && !modelPath.lowercased().contains("laya")
+    }
+
+    /// The local engine the agent's `kestrel-local` provider points at: the
+    /// primary server when its settings describe a chat-capable engine,
+    /// otherwise the first added server card that does. The flat primary keys
+    /// can describe an embeddings or decision server (ProfileStore.apply
+    /// writes an applied card's port into the primary port key) — pointing
+    /// the agent there is the 2026-10-14 routing incident, so such targets
+    /// are excluded by construction. nil when nothing can serve chat.
+    /// `addedProfiles` overrides the persisted card list so checks can run
+    /// the selection against fixtures.
+    static func chatCapableLocalTarget(
+        primary: ServerSettings = ServerSettings.fromDefaults(),
+        addedProfiles: [Profile]? = nil
+    ) -> ServerSettings? {
+        if isChatCapableTarget(modelPath: primary.modelPath, embeddings: primary.embeddings) {
+            return primary
+        }
+        let profiles: [Profile]
+        if let addedProfiles {
+            profiles = addedProfiles
+        } else if let data = UserDefaults.standard.data(forKey: ServerManager.storeKey),
+                  let decoded = try? JSONDecoder().decode([Profile].self, from: data) {
+            profiles = decoded
+        } else {
+            profiles = []
+        }
+        for p in profiles {
+            var s = primary
+            // Same overlay ServerController.effectiveSettings() applies: an
+            // added card inherits the globals under its pinned fields, a
+            // nil-pinned pre-0.83 card is a full snapshot.
+            if let pinned = p.pinned {
+                s.applyPinned(p, Set(pinned))
+            } else {
+                s.apply(p)
+            }
+            if isChatCapableTarget(modelPath: s.modelPath, embeddings: s.embeddings) {
+                return s
+            }
+        }
+        return nil
     }
 
     /// The engine itself as a latch provider, so the delegate runs locally
-    /// by default. The model names the file that is about to load.
+    /// by default. The model names the file that is about to load, and the
+    /// port is always a chat-capable server's (see
+    /// `chatCapableLocalTarget()`) — never an embeddings or decision server.
     static func localEntry() -> ProviderEntry? {
-        let modelPath = UserDefaults.standard.string(forKey: SettingsKeys.modelPath) ?? ""
-        let model = (modelPath as NSString).lastPathComponent
+        guard let target = chatCapableLocalTarget() else { return nil }
+        let model = (target.modelPath as NSString).lastPathComponent
         guard !model.isEmpty else { return nil }
-        let port = UserDefaults.standard.integer(forKey: SettingsKeys.port)
-        let effectivePort = port > 0 ? port : 8080
         let key = Keychain.apiKey()
         return ProviderEntry(id: "kestrel-local",
-                             baseURL: "http://127.0.0.1:\(effectivePort)/v1",
+                             baseURL: "http://127.0.0.1:\(target.port)/v1",
                              apiKey: key, models: [model])
     }
 
