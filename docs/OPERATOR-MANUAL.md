@@ -129,3 +129,19 @@ Logs: `~/Library/Application Support/Kestrel/logs/server-*.log`
   hidden login removed. 413/413.
 - 0.89.9: failed-turn merge fix (was committed but not installed —
   0.89.10 ships it).
+
+## Performance & profiles (learned 2026-10-14, the hard way)
+
+- **The single biggest speed lever is where the MoE experts run.** If
+  generation drops to ~13 t/s from ~70 t/s, check the launch line in the
+  engine log for `--n-cpu-moe N`: a profile carrying `ncmoe>0` was applied
+  (profiles overwrite the flat settings when the engine relaunches). For
+  models that fit in VRAM, set the experts-in-CPU value to 0 and restart —
+  full speed returns immediately.
+- **Toggling Agent Tools relaunches the engine** — and applies the active
+  profile. If a speed or behavior change appears right after a toggle,
+  compare the new `args:` line in the newest log against the previous one;
+  the difference is the cause, every time.
+- Tool-carrying requests on models with custom tool-call syntax now launch
+  with a generated `--chat-template-file` (app-managed, per model hash in
+  `…/Kestrel/tool-templates/`). Deleting that folder is safe; it regenerates.
