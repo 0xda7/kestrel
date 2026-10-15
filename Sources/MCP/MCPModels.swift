@@ -92,8 +92,14 @@ enum MCPConfigImport {
 }
 
 enum MCPServerStore {
+    /// The raw stored bytes, the cache key for tool discovery: any edit,
+    /// addition or removal changes it.
+    static func savedData() -> Data? {
+        UserDefaults.standard.data(forKey: SettingsKeys.mcpServers)
+    }
+
     static func load() -> [MCPServer] {
-        guard let data = UserDefaults.standard.data(forKey: SettingsKeys.mcpServers),
+        guard let data = savedData(),
               let servers = try? JSONDecoder().decode([MCPServer].self, from: data) else { return [] }
         return servers
     }

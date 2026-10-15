@@ -1095,9 +1095,7 @@ final class ChatStore: ObservableObject {
                     // shape, and it does it on every tool, so the model stops getting them
                     let rejected = raw.contains("peg-native") && !availableTools.isEmpty
                     if rejected { ToolSupport.block(ToolSupport.currentModelIdentity) }
-                    let message = rejected
-                        ? "Este modelo escribe mal las llamadas a herramientas y el motor cortó la respuesta; se le han desactivado, vuelve a enviar / this model writes tool calls in the wrong shape and the engine stopped the answer; they are now off for it, send again"
-                        : raw
+                    let message = rejected ? Self.toolsRejectedMessage : raw
                     await MainActor.run { store?.lastError = message }
                 }
             }
@@ -1717,7 +1715,7 @@ final class ChatStore: ObservableObject {
 
     /// Bilingual notice for a request that cannot fit the engine's window.
     nonisolated static func contextOverflowNotice(estimated: Int, window: Int) -> String {
-        "Este mensaje no cabe en la ventana de contexto (≈\(estimated) tokens > \(window)). Resume el historial («Recuperar velocidad»), archiva turnos con la herramienta de memoria, abre un chat nuevo o sube el contexto en Ajustes. / This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
+        "This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
     }
 
     nonisolated static func compactionCutoff(messages: [ChatMessage], alreadyCompacted: Int,
@@ -1944,7 +1942,8 @@ final class ChatStore: ObservableObject {
     }
 
     /// Maps llama-server HTTP errors ({"error":{"message":…}}) to readable,
-    /// actionable text, following the same bilingual style as Server.diagnose.
+    /// actionable, English-only text (agent-reaching strings never carry a
+    /// second language).
     nonisolated private static func describeServerError(status: Int, body: String) -> String {
         var message = body
         if let data = body.data(using: .utf8),
@@ -1955,15 +1954,15 @@ final class ChatStore: ObservableObject {
         }
         if message.lowercased().contains("reasoning effort")
             || message.lowercased().contains("reasoning_effort") {
-            return "El modelo no acepta ese esfuerzo de razonamiento; elige otro o «Predeterminado del modelo» en los ajustes del chat. El motor respondió: \(message.prefix(200)) / the model does not accept that reasoning effort; pick another one or “Model default” in the chat settings. The engine answered: \(message.prefix(200))"
+            return "The model does not accept that reasoning effort; pick another one or “Model default” in the chat settings. The engine answered: \(message.prefix(200))"
         }
         if message.lowercased().contains("context") {
-            return "Contexto lleno: el mensaje, los archivos adjuntos y el historial juntos superan el contexto. Sube el contexto en Ajustes, adjunta menos o inicia un chat nuevo / context full: your message, attached files and history together exceed the context. Raise the context size in Settings, attach less, or start a new chat"
+            return "Context full: your message, attached files and history together exceed the context. Raise the context size in Settings, attach less, or start a new chat."
         }
         // std::bad_function_call comes from both a context overflow on a tool turn
         // and a missing ffmpeg/ffprobe on video; name both, not just video.
         if message.contains("bad_function_call") {
-            return "La solicitud falló. Con herramientas activas suele ser que el archivo o la conversación superan el contexto: súbelo en Ajustes o usa un archivo más pequeño. Si adjuntaste un video, verifica que ffmpeg y ffprobe estén disponibles / the request failed. With tools enabled this is usually the file or conversation exceeding the context: raise it in Settings or use a smaller file. If you attached a video, make sure ffmpeg and ffprobe are available"
+            return "The request failed. With tools enabled this is usually the file or conversation exceeding the context: raise it in Settings or use a smaller file. If you attached a video, make sure ffmpeg and ffprobe are available."
         }
         return "HTTP \(status): \(message.prefix(300))"
     }
@@ -1975,14 +1974,20 @@ final class ChatStore: ObservableObject {
             return message
         }
         if let message = error as? String, !message.isEmpty { return message }
-        return "El motor interrumpió la respuesta / the engine interrupted the response"
+        return "The engine interrupted the response."
     }
+
+    /// The model's tool calls arrive malformed and the engine cut the turn:
+    /// tools are disabled for the model and the user is told why (and that
+    /// resending now works). English-only: agent-reaching text.
+    nonisolated static let toolsRejectedMessage =
+        "This model writes tool calls in the wrong shape and the engine stopped the answer; tools are now off for it — send again."
 
     nonisolated static func emptyResponseMessage(finishReason: String?) -> String {
         if finishReason == "length" {
-            return "El modelo agotó el máximo de tokens durante el razonamiento; aumenta Máx. o desactiva Razonamiento / the model used all max tokens while reasoning; raise Max or disable Reasoning"
+            return "The model used all max tokens while reasoning; raise Max or disable Reasoning."
         }
-        return "El modelo terminó el razonamiento sin producir una respuesta visible; intenta regenerar o desactiva Razonamiento / the model finished reasoning without a visible answer; regenerate or disable Reasoning"
+        return "The model finished reasoning without a visible answer; regenerate or disable Reasoning."
     }
 
     func stop() {

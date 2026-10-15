@@ -95,11 +95,6 @@ enum ChatToolsError: LocalizedError {
 }
 
 enum ChatToolsService {
-    static let builtInNames = [
-        "read_file", "edit_file", "write_file", "get_datetime",
-        "file_glob_search", "grep_search", "exec_shell_command", "run_javascript"
-    ]
-
     /// KES-05: "always" consent is session-scoped and never covers the shell.
     /// A persisted, global grant for `exec_shell_command` is full
     /// user-account code execution for the life of the install — one
@@ -444,10 +439,6 @@ enum ChatToolsService {
         if let key = ServerSettings.activeAPIKey() {
             request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         }
-    }
-
-    private static func permissionKey(_ name: String) -> String {
-        "toolPermission.always.builtin.\(name)"
     }
 
     private static func validate(response: URLResponse, data: Data) throws {

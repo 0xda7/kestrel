@@ -21,7 +21,28 @@ actor KestrelMCPService {
     private var legacyReady: [UUID: CheckedContinuation<URL, Error>] = [:]
     private var legacyResponses: [UUID: [Int: CheckedContinuation<WireResponse, Error>]] = [:]
 
-    func discoverTools() async -> [BuiltinToolInfo] {
+    /// Discovery result cache, keyed on the raw saved server list: the tool
+    /// list is stable for a given MCP configuration, but the agent turn and
+    /// the tools popover both call discoverTools(), and each uncached call
+    /// reopens every configured server and re-issues tools/list. Editing,
+    /// adding or removing a server changes the stored data and invalidates
+    /// the cache on the next call. `discoveryCacheHits` is exposed for the
+    /// check suite so the cache itself stays pinned.
+    private var discoveryCache: (signature: Int, tools: [BuiltinToolInfo])?
+    private(set) var discoveryCacheHits = 0
+
+    private static func discoverySignature() -> Int {
+        var hasher = Hasher()
+        hasher.combine(MCPServerStore.savedData() ?? Data())
+        return hasher.finalize()
+    }
+
+    func discoverTools(force: Bool = false) async -> [BuiltinToolInfo] {
+        let signature = Self.discoverySignature()
+        if !force, let cached = discoveryCache, cached.signature == signature {
+            discoveryCacheHits += 1
+            return cached.tools
+        }
         var output: [BuiltinToolInfo] = []
         for server in MCPServerStore.load() where server.enabled {
             do {
@@ -48,6 +69,7 @@ actor KestrelMCPService {
                 AppLog.chat.error("MCP \(server.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
+        discoveryCache = (signature, output)
         return output
     }
 

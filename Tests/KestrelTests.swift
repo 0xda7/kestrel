@@ -2207,7 +2207,8 @@ final class CompactionTests: CheckCase {
 
     func testReasoningOnlyLengthMessageExplainsTokenLimit() {
         let message = ChatStore.emptyResponseMessage(finishReason: "length")
-        XCTAssertTrue(message.contains("máximo de tokens"))
+        XCTAssertTrue(message.contains("max tokens"))
+        XCTAssertFalse(message.contains("á"), "agent-path text stays English-only")
     }
 }
 
