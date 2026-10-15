@@ -24,6 +24,7 @@ enum CheckRegistry {
         ("ImageGenTests", ImageGenTests.__checkSet),
         ("ServerSettingsTests", ServerSettingsTests.__checkSet),
         ("EnterpriseHardeningTests", EnterpriseHardeningTests.__checkSet),
+        ("LatchRuntimeGuardTests", LatchRuntimeGuardTests.__checkSet),
         ("ChatMessageTests", ChatMessageTests.__checkSet),
         ("LiveStreamTests", LiveStreamTests.__checkSet),
         ("CompactionTests", CompactionTests.__checkSet),

@@ -157,6 +157,18 @@ enum LatchDelegateService {
         // looser (by an older build or a restored backup) is corrected here,
         // not only at creation.
         try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: latchV2.path)
+        // A harness boot may unpack its bundled z.ai provider runtime into
+        // the sandbox (.latch/v2/runtime/provider/bundled). Finding it, the
+        // harness prefers the dead builtin path — probing z.ai, failing with
+        // the bootstrap 404, and exiting 1 — instead of the Active config
+        // this app generates. The bridge file is the embedded agent's only
+        // provider source, so any bundled runtime left in the sandbox is
+        // removed on every spawn (observed 2026-10-14: the operator's agent
+        // ignored a correct kestrel-local config because of it).
+        let staleBuiltin = latchV2.appendingPathComponent("runtime")
+        if fm.fileExists(atPath: staleBuiltin.path) {
+            try? fm.removeItem(at: staleBuiltin)
+        }
         let cli = home.appendingPathComponent(".zcode/cli")
         try? fm.createDirectory(at: cli, withIntermediateDirectories: true)
         let bootConfig = cli.appendingPathComponent("config.json")
