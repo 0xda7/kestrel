@@ -122,8 +122,9 @@ Logs: `~/Library/Application Support/Kestrel/logs/server-*.log`
 ## 10. Release history (this machine)
 
 - 0.89.12 (2026-10-14): Agent Tools grammar fix for re-authored
-  LFM2-family templates; latch and Laya integrations removed end-to-end
-  (the native assistant + engine tool runtime is the product).
+  LFM2-family templates; the external sidecar-agent and decision-model
+  integrations removed end-to-end (the native assistant + engine tool
+  runtime is the product).
 - 0.89.10 (2026-10-14): all four incident fixes, English-only UI,
   hidden login removed. 413/413.
 - 0.89.9: failed-turn merge fix (was committed but not installed —
