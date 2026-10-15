@@ -68,11 +68,10 @@ enum ChatJSONL {
         if let value = conversation.summary { header["kestrelSummary"] = value }
         if let value = conversation.summarizedCount { header["kestrelSummarizedCount"] = value }
         // Modernization fields: without these an exported agent-mode chat
-        // re-imports as engine-routed and loses its tool working directory —
+        // re-imports and loses its tool working directory —
         // a silent behavior change on a lossless "round-trip".
         if let value = conversation.projectID { header["kestrelProjectID"] = value.uuidString }
         if let value = conversation.workingDirectory, !value.isEmpty { header["kestrelWorkingDirectory"] = value }
-        if let value = conversation.assistantMode { header["kestrelAssistantMode"] = value }
         if let draft = conversation.draft,
            let data = try? JSONEncoder().encode(draft),
            let json = try? JSONSerialization.jsonObject(with: data) {
@@ -194,9 +193,6 @@ enum ChatJSONL {
         }
         if let value = header["kestrelWorkingDirectory"] as? String {
             conversation.workingDirectory = value
-        }
-        if let value = header["kestrelAssistantMode"] as? String {
-            conversation.assistantMode = value == "pi" ? "latch" : value
         }
         if let json = header["kestrelDraft"],
            let data = try? JSONSerialization.data(withJSONObject: json),

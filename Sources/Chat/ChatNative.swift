@@ -144,32 +144,6 @@ struct Conversation: Identifiable, Codable {
     /// Last exchange's context tokens, per chat so the bar follows the open
     /// conversation and persists with the KV cache. Optional for old JSON.
     var contextUsed: Int? = nil
-    /// Assistant backend for this conversation: "latch" answers through the
-    /// latch harness (the direct chat agent), nil uses the model engine.
-    /// Optional so older JSON decodes and older builds ignore the extra key.
-    var assistantMode: String? = nil
-}
-
-/// A thread-safe holder for a sidecar Process, filled on the launch thread
-/// inside `onLaunch` and read by stop() on the main actor — no hop window.
-final class SidecarProcessBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var process: Process?
-    func store(_ process: Process) {
-        lock.lock()
-        self.process = process
-        lock.unlock()
-    }
-    func load() -> Process? {
-        lock.lock()
-        defer { lock.unlock() }
-        return process
-    }
-    func clear() {
-        lock.lock()
-        process = nil
-        lock.unlock()
-    }
 }
 
 struct ChatBranch: Identifiable, Codable, Equatable {
@@ -433,17 +407,6 @@ final class ChatStore: ObservableObject {
     /// True while the current generation flows through a remote provider:
     /// engine-only paths (stream resume, engine stop, stall-kills-engine) stand down.
     private var activeStreamRemote = false
-    /// Running latch-harness process while a latch-mode reply streams; Stop
-    /// terminates it. Latch mode never sets `activeStream`, so the engine
-    /// DELETE below is naturally inert for these runs.
-    private var latchProcess: Process?
-    /// Synchronously-published handles for the current sidecar runs. The
-    /// MainActor properties above are set via a detached hop AFTER
-    /// process.run(), so stop() in that window would find nil and a runaway
-    /// sidecar would run to its full budget; the boxes are created before the
-    /// task starts and filled inside onLaunch on the launch thread itself,
-    /// closing that window. Box per run; cleared in finish().
-    let latchProcessBox = SidecarProcessBox()
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
@@ -669,14 +632,6 @@ final class ChatStore: ObservableObject {
         save()
     }
 
-    /// Per-conversation assistant backend: "latch" (the direct chat agent)
-    /// or nil (model engine).
-    func setConversationAssistantMode(_ c: Conversation, _ mode: String?) {
-        guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
-        conversations[i].assistantMode = (mode?.isEmpty ?? true) ? nil : mode
-        save()
-    }
-
     /// Folder picker for a project, so the menu entry is one line at each call site.
     func pickProjectWorkingDirectory(_ p: ChatProject) {
         let panel = NSOpenPanel()
@@ -767,102 +722,6 @@ final class ChatStore: ObservableObject {
                continuationInstruction: "Continue exactly where the previous response stopped. Do not repeat any text.")
     }
 
-    /// Global "latch as primary assistant" toggle (Chat advanced settings).
-    var globalLatchPrimary: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// True when this conversation should be answered by the latch harness:
-    /// an explicit per-conversation choice wins; otherwise the global
-    /// "latch as primary assistant" toggle decides for new/default chats.
-    func latchWanted(for c: Conversation) -> Bool {
-        if let mode = c.assistantMode { return mode == "latch" }
-        return UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// One-shot prompt for a latch run: the conversation's system prompt, a
-    /// char-bounded recent transcript (attachments already ride inline inside
-    /// wireContent) and the standing instruction. Bounded so a long history can
-    /// never push argv past the kernel limit; newest messages are kept.
-    private func latchPrompt(for i: Int, system: String,
-                             continuationInstruction: String?) -> String {
-        let maximumContextCharacters = 24_000
-        var budget = maximumContextCharacters
-        var lines: [String] = []
-        for message in conversations[i].messages.reversed() {
-            guard message.role == "user" || message.role == "assistant" else { continue }
-            if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Reasoning must never re-enter the transcript as assistant text:
-            // a leaked <think> block reads as a broken assistant turn.
-            if message.role == "assistant" {
-                body = body.replacingOccurrences(
-                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
-                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard !body.isEmpty else { continue }
-            let line = (message.role == "user" ? "User: " : "Assistant: ") + body
-            if line.count > budget {
-                lines.insert("… " + line.prefix(budget), at: 0)
-                break
-            }
-            budget -= line.count + 1
-            lines.insert(line, at: 0)
-            if budget <= 0 { break }
-        }
-        var prompt = ""
-        let trimmedSystem = system.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedSystem.isEmpty { prompt += trimmedSystem + "\n\n" }
-        if !lines.isEmpty {
-            prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
-        }
-        if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
-        prompt += Self.latchStandingInstruction
-        return prompt
-    }
-
-    /// The standing instruction every latch prompt ends with. English-only:
-    /// these words and the transcript steer the agent's reply language, and
-    /// the product is English-only (a bilingual status message re-entering
-    /// this transcript is what made replies mix languages).
-    nonisolated static let latchStandingInstruction =
-        "Answer as the assistant directly, in English only; your reply becomes the next assistant message."
-
-    nonisolated static var latchUnavailableMessage: String {
-        "latch is unavailable: the latch-harness binary was not found (default path ~/.latch/bin/latch-harness). The engine was not silently used instead; switch this chat's mode or install latch."
-    }
-
-    nonisolated static func latchExitMessage(status: Int32) -> String {
-        "latch exited abnormally (status \(status))."
-    }
-
-    /// Empty-success guard for the latch primary path: the run ended cleanly
-    /// but stdout carried nothing, so this surfaces instead of a blank bubble.
-    nonisolated static var latchEmptyReplyMessage: String {
-        "latch completed the turn without producing visible output."
-    }
-
-    /// Loopback /health probe before an agent turn (the same pattern
-    /// LayaDecideService.engineHealth uses, over the shared EngineHTTP
-    /// control-plane session): true when the engine answers with 200.
-    nonisolated static func engineReachable(port: Int) async -> Bool {
-        guard let url = URL(string: "http://127.0.0.1:\(port)/health") else { return false }
-        let req = EngineHTTP.request(url: url, method: "GET", timeout: 3,
-                                     apiKey: ServerSettings.activeAPIKey())
-        guard let (_, response) = try? await EngineHTTP.session.data(for: req),
-              let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
-        return true
-    }
-
-    /// Pre-flight failure text for an agent turn whose chat engine is not
-    /// answering. Says the one actionable thing instead of letting the
-    /// harness stack-dump a provider error (the 2026-10-14 chain: builtin
-    /// 404, then an embeddings-mode server's sampler 400).
-    nonisolated static func latchEngineDownMessage(port: Int) -> String {
-        "The agent's chat engine (port \(port)) is not running — start your main model server on the Home/Servers tab, then send again."
-    }
-
     private func stream(into i: Int, port: Int, temperature: Double, maxTokens: Int,
                         system: String, thinking: Bool,
                         sampling: ChatSamplingSettings = ChatSamplingSettings(),
@@ -872,145 +731,6 @@ final class ChatStore: ObservableObject {
         generating = true
         generatingConvID = conversations[i].id
         live.reset()
-        // Latch mode answers through the harness process: no engine, no
-        // gateway, no port. The branch returns BEFORE startWatchdog so the
-        // engine idle watchdog (30/180 s) never fires against latch's
-        // multi-minute runs, and activeStream stays nil so stop() never sends
-        // an engine DELETE for these runs.
-        if latchWanted(for: conversations[i]) {
-            guard LatchDelegateService.isInstalled else {
-                conversations[i].messages.append(
-                    ChatMessage(role: "assistant", content: Self.latchUnavailableMessage))
-                conversations[i].updated = Date()
-                generating = false
-                generatingConvID = nil
-                live.reset()
-                save()
-                return
-            }
-            conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
-            let convID = conversations[i].id
-            let toolCwd = effectiveWorkingDirectory(for: convID)
-            let prompt = latchPrompt(for: i, system: system,
-                                     continuationInstruction: continuationInstruction)
-            let buffer = StreamBuffer()
-            let pump = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    guard let snap = buffer.take() else {
-                        try? await Task.sleep(for: .milliseconds(40))
-                        continue
-                    }
-                    if snap.done { break }   // finish() publishes the final transcript
-                    self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: snap.speed)
-                    // Length-adaptive cadence: long replies ease their pump
-                    // rate so the UI stays responsive while text lands.
-                    let n = snap.visible.count
-                    let ms = n > 12_000 ? 600 : n > 6_000 ? 350 : n > 2_500 ? 180 : 80
-                    try? await Task.sleep(for: .milliseconds(ms))
-                }
-            }
-            let store = self
-            // `store` already carries the strong reference; a `weak self`
-            // capture here would be dead weight (and a Swift 6 warning).
-            task = Task.detached(priority: .userInitiated) { [buffer, pump] in
-                // Boxed: onOutput is @Sendable (the pipe-reader thread), so
-                // the accumulator is only touched through a lock — which also
-                // fixes the unfenced read below.
-                let streamedText = OSAllocatedUnfairLock<String>(initialState: "")
-                // Pre-flight (2026-10-14 routing incident): the harness's
-                // kestrel-local provider must point at a chat-capable engine,
-                // and that engine must answer /health before the agent runs —
-                // otherwise the harness stack-dumps its provider chain
-                // (builtin bootstrap 404, then an embeddings server's sampler
-                // 400) instead of the operator seeing the one actionable fix.
-                let outcome: LatchDelegateService.RunOutcome
-                if let target = LatchBridge.chatCapableLocalTarget(),
-                   await !ChatStore.engineReachable(port: target.port) {
-                    outcome = .failed(reason: ChatStore.latchEngineDownMessage(port: target.port))
-                } else {
-                    outcome = await LatchDelegateService.runStreaming(
-                        argv: [LatchDelegateService.binaryPath, "-p", prompt],
-                        workingDirectory: toolCwd,
-                        timeout: LatchDelegateService.chatTurnTimeoutSeconds,
-                        onLaunch: { proc in
-                            // Synchronous publish closes the stop() race window;
-                            // the MainActor hop below is only for the UI-facing
-                            // property.
-                            store.latchProcessBox.store(proc)
-                            Task { @MainActor in store.latchProcess = proc }
-                        },
-                        onOutput: { fullSoFar in
-                            // StreamBuffer is snapshot-replace: hand it the full
-                            // text so far, never a fragment.
-                            streamedText.withLock { $0 = fullSoFar }
-                            buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
-                        })
-                }
-                if Task.isCancelled {
-                    // stop() terminated the process; keep whatever streamed.
-                    // The partial comes from the buffer's last snapshot — the
-                    // captured var is written on the pipe-reader thread with
-                    // no fence, so it is not safe to read here.
-                    let partial = buffer.take().map { $0.visible }
-                        ?? streamedText.withLock { $0 }
-                    let trimmed = partial.trimmingCharacters(in: .whitespacesAndNewlines)
-                    buffer.finish()
-                    await MainActor.run {
-                        store.finish(conversation: convID, text: trimmed, speed: nil,
-                                     model: "latch")
-                        // Same queued-message delivery as the normal latch
-                        // completion below (and the engine path): a stop must
-                        // not silently swallow a steering message the user
-                        // queued during the run.
-                        if store.queuedMessage?.conversationID == convID {
-                            store.deliverQueuedMessage(conversation: convID, context: AgentRunContext(
-                                port: port, temperature: temperature, maxTokens: maxTokens,
-                                system: system, thinking: thinking, sampling: sampling,
-                                modalities: modalities,
-                                remainingTurns: 0, tools: [], workingDirectory: toolCwd))
-                        }
-                    }
-                    pump.cancel()
-                    return
-                }
-                let reply: String
-                switch outcome {
-                case .completed(let output):
-                    let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Empty-success guard: a clean exit with no visible
-                    // output surfaces a failure notice instead of finish()
-                    // silently deleting the reply.
-                    reply = produced.isEmpty ? Self.latchEmptyReplyMessage : produced
-                case .exited(let status, let output):
-                    let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    reply = partial.isEmpty
-                        ? Self.latchExitMessage(status: status)
-                        : partial + "\n\n" + Self.latchExitMessage(status: status)
-                case .failed(let reason):
-                    reply = reason
-                }
-                buffer.finish()
-                await MainActor.run {
-                    store.finish(conversation: convID, text: reply, speed: nil,
-                                 model: "latch")
-                    // Mirror the engine path: a steering message queued while
-                    // this latch turn ran starts its own turn now, instead of
-                    // being silently dropped by the next manual send (send()
-                    // clears queuedMessage). The context carries this turn's
-                    // parameters; latch needs no tools, and stream() re-runs
-                    // the latch branch from scratch.
-                    if store.queuedMessage?.conversationID == convID {
-                        store.deliverQueuedMessage(conversation: convID, context: AgentRunContext(
-                            port: port, temperature: temperature, maxTokens: maxTokens,
-                            system: system, thinking: thinking, sampling: sampling,
-                            modalities: modalities,
-                            remainingTurns: 0, tools: [], workingDirectory: toolCwd))
-                    }
-                }
-                pump.cancel()
-            }
-            return
-        }
         startWatchdog(port: port)
         // The user can switch or delete conversations mid-stream; the result
         // must land in the one this request started from, found by id.
@@ -1024,7 +744,6 @@ final class ChatStore: ObservableObject {
         activeStreamRemote = sendRoute?.isConfigured == true
         let toolsEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled)
         let javaScriptEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled)
-        let latchEnabled = LatchDelegateService.isEnabled
         let memoryToolsEnabled = ChatMemoryService.isEnabled
         let agentTurnLimit = Self.configuredAgentTurnLimit
         let enabledToolNames = conversations[i].enabledToolNames
@@ -1035,7 +754,7 @@ final class ChatStore: ObservableObject {
             (system.isEmpty ? "" : system + "\n\n")
             + "File tools work inside \($0). Use paths relative to it, and never call them for text that only exists in this conversation."
         } ?? system
-        if toolsEnabled || javaScriptEnabled || latchEnabled || memoryToolsEnabled {
+        if toolsEnabled || javaScriptEnabled || memoryToolsEnabled {
             systemWithCwd += "\n\n" + Self.agentDisciplinePrompt
         }
 
@@ -1203,7 +922,6 @@ final class ChatStore: ObservableObject {
                         }
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
-                    if LatchDelegateService.isEnabled { availableTools.append(LatchDelegateService.tool) }
                     // Laya is opt-in (default off): the operator adds the
                     // decision tool to a conversation by choice, never by
                     // installation.
@@ -1499,7 +1217,6 @@ final class ChatStore: ObservableObject {
         generatingConvID = nil
         live.reset()
         task = nil
-        latchProcessBox.clear()
         watchdog?.cancel()
         watchdog = nil
         save()
@@ -1644,7 +1361,7 @@ final class ChatStore: ObservableObject {
             // that: the next manual send() clears queuedMessage — the exact
             // silent drop the turn-end delivery exists to prevent — so it
             // starts its own turn now with this run's parameters, the same
-            // delivery the latch stop path performs. With nothing queued (or
+            // delivery the engine stop path performs. With nothing queued (or
             // no conversation left to deliver into) this reduces to the old
             // behavior: clear the context and stop.
             if let context = agentContext,
@@ -1694,9 +1411,6 @@ final class ChatStore: ObservableObject {
                         serverID: serverID, name: remoteName, arguments: arguments)
                 } else if request.name == JavaScriptSandboxService.toolName {
                     result = await JavaScriptSandboxService.execute(arguments: arguments)
-                } else if request.name == LatchDelegateService.toolName {
-                    result = await LatchDelegateService.execute(
-                        arguments: arguments, workingDirectory: context.workingDirectory)
                 } else if request.name == LayaDecideService.toolName {
                     result = await LayaDecideService.execute(arguments: arguments)
                 } else if ChatMemoryService.toolNames.contains(request.name) {
@@ -2283,14 +1997,6 @@ final class ChatStore: ObservableObject {
         watchdog?.cancel()
         watchdog = nil
         task?.cancel()
-        // A latch run owns no engine slot: terminating its process is the stop.
-        // The box is checked first: the MainActor property is published via a
-        // detached hop and can still be nil in the launch window.
-        let latchHandle = latchProcessBox.load() ?? latchProcess
-        latchProcess = nil
-        if let proc = latchHandle {
-            proc.terminate()
-        }
         if let stream = activeStream, !activeStreamRemote,
            let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
@@ -2935,87 +2641,6 @@ struct NativeChatView: View {
         return !(FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue)
     }
 
-    /// Per-conversation assistant backend chip: the latch agent (harness
-    /// process with its tool surface) or the model engine. A third
-    /// "Automatic" state clears the explicit choice so the conversation
-    /// follows the global toggle again. Choosing the agent while the binary
-    /// is missing is allowed — the send path finishes an explicit bilingual
-    /// error into the chat — but the chip turns warning-colored so the cause
-    /// is visible before sending.
-    @ViewBuilder private var assistantModeChip: some View {
-        if let conversation = chat.current {
-            let selected = conversation.assistantMode
-            let agentSelected = selected == "latch"
-            let automatic = selected == nil
-            let agent = chat.latchWanted(for: conversation)
-            let broken = agent && !LatchDelegateService.isInstalled
-            let budget = LatchDelegateService.chatTurnTimeoutSeconds
-            let folder = chat.effectiveWorkingDirectory(for: conversation.id)
-            Menu {
-                Button {
-                    chat.setConversationAssistantMode(conversation, "latch")
-                } label: {
-                    if agentSelected {
-                        Label(loc.t("Agente (latch + herramientas)",
-                                    "Agent (latch + tools)"),
-                              systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Agente (latch + herramientas)",
-                                   "Agent (latch + tools)"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, "engine")
-                } label: {
-                    if selected == "engine" {
-                        Label(loc.t("Asistente del modelo", "Model assistant"), systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Asistente del modelo", "Model assistant"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, nil)
-                } label: {
-                    if automatic {
-                        Label(loc.t("Automática (ajuste global)", "Automatic (global setting)"),
-                              systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Automática (ajuste global)", "Automatic (global setting)"))
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: agent ? "bird" : "cpu")
-                        .font(.system(size: 10, weight: .medium))
-                    Text(automatic
-                         ? (agent ? loc.t("Auto · Agente", "Auto · Agent")
-                                  : loc.t("Auto · Modelo", "Auto · Model"))
-                         : agentSelected ? loc.t("Agente (latch)", "Agent (latch)")
-                         : loc.t("Asistente del modelo", "Model assistant"))
-                        .lineLimit(1)
-                }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(broken ? AnyShapeStyle(Color.orange)
-                                        : AnyShapeStyle(HierarchicalShapeStyle.secondary))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .glassSurface(in: Capsule(), interactive: true)
-                .overlay(Capsule().strokeBorder(.primary.opacity(0.07)))
-                .contentShape(Capsule())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .tint(broken ? .orange : .secondary)
-            .help(broken
-                  ? loc.t("El agente latch no tiene binario instalado; el envío mostrará el error.",
-                          "The latch agent has no binary installed; sending will show the error.")
-                  : loc.t("Quién responde en esta conversación: el agente latch (con herramientas, carpeta \(folder ?? "—"), presupuesto \(budget)s) o el asistente del modelo.",
-                          "Who answers in this conversation: the latch agent (with tools, folder \(folder ?? "—"), budget \(budget)s) or the model assistant."))
-        }
-    }
-
     @ViewBuilder private var workingDirectoryChip: some View {
         let own = chat.current?.workingDirectory
         let inherited = chat.current.flatMap { chat.project(id: $0.projectID)?.workingDirectory }
@@ -3133,27 +2758,7 @@ struct NativeChatView: View {
                 .help(loc.t("Haz clic para renombrar la conversación (Enter guarda).",
                             "Click to rename the conversation (Enter saves)."))
             Spacer()
-            assistantModeChip
             workingDirectoryChip
-            if let conversation = chat.current, chat.latchWanted(for: conversation) {
-                // The agent surface is live for this chat: latch can read and
-                // write files in the working folder under the shown budget —
-                // visible before sending, not after.
-                Label {
-                    Text(loc.t(
-                        "Agente · latch · \(LatchDelegateService.chatTurnTimeoutSeconds)s",
-                        "Agent · latch · \(LatchDelegateService.chatTurnTimeoutSeconds)s"))
-                        .font(.caption2)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.orange)
-                .help(loc.t(
-                    "Modo agente: latch puede leer y escribir archivos en la carpeta de trabajo (la de su chip, o la del proyecto). Presupuesto del turno: \(LatchDelegateService.chatTurnTimeoutSeconds)s. Desactívalo en el menú del asistente.",
-                    "Agent mode: latch can read and write files in the working folder (its chip's, or the project's). Turn budget: \(LatchDelegateService.chatTurnTimeoutSeconds)s. Turn it off in the assistant menu."))
-            }
             if let branches = chat.current?.branches, branches.count > 1,
                let position = chat.currentBranchPosition {
                 Menu {
@@ -3716,12 +3321,9 @@ struct NativeChatView: View {
     }
 
     private var canSend: Bool {
-        // A configured remote route replaces the local engine entirely, and a
-        // latch-mode conversation needs neither: the harness process is the
-        // whole backend.
+        // A configured remote route replaces the local engine entirely.
         let remoteReady = InferenceRoutes.active()?.isConfigured == true
-        let latchReady = LatchDelegateService.isInstalled
-        return (server.state == .running || remoteReady || latchReady)
+        return (server.state == .running || remoteReady)
             && ocrPending == 0 && transcriptionPending == 0
             && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !attachments.isEmpty || !images.isEmpty)
@@ -4427,9 +4029,8 @@ struct NativeChatView: View {
         }
         // Same enable flags the send path uses, so the per-conversation
         // picker and the offered tool set are the same list: opening this
-        // popover must never silently strip latch_delegate or laya_decide
+        // popover must never silently strip laya_decide
         // from a conversation that had them.
-        if LatchDelegateService.isEnabled { tools.append(LatchDelegateService.tool) }
         if UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled) {
             tools.append(LayaDecideService.tool)
         }

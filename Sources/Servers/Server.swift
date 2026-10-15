@@ -2062,9 +2062,6 @@ final class ServerController: ObservableObject {
 
     func start(_ settings: ServerSettings) {
         guard state == .stopped || isFailed else { return }
-        // The sidecar's kestrel-local entry names the model that is about
-        // to load; refresh it so latch never sees a stale model id.
-        LatchBridge.sync()
         guard FileManager.default.fileExists(atPath: settings.serverBinary) else {
             let msg = "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
             fileLog.append("[start] \(msg.replacingOccurrences(of: "\n", with: " "))")
@@ -2412,9 +2409,8 @@ final class ServerController: ObservableObject {
     /// SIGKILL escalation shared by the engine-kill paths: `terminate()` was
     /// already sent; if the child ignores it past the grace period, take the
     /// process down and sweep the router's orphaned model children. Detached
-    /// with a structured sleep (the same shape as the latch budget's
-    /// escalation) so the caller's own verdict never waits on the grace
-    /// period.
+    /// with a structured sleep so the caller's own verdict never waits on
+    /// the grace period.
     nonisolated static func escalateKill(pid: pid_t, after grace: TimeInterval) {
         Task.detached(priority: .utility) {
             try? await Task.sleep(for: .seconds(grace))

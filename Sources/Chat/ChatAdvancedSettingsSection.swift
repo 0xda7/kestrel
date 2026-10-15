@@ -14,10 +14,6 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
     @AppStorage(SettingsKeys.layaDecideEnabled) private var layaDecideEnabled = false
-    @AppStorage(SettingsKeys.latchDelegateEnabled) private var latchDelegateEnabled = false
-    @AppStorage(SettingsKeys.latchPrimaryEnabled) private var latchPrimaryEnabled = false
-    @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
-    @AppStorage(SettingsKeys.latchDelegateTimeout) private var latchDelegateTimeout = 300
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
@@ -283,35 +279,6 @@ struct ChatAdvancedSettingsSection: View {
                                        "Adds the laya_decide tool: fast classification, verification and scoring over documents using the System-1 model on the 'Laya Decisions' card. Off by default; Laya joins a conversation only when you turn it on.")) {
                         SettingsToggle(isOn: $layaDecideEnabled)
                     }
-                    SettingsRow(icon: "arrowshape.turn.up.right.circle",
-                                title: loc.t("Delegar a latch", "Delegate to latch"),
-                                help: loc.t("Añade una herramienta que entrega una tarea autónoma al agente latch y espera su informe final. Requiere el binario de latch instalado.",
-                                       "Adds a tool that hands a self-contained task to the latch agent and waits for its final report. Requires the latch binary to be installed.")) {
-                        SettingsToggle(isOn: $latchDelegateEnabled)
-                    }
-                    SettingsRow(icon: "bird",
-                                title: loc.t("Latch como asistente principal", "Latch as primary assistant"),
-                                help: loc.t("Las conversaciones nuevas responden con latch (proceso independiente, sin motor ni pasarela). Se puede cambiar por conversación desde el chip de la cabecera. Requiere el binario de latch instalado.",
-                                       "New conversations are answered by latch (its own process, no engine or gateway). Switchable per conversation from the header chip. Requires the latch binary to be installed.")) {
-                        SettingsToggle(isOn: $latchPrimaryEnabled)
-                    }
-                    // The one agent section: the latch binary and its budget
-                    // serve both roles — the delegate tool and the direct
-                    // chat agent — so they surface when either is enabled.
-                    if latchDelegateEnabled || latchPrimaryEnabled {
-                        SettingsRow(icon: "wrench.and.screwdriver",
-                                    title: loc.t("Binario de latch", "Latch binary"),
-                                    help: loc.t("Ruta al ejecutable latch-harness. Se amplía ~ al usarla.",
-                                           "Path to the latch-harness executable. ~ expands when used.")) {
-                            DeferredSettingsTextField("", text: $latchBinaryPath,
-                                                      prompt: LatchDelegateService.defaultBinaryPath,
-                                                      width: 220)
-                        }
-                        integerStepper(loc.t("Tiempo límite de latch (s)", "Latch timeout (s)"),
-                                       value: $latchDelegateTimeout, range: 30...900,
-                                       help: loc.t("Cuánto esperar a latch antes de detenerlo: el informe del delegado o el turno de chat directo (mínimo 60 s en chat, tope 900 s).",
-                                                   "How long to wait for latch before stopping it: the delegate's report or the direct chat turn (60 s floor in chat, 900 s cap)."))
-                    }
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
                                    help: loc.t("Máximo de rondas herramienta→respuesta que el agente encadena en un turno antes de detenerse.",
@@ -524,8 +491,6 @@ struct ChatAdvancedSettingsSection: View {
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
         layaDecideEnabled = false
-        latchDelegateEnabled = false; latchPrimaryEnabled = false
-        latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; MemoryArchiveHook.setReceiverToken("")
     }

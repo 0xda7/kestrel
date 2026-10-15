@@ -37,7 +37,6 @@ enum SkillsDiscovery {
             .applicationSupportDirectory, .userDomainMask, true).first
             ?? NSHomeDirectory() + "/Library/Application Support"
         return [
-            home.appendingPathComponent(".latch/skills"),
             home.appendingPathComponent(".claude/skills"),
             home.appendingPathComponent(".codex/skills"),
             home.appendingPathComponent(".agents/skills"),

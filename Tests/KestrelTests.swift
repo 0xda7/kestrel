@@ -3205,60 +3205,7 @@ final class EnterpriseHardeningTests: CheckCase {
                       "the error row's text must be selectable so engine errors are copyable")
     }
 
-    /// English-only agent replies. The bilingual "es / en" status messages
-    /// landed as assistant messages and re-entered the next latch prompt's
-    /// transcript, so the agent answered with both languages mixed in one
-    /// reply. Every agent-reaching string must be English-only (" / " is
-    /// this codebase's bilingual-pair marker), and the standing instruction
-    /// at the prompt seam must say so explicitly.
-    func testLatchAgentStringsAreEnglishOnly() {
-        XCTAssertTrue(ChatStore.latchStandingInstruction.contains("English"))
-        XCTAssertTrue(ChatStore.latchEngineDownMessage(port: 8080)
-                      .contains("start your main model server"),
-                      "the pre-flight failure must name the one actionable fix")
-        for text in [ChatStore.latchStandingInstruction as String,
-                     ChatStore.latchUnavailableMessage,
-                     ChatStore.latchExitMessage(status: 1),
-                     ChatStore.latchEmptyReplyMessage,
-                     ChatStore.latchEngineDownMessage(port: 8080),
-                     LatchDelegateService.engineDownPrefix,
-                     MetaPromptService.emptyTaskMessage,
-                     MetaPromptService.emptyReplyMessage,
-                     MetaPromptService.exitMessage(status: 1)] {
-            XCTAssertFalse(text.contains(" / "),
-                           "agent-reaching text must be English-only, got: \(text.prefix(60))…")
-        }
-    }
 
-    /// The sandbox boot config must carry no language preference: a stale
-    /// config copied verbatim by a pre-minimal-seed build (the operator's
-    /// sandbox still holds one) would leak a language hint into every agent
-    /// reply. Accessing sandboxHome scrubs such keys in place, and the pure
-    /// helper leaves a clean or non-JSON config untouched.
-    func testLatchSandboxConfigCarriesNoLanguagePreference() throws {
-        let dirty = Data(#"{"language":"es","locale":"es_ES","chat":{"responseLanguage":"Spanish"},"theme":"dark"}"#.utf8)
-        let scrubbed = try XCTUnwrap(LatchDelegateService.scrubbingLanguagePreferences(from: dirty))
-        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: scrubbed) as? [String: Any])
-        XCTAssertNil(obj["language"])
-        XCTAssertNil(obj["locale"])
-        let chat = try XCTUnwrap(obj["chat"] as? [String: Any])
-        XCTAssertNil(chat["responseLanguage"], "nested language keys must be scrubbed too")
-        XCTAssertTrue(chat.isEmpty, "the nested object keeps nothing but scrubbed keys")
-        XCTAssertEqual(obj["theme"] as? String, "dark", "unrelated keys survive the scrub")
-        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: Data(#"{"theme":"dark"}"#.utf8)),
-                     "a config without language keys is left alone")
-        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: Data("not json".utf8)),
-                     "non-JSON data is left alone")
-
-        // The live sandbox: after accessing sandboxHome, the boot config on
-        // disk carries none of the language-preference keys (the helper
-        // returns nil exactly when there is nothing left to scrub).
-        let bootConfig = LatchDelegateService.sandboxHome
-            .appendingPathComponent(".zcode/cli/config.json")
-        let live = try XCTUnwrap(try? Data(contentsOf: bootConfig))
-        XCTAssertNil(LatchDelegateService.scrubbingLanguagePreferences(from: live),
-                     "the seeded sandbox config must not carry any language preference")
-    }
 
     /// The double engine abort: gemma + mixed K/V hits the same-type-requiring
     /// generic Metal kernel. Mixed pairs for gemma must be equalized on the
@@ -3294,66 +3241,7 @@ final class EnterpriseHardeningTests: CheckCase {
         XCTAssertFalse(loc.isSpanish)
     }
 
-    /// The agent's sessions must never land in the operator's real ZCode
-    /// data, and no hidden provider login may ride the environment. The
-    /// stored latch key is seeded so the "key present" branch runs
-    /// deterministically regardless of the machine's state.
-    func testLatchChildEnvironmentIsIsolatedAndProviderNeutral() throws {
-        let prior = LocalSecretStore.value("latch-api-key")
-        XCTAssertTrue(LocalSecretStore.store("latch-api-key", "kestrel-check-sentinel"))
-        defer {
-            if let prior { LocalSecretStore.store("latch-api-key", prior) }
-            else { LocalSecretStore.delete("latch-api-key") }
-        }
-        let env = LatchDelegateService.childEnvironment()
-        let home = try XCTUnwrap(env["HOME"])
-        XCTAssertNotEqual(home, NSHomeDirectory())
-        XCTAssertTrue(home.hasSuffix("Kestrel/latch-home"))
-        XCTAssertNil(env["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"],
-                     "no hidden builtin provider login")
-        XCTAssertNil(env["AI_GATEWAY_API_KEY"], "no mirrored gateway key")
-        // The operator's own stored key passes through (the harness refuses
-        // to boot without one).
-        XCTAssertEqual(env["LATCH_API_KEY"], "kestrel-check-sentinel")
-        // Allowlist, not inherit-and-subtract: nothing outside the known
-        // keys may ride into the separate product's process — a provider
-        // credential exported by the launching environment (OPENAI_API_KEY,
-        // ANTHROPIC_API_KEY, …) included.
-        let allowed: Set<String> = ["HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE",
-                                    "LATCH_API_KEY"]
-        let leaked = Set(env.keys).subtracting(allowed).sorted()
-        XCTAssertTrue(leaked.isEmpty, "unexpected environment keys leaked: \(leaked)")
-    }
 
-    /// Defect-register item 1: a fresh sandbox (no provider_config.json yet,
-    /// e.g. a first launch before any server event fired) must be healed by
-    /// childEnvironment() itself, so the harness can never boot into the
-    /// 0.89.6 no-config failure shape. Machine state is saved and restored;
-    /// a model path is seeded so LatchBridge has an entry to write.
-    func testChildEnvironmentMaterializesProviderConfigForFreshSandbox() throws {
-        let configURL = LatchBridge.configFileURL
-        let priorModel = UserDefaults.standard.string(forKey: SettingsKeys.modelPath)
-        let priorConfig = try? Data(contentsOf: configURL)
-        let hadConfig = FileManager.default.fileExists(atPath: configURL.path)
-        UserDefaults.standard.set("/tmp/kestrel-check-model.gguf", forKey: SettingsKeys.modelPath)
-        try? FileManager.default.removeItem(at: configURL)
-        defer {
-            if let priorModel {
-                UserDefaults.standard.set(priorModel, forKey: SettingsKeys.modelPath)
-            } else {
-                UserDefaults.standard.removeObject(forKey: SettingsKeys.modelPath)
-            }
-            if let priorConfig {
-                try? priorConfig.write(to: configURL)
-            } else if !hadConfig {
-                // Leave the machine as found: drop the config this check made.
-                try? FileManager.default.removeItem(at: configURL)
-            }
-        }
-        _ = LatchDelegateService.childEnvironment()
-        XCTAssertTrue(FileManager.default.fileExists(atPath: configURL.path),
-                      "childEnvironment() must materialize provider_config.json in a fresh sandbox")
-    }
 
     /// Laya integration (0.89.11): the medical triage set seeds on first
     /// use, questions serialize to the exact /v1/systemone wire shape, and
@@ -3374,39 +3262,6 @@ final class EnterpriseHardeningTests: CheckCase {
                        LayaDecideService.sliceSizes.sorted(by: >), "sizes must descend")
     }
 
-    /// Audit fix (77de404): provider_config.json carries every configured
-    /// provider key in plaintext, so the sidecar file must land owner-only
-    /// (0600) inside an owner-only directory (0700) — created atomically at
-    /// write time, not by a write-then-chmod sequence. Machine state is
-    /// saved and restored around the sync.
-    func testLatchSidecarConfigLandsOwnerOnly() throws {
-        let configURL = LatchBridge.configFileURL
-        let dirURL = LatchBridge.sidecarDirectory
-        let priorModel = UserDefaults.standard.string(forKey: SettingsKeys.modelPath)
-        let priorConfig = try? Data(contentsOf: configURL)
-        let hadConfig = FileManager.default.fileExists(atPath: configURL.path)
-        UserDefaults.standard.set("/tmp/kestrel-check-model.gguf", forKey: SettingsKeys.modelPath)
-        // Force the write path (sync() skips identical content).
-        try? FileManager.default.removeItem(at: configURL)
-        defer {
-            if let priorModel {
-                UserDefaults.standard.set(priorModel, forKey: SettingsKeys.modelPath)
-            } else {
-                UserDefaults.standard.removeObject(forKey: SettingsKeys.modelPath)
-            }
-            if let priorConfig {
-                try? priorConfig.write(to: configURL)
-            } else if !hadConfig {
-                try? FileManager.default.removeItem(at: configURL)
-            }
-        }
-        XCTAssertTrue(LatchBridge.sync())
-        let fm = FileManager.default
-        let fileMode = try fm.attributesOfItem(atPath: configURL.path)[.posixPermissions] as? Int
-        let dirMode = try fm.attributesOfItem(atPath: dirURL.path)[.posixPermissions] as? Int
-        XCTAssertEqual(fileMode, 0o600, "provider_config.json must be owner-only")
-        XCTAssertEqual(dirMode, 0o700, "the .latch/v2 sidecar directory must be owner-only")
-    }
 
     /// Audit fix (77de404): every LocalSecretStore write (engine key,
     /// provider route keys, archive token) must land 0600 inside a 0700
@@ -3428,11 +3283,9 @@ final class EnterpriseHardeningTests: CheckCase {
 
     /// Hardening round 2 — one sweep over EVERY secret-bearing path, not one
     /// known filename: every file in the local secret store (engine key,
-    /// provider route keys, latch key, archive token) must be owner-only
-    /// 0600, the store directory 0700, and the latch sidecar's
-    /// provider_config.json (every provider key in plaintext) 0600 inside a
-    /// 0700 `.latch/v2`. Walking the whole directory is what pins a FUTURE
-    /// writer that adds a new secret file.
+    /// provider route keys, archive token) must be owner-only 0600 and the
+    /// store directory 0700. Walking the whole directory is what pins a
+    /// FUTURE writer that adds a new secret file.
     func testEverySecretPathLandsOwnerOnly() throws {
         // One write through the public API (restored in defer) so the sweep
         // always inspects at least one fresh file.
@@ -3451,16 +3304,6 @@ final class EnterpriseHardeningTests: CheckCase {
             let path = secretsDir.appendingPathComponent(file).path
             let mode = try fm.attributesOfItem(atPath: path)[.posixPermissions] as? Int
             XCTAssertEqual(mode, 0o600, "secret file '\(file)' must be owner-only")
-        }
-        // The latch sidecar, when the machine has one (its sync()-write is
-        // pinned by testLatchSidecarConfigLandsOwnerOnly).
-        if fm.fileExists(atPath: LatchBridge.configFileURL.path) {
-            let mode = try fm.attributesOfItem(atPath: LatchBridge.configFileURL.path)[.posixPermissions] as? Int
-            XCTAssertEqual(mode, 0o600, "provider_config.json must be owner-only")
-        }
-        if fm.fileExists(atPath: LatchBridge.sidecarDirectory.path) {
-            let mode = try fm.attributesOfItem(atPath: LatchBridge.sidecarDirectory.path)[.posixPermissions] as? Int
-            XCTAssertEqual(mode, 0o700, "the sidecar directory must be owner-only")
         }
     }
 
@@ -3695,73 +3538,11 @@ final class EnterpriseHardeningTests: CheckCase {
         UserDefaults.standard.removeObject(forKey: SettingsKeys.layaDecideEnabled)
         XCTAssertFalse(UserDefaults.standard.bool(forKey: SettingsKeys.layaDecideEnabled),
                        "laya_decide must default to off (opt-in)")
-        XCTAssertEqual(LatchDelegateService.tool.name, "latch_delegate")
         XCTAssertEqual(LayaDecideService.tool.name, "laya_decide")
     }
 
-    /// Audit fix (77de404): a steering message the user queued while a latch
-    /// turn ran must start its own turn when that turn completes — not be
-    /// silently dropped by the next manual send (send() clears
-    /// queuedMessage). Full ChatStore integration against a stub harness
-    /// binary; the operator's conversations.json is backed up and restored
-    /// byte-exact in the defer.
-    @MainActor func testQueuedSteeringMessageStartsANewLatchTurn() async throws {
-        let stubURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("kestrel-latch-queue-\(UUID().uuidString).sh")
-        try "#!/bin/sh\nsleep 1\nprintf 'stub latch reply'\n"
-            .write(to: stubURL, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755],
-                                               ofItemAtPath: stubURL.path)
-        defer { try? FileManager.default.removeItem(at: stubURL) }
 
-        let conversationsURL = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/conversations.json")
-        let priorBytes = try? Data(contentsOf: conversationsURL)
-        let hadFile = FileManager.default.fileExists(atPath: conversationsURL.path)
-        let priorBinary = UserDefaults.standard.string(forKey: SettingsKeys.latchBinaryPath)
-        UserDefaults.standard.set(stubURL.path, forKey: SettingsKeys.latchBinaryPath)
-        defer {
-            if let priorBinary {
-                UserDefaults.standard.set(priorBinary, forKey: SettingsKeys.latchBinaryPath)
-            } else {
-                UserDefaults.standard.removeObject(forKey: SettingsKeys.latchBinaryPath)
-            }
-            if let priorBytes {
-                try? priorBytes.write(to: conversationsURL)
-            } else if !hadFile {
-                try? FileManager.default.removeItem(at: conversationsURL)
-            }
-        }
-
-        let store = ChatStore()
-        guard let conv = store.current else {
-            return XCTFail("ChatStore must open with a conversation")
-        }
-        store.setConversationAssistantMode(conv, "latch")
-        store.send(text: "first turn", port: 8099, temperature: 0.7, maxTokens: 64,
-                   system: "", thinking: false)
-        XCTAssertTrue(store.generating, "the latch turn must be running")
-        store.queueMessage(text: "steering follow-up", attachments: [], images: [])
-        XCTAssertNotNil(store.queuedMessage, "the steering message must be queued mid-run")
-
-        let deadline = Date().addingTimeInterval(90)
-        while store.generating && Date() < deadline {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        if store.generating { store.stop() }
-        XCTAssertNil(store.queuedMessage,
-                     "a queued steering message must be delivered when the latch turn ends, not dropped")
-        let messages = store.conversations.first(where: { $0.id == conv.id })?.messages ?? []
-        XCTAssertEqual(messages.filter { $0.role == "user" }.map(\.content),
-                       ["first turn", "steering follow-up"],
-                       "the steering message must land as its own user turn")
-        XCTAssertEqual(messages.filter { $0.role == "assistant" && !$0.content.isEmpty }.count, 2,
-                       "the delivered message must start a second latch turn")
-    }
-
-    /// Companion pin to testQueuedSteeringMessageStartsANewLatchTurn, for the
-    /// other agent-turn boundary: a steering message queued while the
+    /// A steering message queued while the
     /// continuation card waited must survive the operator DECLINING
     /// continuation — the run ends there, so the queued message starts its
     /// own turn (the same delivery every other turn boundary performs)
@@ -3787,10 +3568,8 @@ final class EnterpriseHardeningTests: CheckCase {
         guard let conv = store.current else {
             return XCTFail("ChatStore must open with a conversation")
         }
-        // Engine branch regardless of the machine's global latch toggle: the
-        // delivered turn must aim at the closed test port, never at a real
-        // latch binary the operator may have installed.
-        store.setConversationAssistantMode(conv, "engine")
+        // The delivered turn aims at the closed test port, so it fails fast
+        // after the assertions.
         // Arrange the decline boundary directly: a finished-budget agent run
         // (continuation card up) with a steering message queued against it.
         store.agentContext = AgentRunContext(
@@ -3848,15 +3627,10 @@ extension EnterpriseHardeningTests {
             .init(name: "testPrimaryServerNeverLaunchesEmbeddingsOnly") { try await $0.testPrimaryServerNeverLaunchesEmbeddingsOnly() },
             .init(name: "testEmbeddingsCardsCannotCarryChatToolFlags") { try $0.testEmbeddingsCardsCannotCarryChatToolFlags() },
             .init(name: "testChatErrorTextIsCopyable") { try $0.testChatErrorTextIsCopyable() },
-            .init(name: "testLatchAgentStringsAreEnglishOnly") { $0.testLatchAgentStringsAreEnglishOnly() },
-            .init(name: "testLatchSandboxConfigCarriesNoLanguagePreference") { try $0.testLatchSandboxConfigCarriesNoLanguagePreference() },
             .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
             .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
-            .init(name: "testLatchChildEnvironmentIsIsolatedAndProviderNeutral") { try await $0.testLatchChildEnvironmentIsIsolatedAndProviderNeutral() },
-            .init(name: "testChildEnvironmentMaterializesProviderConfigForFreshSandbox") { try await $0.testChildEnvironmentMaterializesProviderConfigForFreshSandbox() },
             .init(name: "testLayaQuestionSetSeedsAndWireShape") { try await $0.testLayaQuestionSetSeedsAndWireShape() },
             .init(name: "testLayaAnswerParsingAndSummaryLines") { try await $0.testLayaAnswerParsingAndSummaryLines() },
-            .init(name: "testLatchSidecarConfigLandsOwnerOnly") { try await $0.testLatchSidecarConfigLandsOwnerOnly() },
             .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
             .init(name: "testEverySecretPathLandsOwnerOnly") { try await $0.testEverySecretPathLandsOwnerOnly() },
             .init(name: "testOwnerOnlyWriterCoversCreationAndLooseOverwrite") { try await $0.testOwnerOnlyWriterCoversCreationAndLooseOverwrite() },
@@ -3870,7 +3644,6 @@ extension EnterpriseHardeningTests {
             .init(name: "testMemoryArchiveHookRequiresHTTPSOffLoopback") { $0.testMemoryArchiveHookRequiresHTTPSOffLoopback() },
             .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
             .init(name: "testAgentToolExposureContract") { $0.testAgentToolExposureContract() },
-            .init(name: "testQueuedSteeringMessageStartsANewLatchTurn") { try await $0.testQueuedSteeringMessageStartsANewLatchTurn() },
             .init(name: "testDeclinedContinuationDeliversQueuedSteeringMessage") { try await $0.testDeclinedContinuationDeliversQueuedSteeringMessage() },
         ])
 }

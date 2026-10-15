@@ -104,9 +104,6 @@ private struct ToolCallDetailView: View {
                 } else { emptyState("Waiting…") }
             case .search:
                 SearchResultPanel(result: presentation.result)
-            case .delegate:
-                codePanel(presentation.code ?? "", language: "text")
-                consolePanel(title: "Report")
             case .generic:
                 codePanel(call.arguments.isEmpty ? "{}" : call.arguments, language: "json")
                 resultText()

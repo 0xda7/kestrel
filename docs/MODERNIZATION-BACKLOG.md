@@ -5,8 +5,8 @@ Worklist, not report. Each item = one agent batch, suite-gated, shipped.
 ## Modernization (verify each against current code first; fix where real)
 
 1. **Swift concurrency correctness**: audit async paths for main-thread
-   UI work and unstructured Task leaks (ChatNative streaming, LatchDelegate
-   pumps, Server process watchers). Modernize to structured concurrency,
+   UI work and unstructured Task leaks (ChatNative streaming,
+   Server process watchers). Modernize to structured concurrency,
    actor isolation where state is shared.
 2. **SwiftUI data flow**: replace remaining imperative state mutations
    with @Observable/single-source patterns where the codebase's

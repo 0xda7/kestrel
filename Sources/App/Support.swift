@@ -99,13 +99,6 @@ enum SettingsKeys {
     static let layaDecideEnabled = "layaDecideEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
-    /// latch_delegate tool: path to the latch harness binary, on/off, timeout.
-    static let latchBinaryPath = "latchBinaryPath"
-    static let latchDelegateEnabled = "latchDelegateEnabled"
-    static let latchDelegateTimeout = "latchDelegateTimeout"
-    /// When on, new conversations answer through the latch harness instead of
-    /// the model engine. Per-conversation overrides can still flip back.
-    static let latchPrimaryEnabled = "latchPrimaryEnabled"
     /// Stop sequences for chat sampling, comma/newline separated.
     static let chatStopSequences = "chatStopSequences"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
@@ -271,7 +264,6 @@ enum SettingsKeys {
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
         layaDecideEnabled,
-        latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
@@ -736,7 +728,7 @@ enum Keychain {
 // MARK: - Local secret store (machine-generated, machine-local secrets)
 
 /// The one way secret-bearing files are written (engine key, provider route
-/// keys, latch sidecar config, chat history): the destination must never
+/// keys, chat history): the destination must never
 /// exist with permissions looser than 0600 at ANY instant — not at creation
 /// (the open must carry the mode), and not on overwrite (a truncate-rewrite
 /// of a legacy looser file is world-readable until a follow-up chmod, and

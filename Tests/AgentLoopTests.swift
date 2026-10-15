@@ -56,7 +56,7 @@ final class AgentLoopTests: CheckCase {
     /// definition would be dropped at registration, silently disabling the
     /// tool; this pins the definitions themselves.
     func testAllShippedToolSchemasValidate() {
-        for info in [LatchDelegateService.tool, JavaScriptSandboxService.tool] + ChatMemoryService.tools {
+        for info in [JavaScriptSandboxService.tool] + ChatMemoryService.tools {
             XCTAssertEqual(ChatToolsService.schemaProblems(for: info), [],
                            "\(info.name): \(ChatToolsService.schemaProblems(for: info).joined(separator: "; "))")
         }
