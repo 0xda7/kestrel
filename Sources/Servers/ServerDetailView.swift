@@ -526,6 +526,12 @@ private struct ServerConfigurationWorkspace: View {
                                  detail: loc.t("Equilibra velocidad y memoria", "Balances throughput and memory")) {
                     KestrelDropdown(selection: ubatch(settings), options: ubatchOptions, width: 184, listWidth: 250)
                 }
+                if settings.ubatchOverflow {
+                    Label(loc.t("El micro-lote elegido no cabe en VRAM junto a pesos, KV y cómputo con la ventana actual; baja el micro-lote o el contexto.",
+                                "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context."),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             }
             if ServerSettings.modelIsMoE(at: settings.modelPath) {
                 if showAdvanced { Divider() }

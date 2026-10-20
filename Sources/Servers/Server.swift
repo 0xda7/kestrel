@@ -326,7 +326,8 @@ struct ServerSettings {
         return Self.routerCtx(forModel: modelPath, requested: ctx,
                                           ncmoe: ncmoe,
                                           kvScale: Estimator.kvTypeScale(cacheTypeK),
-                                          reserveMB: vramReserveMB)
+                                          reserveMB: vramReserveMB,
+                                          ubatch: effectiveUbatch ?? 512)
     }
 
     // MARK: Live engine window
@@ -456,22 +457,78 @@ struct ServerSettings {
     /// Router writes one entry per model with the same context, but a multi-head model
     /// caches several times more per token than a GQA one and can overflow VRAM on
     /// load, which hangs the driver. Shrink the context for the models that don't fit.
+    /// The micro-batch sizes the compute/UB buffer linearly, so its term rides the
+    /// budget too (see ubatchComputeBufferGB): ignoring it made the solver promise a
+    /// ctx Metal then had to realloc past (~2× blowout observed at ubatch 1024).
     nonisolated static func routerCtx(forModel path: String, requested: Int, ncmoe: Int,
-                                      kvScale: Double, reserveMB: Int) -> Int {
+                                      kvScale: Double, reserveMB: Int, ubatch: Int = 512) -> Int {
         let kvPerToken = ModelSpec.kvBytesPerToken(atPath: path) * kvScale
-        guard kvPerToken > 0, requested > 2048 else { return requested }
         let vramGB = Double(ServerController.availableGPUs().map(\.vramMB).max() ?? 0) / 1024
-        guard vramGB > 0 else { return requested }
-        let budget = vramGB - Double(reserveMB) / 1024
         let size = ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64) ?? 0
         let weightsGB = Double(size) / 1_073_741_824 * (ncmoe > 0 ? 0.45 : 1.0)
-        let computeGB = 0.9
+        return solveCtx(requested: requested, vramGB: vramGB, weightsGB: weightsGB,
+                        kvPerToken: kvPerToken, reserveGB: Double(reserveMB) / 1024,
+                        ubatch: ubatch)
+    }
+
+    /// Compute/UB scratch the engine allocates for prompt processing, linear in
+    /// the micro-batch size. Calibrated from observed Metal private-buffer sizes
+    /// on this machine: 512 → ~1.1 GiB, 1024 → ~2.0 GiB; the linear term prices
+    /// 1024 at ~2.2 GiB, slightly over the observation, which is the safe side.
+    nonisolated static func ubatchComputeBufferGB(_ ubatch: Int) -> Double {
+        Double(max(1, ubatch)) / 512 * 1.1
+    }
+
+    /// Whether weights + KV at `ctx` + compute (base scratch plus the
+    /// ubatch-scaled buffer) fit the GPU budget. Pure so the pickers and the
+    /// solver share one definition of "fits".
+    nonisolated static func windowFitsVRAM(vramGB: Double, reserveGB: Double, weightsGB: Double,
+                                           kvPerToken: Double, ctx: Int, ubatch: Int) -> Bool {
+        weightsGB + 0.9 + ubatchComputeBufferGB(ubatch)
+            + kvPerToken * Double(ctx) / 1_073_741_824 <= vramGB - reserveGB
+    }
+
+    /// Pure VRAM window solver behind `routerCtx` and `resolvedCtx`: halve the
+    /// requested context until weights + KV + compute fit, never below the
+    /// 2048 floor. Extracted from the GPU-reading wrapper so the budget math
+    /// is checkable without a live machine.
+    nonisolated static func solveCtx(requested: Int, vramGB: Double, weightsGB: Double,
+                                     kvPerToken: Double, reserveGB: Double, ubatch: Int) -> Int {
+        guard kvPerToken > 0, requested > 2048, vramGB > 0 else { return requested }
         var value = requested
         while value > 2048,
-              weightsGB + computeGB + kvPerToken * Double(value) / 1_073_741_824 > budget {
+              !windowFitsVRAM(vramGB: vramGB, reserveGB: reserveGB, weightsGB: weightsGB,
+                              kvPerToken: kvPerToken, ctx: value, ubatch: ubatch) {
             value /= 2
         }
         return value
+    }
+
+    /// Whether this configuration's micro-batch would push weights + KV +
+    /// compute past VRAM at the window the engine would actually launch —
+    /// the manual context when set, or the solver's answer when automatic
+    /// (where only the 2048 floor can still overflow). Drives the orange
+    /// warning next to the ubatch pickers; false when it cannot be judged
+    /// (no GPU inventory, unknown model).
+    var ubatchOverflow: Bool {
+        guard ubatch > 0, !modelPath.isEmpty else { return false }
+        let vramGB = Double(ServerController.availableGPUs().map(\.vramMB).max() ?? 0) / 1024
+        guard vramGB > 0 else { return false }
+        let kvPerToken = ModelSpec.kvBytesPerToken(atPath: modelPath) * Estimator.kvTypeScale(cacheTypeK)
+        guard kvPerToken > 0 else { return false }
+        let size = ((try? FileManager.default.attributesOfItem(atPath: modelPath))?[.size] as? Int64) ?? 0
+        let weightsGB = Double(size) / 1_073_741_824 * (ncmoe > 0 ? 0.45 : 1.0)
+        // Judge the micro-batch the engine would actually launch: the chosen
+        // one when it applies, the engine's 512 default otherwise.
+        let launched = effectiveUbatch ?? 512
+        let window = contextAutomatic
+            ? Self.solveCtx(requested: ctx, vramGB: vramGB, weightsGB: weightsGB,
+                            kvPerToken: kvPerToken, reserveGB: Double(vramReserveMB) / 1024,
+                            ubatch: launched)
+            : ctx
+        return !Self.windowFitsVRAM(vramGB: vramGB, reserveGB: Double(vramReserveMB) / 1024,
+                                    weightsGB: weightsGB, kvPerToken: kvPerToken,
+                                    ctx: window, ubatch: launched)
     }
 
     /// Router-mode CLI args: no `-m`, the preset file lists every model. Per-model
@@ -541,7 +598,8 @@ struct ServerSettings {
 
             let modelCtx = Self.routerCtx(forModel: path, requested: ctx, ncmoe: ncmoeByPath[path] ?? 0,
                                           kvScale: Estimator.kvTypeScale(cacheTypeK),
-                                          reserveMB: vramReserveMB)
+                                          reserveMB: vramReserveMB,
+                                          ubatch: effectiveUbatch ?? 512)
             var lines = ["[\(alias)]", "model = \(path)", "n-gpu-layers = \(ngl)",
                          "ctx-size = \(modelCtx)", "threads = \(threads)", "flash-attn = \(faValue)"]
             if !effectiveDynamicMoe, let ncmoe = ncmoeByPath[path], ncmoe > 0 { lines.append("n-cpu-moe = \(ncmoe)") }

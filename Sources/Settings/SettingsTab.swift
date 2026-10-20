@@ -1127,6 +1127,12 @@ struct SettingsView: View {
                         }
                         .infoTip(loc.t("Cuántos tokens de prompt procesa la GPU de una vez. Solo aporta en modelos MoE, y cuánto depende de dónde estén los expertos. Con expertos en CPU cada micro-lote los sube por el bus, así que uno más grande paga ese viaje menos veces: medido en una Radeon RX 6700 XT, leer 2048 tokens pasa de 475 a 886 tokens por segundo en un 35B, y de 546 a 1133 en un 30B. Con el modelo entero en la tarjeta la mejora ronda el 10%, igual con una GPU que repartido entre varias. La generación no cambia en ningún caso. A cambio ocupa VRAM, cerca de 0.5 GB por cada 512 tokens de micro-lote, así que si vas justo tendrás que bajar los expertos en CPU para compensar.",
                                     "How many prompt tokens the GPU processes at once. It only helps MoE models, and how much depends on where the experts live. With experts on the CPU every micro-batch uploads them over the bus, so a larger one pays that trip fewer times: measured on a Radeon RX 6700 XT, reading 2048 tokens goes from 475 to 886 tokens per second on a 35B, and from 546 to 1133 on a 30B. With the model whole on the card the gain is around 10%, the same on one GPU as split across several. Generation is unchanged in every case. In exchange it takes VRAM, around 0.5 GB per 512 tokens of micro-batch, so if you are tight you will have to lower the experts on CPU to make room."))
+                        if ServerSettings.fromDefaults().ubatchOverflow {
+                            Label(loc.t("El micro-lote elegido no cabe en VRAM junto a pesos, KV y cómputo con la ventana actual; baja el micro-lote o el contexto.",
+                                        "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context."),
+                                  systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
                     }
                 }
                 LabeledContent(loc.t("Peticiones simultáneas", "Concurrent requests")) {

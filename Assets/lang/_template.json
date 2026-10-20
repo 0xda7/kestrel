@@ -1648,6 +1648,7 @@
   "The box always reads; the outline covers less of the picture.": "",
   "The brush marks what gets repainted; the eraser puts an area back to kept.": "",
   "The catalog marks which models fit your machine; one click configures them.": "",
+  "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context.": "",
   "The configuration is tested in isolation and does not change your servers.": "",
   "The current matches are available in the carousel above.": "",
   "The dMoE sweep produced no results": "",

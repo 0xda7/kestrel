@@ -1648,6 +1648,7 @@
   "The box always reads; the outline covers less of the picture.": "Il riquadro si legge sempre; il contorno copre meno immagine.",
   "The brush marks what gets repainted; the eraser puts an area back to kept.": "Il pennello segna ciò che viene ridipinto; la gomma riporta un'area a conservata.",
   "The catalog marks which models fit your machine; one click configures them.": "Il catalogo indica quali modelli si adattano alla tua macchina; un clic li configura.",
+  "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context.": "",
   "The configuration is tested in isolation and does not change your servers.": "La configurazione viene testata in isolamento e non modifica i tuoi server.",
   "The current matches are available in the carousel above.": "Le corrispondenze attuali sono disponibili nel carosello qui sopra.",
   "The dMoE sweep produced no results": "Lo sweep dMoE non ha prodotto risultati",

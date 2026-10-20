@@ -23,6 +23,7 @@ enum CheckRegistry {
         ("DflashPolicyTests", DflashPolicyTests.__checkSet),
         ("ImageGenTests", ImageGenTests.__checkSet),
         ("ServerSettingsTests", ServerSettingsTests.__checkSet),
+        ("VRAMWindowTests", VRAMWindowTests.__checkSet),
         ("ChatMessageTests", ChatMessageTests.__checkSet),
         ("LiveStreamTests", LiveStreamTests.__checkSet),
         ("CompactionTests", CompactionTests.__checkSet),

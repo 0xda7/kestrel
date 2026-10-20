@@ -1648,6 +1648,7 @@
   "The box always reads; the outline covers less of the picture.": "方框始终清晰易读；描边则遮挡画面更少。",
   "The brush marks what gets repainted; the eraser puts an area back to kept.": "画笔标记要重绘的部分；橡皮擦把区域改回保留。",
   "The catalog marks which models fit your machine; one click configures them.": "目录会标出哪些模型适合你的机器，点一下即可完成配置。",
+  "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context.": "",
   "The configuration is tested in isolation and does not change your servers.": "配置会在隔离环境中测试，不会更改你的服务器。",
   "The current matches are available in the carousel above.": "当前匹配项可在上方的轮播中查看。",
   "The dMoE sweep produced no results": "dMoE 扫描没有得出结果",

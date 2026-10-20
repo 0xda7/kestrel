@@ -1648,6 +1648,7 @@
   "The box always reads; the outline covers less of the picture.": "ボックスは常に読みやすく、縁取りは映像を隠しません。",
   "The brush marks what gets repainted; the eraser puts an area back to kept.": "ブラシは描き直す範囲を指定し、消しゴムはその範囲を保持に戻します。",
   "The catalog marks which models fit your machine; one click configures them.": "カタログは、お使いのマシンに収まるモデルに印を付けます。1クリックで設定されます。",
+  "The chosen micro-batch does not fit in VRAM next to weights, KV and compute at the current window; lower the micro-batch or the context.": "",
   "The configuration is tested in isolation and does not change your servers.": "設定は分離された環境でテストされ、サーバーは変更されません。",
   "The current matches are available in the carousel above.": "現在の候補は上のカルーセルで確認できます。",
   "The dMoE sweep produced no results": "dMoEの振り分け計測から結果が得られませんでした",
