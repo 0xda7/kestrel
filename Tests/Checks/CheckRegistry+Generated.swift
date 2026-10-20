@@ -25,6 +25,7 @@ enum CheckRegistry {
         ("ChatMessageTests", ChatMessageTests.__checkSet),
         ("LiveStreamTests", LiveStreamTests.__checkSet),
         ("CompactionTests", CompactionTests.__checkSet),
+        ("CompactionWindowTests", CompactionWindowTests.__checkSet),
         ("BenchAndProfileTests", BenchAndProfileTests.__checkSet),
         ("LocalizationTests", LocalizationTests.__checkSet),
         ("ShellWordsTests", ShellWordsTests.__checkSet),

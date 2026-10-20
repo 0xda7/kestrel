@@ -1240,8 +1240,11 @@ final class ChatStore: ObservableObject {
         // failure). Refuse here instead — the turn stays in the transcript
         // and the notice names the ways out. Remote routes are exempt: the
         // provider's window, not the local engine's, applies there.
+        let sentMaxTokens: Int
         if sendRoute?.isConfigured != true {
-            let window = ServerSettings.fromDefaults().resolvedCtx
+            // The live engine's window, not a solver recomputation: the engine
+            // keeps the ctx it launched with while free VRAM keeps moving.
+            let window = ServerSettings.liveResolvedCtx(port: port)
             let estimate = Self.estimatedRequestTokens(messages: conversations[i].messages,
                                                        system: systemWithCwd)
             if window > 0, estimate + maxTokens + 256 > window {
@@ -1255,6 +1258,9 @@ final class ChatStore: ObservableObject {
                 save()
                 return
             }
+            sentMaxTokens = Self.clampedResponseTokens(maxTokens, window: window, estimatedPrompt: estimate)
+        } else {
+            sentMaxTokens = maxTokens
         }
 
         conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
@@ -1404,7 +1410,7 @@ final class ChatStore: ObservableObject {
                     "dry_penalty_last_n": max(0, sampling.dryPenaltyLastN),
                     "backend_sampling": sampling.backendSampling,
                     "seed": sampling.seed,
-                    "max_tokens": maxTokens,
+                    "max_tokens": sentMaxTokens,
                     // Reuse the server-side KV cache for the unchanged history
                     // prefix so each turn only processes the new tokens.
                     "cache_prompt": true,
@@ -1590,7 +1596,7 @@ final class ChatStore: ObservableObject {
             let finalToolCalls = rescuedToolCalls
             let finalModelID = remoteModelID
             let nextAgentRun = AgentRunContext(
-                port: port, temperature: temperature, maxTokens: maxTokens,
+                port: port, temperature: temperature, maxTokens: sentMaxTokens,
                 system: system, thinking: thinking, sampling: sampling,
                 modalities: modalities,
                 remainingTurns: agentRun?.remainingTurns ?? agentTurnLimit,
@@ -1900,7 +1906,7 @@ final class ChatStore: ObservableObject {
         // Cap what re-enters the context: a giant dump starves small models
         // and eats the KV budget the rest of the run still needs. The cap
         // scales with the window's remaining headroom, not a fixed number.
-        let window = ServerSettings.fromDefaults().resolvedCtx
+        let window = ServerSettings.liveResolvedCtx(port: ServerSettings.fromDefaults().port)
         let used = conversations[i].contextUsed ?? 0
         let contextResult = ChatToolsService.clampedToolResult(
             result, cap: ChatToolsService.dynamicToolResultCap(windowTokens: window,
@@ -2141,6 +2147,61 @@ final class ChatStore: ObservableObject {
         system.utf8.count / 4 + messages.reduce(0) { $0 + $1.estimatedTokens }
     }
 
+    /// A turn may never reserve more room than the window has left after the
+    /// prompt: an uncapped repetition loop otherwise decodes to the window
+    /// edge, the server truncates the reply into history, and the next
+    /// exchange no longer fits (the 65,547-token wedge).
+    nonisolated static func clampedResponseTokens(_ requested: Int, window: Int, estimatedPrompt: Int,
+                                                  margin: Int = 256) -> Int {
+        guard window > 0 else { return requested }
+        return max(1, min(requested, window - estimatedPrompt - margin))
+    }
+
+    /// Compaction prompt that always fits the engine window. When the history
+    /// to summarize is itself larger than the window (the summarize request
+    /// would be refused like any other), keep the newest messages that fit,
+    /// truncate a lone giant turn to its tail, and report how many leading
+    /// messages were dropped — the caller still advances summarizedCount past
+    /// them, because a wedge-proof partial summary beats a permanent deadlock.
+    nonisolated static func compactionPrompt(summary: String?, messages: [ChatMessage],
+                                             window: Int,
+                                             summaryResponseTokens: Int = 512) -> (prompt: String, dropped: Int) {
+        func line(_ m: ChatMessage) -> String {
+            (m.role == "user" ? "User: " : "Assistant: ")
+                + (m.role == "assistant" ? m.parts.body : m.content) + "\n\n"
+        }
+        let budget = window - summaryResponseTokens - 256
+        guard budget > 0, !messages.isEmpty else {
+            return ("Conversation to summarize:\n\n" + messages.map(line).joined(), 0)
+        }
+        var head = ""
+        if let prior = summary, !prior.isEmpty { head = "Previous summary:\n" + prior + "\n\n" }
+        var kept: [String] = []
+        var used = head.utf8.count / 4 + 24
+        var firstKept = messages.count
+        while firstKept > 0 {
+            let text = line(messages[firstKept - 1])
+            let cost = text.utf8.count / 4 + 4
+            if used + cost > budget {
+                if kept.isEmpty {
+                    // A single turn bigger than the window: summarize its
+                    // visible tail rather than nothing at all.
+                    let charBudget = max(64, budget * 4 - used * 4)
+                    kept.insert(String(text.prefix(charBudget)) + "\n\n[…]\n\n", at: 0)
+                    firstKept -= 1
+                }
+                break
+            }
+            kept.insert(text, at: 0)
+            used += cost
+            firstKept -= 1
+        }
+        let omitted = firstKept > 0
+            ? "\n\n[… \(firstKept) earlier message(s) omitted to fit the context window …]\n\n"
+            : ""
+        return (head + "Conversation to summarize:" + omitted + "\n\n" + kept.joined(), firstKept)
+    }
+
     /// Bilingual notice for a request that cannot fit the engine's window.
     nonisolated static func contextOverflowNotice(estimated: Int, window: Int) -> String {
         "Este mensaje no cabe en la ventana de contexto (≈\(estimated) tokens > \(window)). Resume el historial («Recuperar velocidad»), archiva turnos con la herramienta de memoria, abre un chat nuevo o sube el contexto en Ajustes. / This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
@@ -2272,9 +2333,9 @@ final class ChatStore: ObservableObject {
         let d = UserDefaults.standard
         let enabled = d.object(forKey: SettingsKeys.chatAutoCompact) == nil
             ? true : d.bool(forKey: SettingsKeys.chatAutoCompact)
-        // The window the engine actually launched with, not the raw setting:
-        // under contextAutomatic the solver may have shrunk it.
-        let limit = ServerSettings.fromDefaults().resolvedCtx
+        // The live engine's window — its own /props n_ctx when running —
+        // not a fresh solver run that may no longer match the launched ctx.
+        let limit = ServerSettings.liveResolvedCtx(port: port)
         guard enabled, !generating, !compacting, limit > 0,
               let i = conversations.firstIndex(where: { $0.id == id }),
               let used = conversations[i].contextUsed, Double(used) / Double(limit) > 0.7 else { return }
@@ -2303,20 +2364,21 @@ final class ChatStore: ObservableObject {
 
     private func compact(conversation id: UUID, index i: Int,
                          from start: Int, through cutoff: Int, port: Int) {
-        var prompt = ""
-        if let prior = conversations[i].summary, !prior.isEmpty {
-            prompt += "Previous summary:\n" + prior + "\n\n"
-        }
-        prompt += "Conversation to summarize:\n\n"
-        for m in conversations[i].messages[start..<cutoff] {
-            prompt += (m.role == "user" ? "User: " : "Assistant: ")
-                + (m.role == "assistant" ? m.parts.body : m.content) + "\n\n"
+        // The summarize request is itself subject to the engine window: once
+        // the history no longer fits, summarize the newest turns that do and
+        // let applyCompaction advance summarizedCount past the dropped head —
+        // a partial summary instead of a conversation that can never compact.
+        let built = Self.compactionPrompt(summary: conversations[i].summary,
+                                          messages: Array(conversations[i].messages[start..<cutoff]),
+                                          window: ServerSettings.liveResolvedCtx(port: port))
+        if built.dropped > 0 {
+            AppLog.chat.warning("compaction prompt dropped \(built.dropped) leading message(s) to fit the window")
         }
 
         compacting = true
         AppLog.chat.info("compacting conversation through message \(cutoff)")
         Task.detached(priority: .utility) { [weak self] in
-            let summary = await Self.summarize(prompt: prompt, port: port)
+            let summary = await Self.summarize(prompt: built.prompt, port: port)
             let store = self
             await MainActor.run {
                 store?.applyCompaction(conversation: id, cutoff: cutoff, summary: summary)
@@ -2819,10 +2881,11 @@ struct NativeChatView: View {
     @AppStorage(SettingsKeys.ctx) private var configuredContextLimit = 16384
     @AppStorage(SettingsKeys.contextAutomatic) private var contextAutomatic = false
     /// The window the engine actually launched with — the raw setting when
-    /// manual, the VRAM-fitted solver value when automatic, so the meter
-    /// and the compaction threshold never lie about what fits.
+    /// manual, the live engine's published window (launch estimate, then its
+    /// own /props n_ctx) when automatic, so the meter, the response-token
+    /// picker and the compaction threshold never lie about what fits.
     private var contextLimit: Int {
-        contextAutomatic ? ServerSettings.fromDefaults().resolvedCtx : configuredContextLimit
+        contextAutomatic ? ServerSettings.liveResolvedCtx(port: port) : configuredContextLimit
     }
     @AppStorage(SettingsKeys.routerMode) private var routerMode = false
     @AppStorage(SettingsKeys.chatSelectedModel) private var chatSelectedModel = ""
