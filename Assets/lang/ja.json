@@ -1642,7 +1642,6 @@
   "The GPU timed out: the image is too large. Lower the base size.": "GPUがタイムアウトしました。画像が大きすぎます。基準サイズを下げてください。",
   "The JSON is formatted here for readability. Signing uses the exact original bytes; the complete log is shown separately.": "ここでは読みやすさのためJSONを整形しています。署名には元のバイト列をそのまま使います。完全なログは別に表示されます。",
   "The Metal backend uses shared (system) memory on external GPUs, which streams weights over Thunderbolt every op and tanks speed (~0.8 t/s). This forces private VRAM buffers. If you pin an eGPU in the picker above it's automatic; use this when you leave 'Default' and macOS picks the eGPU.": "Metalバックエンドは外付けGPUで共有(システム)メモリを使うため、演算のたびに重みをThunderbolt越しに流し、速度が落ちます(約0.8 t/s)。この項目は専用VRAMバッファーを強制します。上の選択で外付けGPUを指定した場合は自動です。「既定」のままでmacOSが外付けGPUを選ぶ場合に使ってください。",
-  "The agent reached its 8-turn limit. Continue?": "エージェントが8往復の上限に達しました。続けますか?",
   "The alias cannot exceed 80 characters.": "名前は80文字までです。",
   "The answer is still being written off screen; jump to the end and follow it again.": "回答はまだ画面の外で書かれています。末尾へ移動して追従し直してください。",
   "The attachments don't fit the configured context, so sending will fail with 'context full'. Raise the context in Settings, remove files or start a new chat.": "添付が設定したコンテキストに収まらないため、送信は「コンテキストがいっぱい」で失敗します。設定でコンテキストを増やすか、ファイルを減らすか、新しいチャットを始めてください。",

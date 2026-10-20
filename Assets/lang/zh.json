@@ -1642,7 +1642,6 @@
   "The GPU timed out: the image is too large. Lower the base size.": "GPU 超时：图片太大。请调低基础大小。",
   "The JSON is formatted here for readability. Signing uses the exact original bytes; the complete log is shown separately.": "这里的 JSON 经过格式化以便阅读。签名使用的是原始字节；完整日志另行展示。",
   "The Metal backend uses shared (system) memory on external GPUs, which streams weights over Thunderbolt every op and tanks speed (~0.8 t/s). This forces private VRAM buffers. If you pin an eGPU in the picker above it's automatic; use this when you leave 'Default' and macOS picks the eGPU.": "在外接显卡上，Metal 后端会使用共享（系统）内存，导致每次运算都通过雷雳传输权重，速度骤降（约 0.8 t/s）。此选项会强制使用独立的显存缓冲区。若你在上方选择器中锁定了 eGPU，这是自动的；当你保持“默认”而 macOS 选中 eGPU 时，请启用它。",
-  "The agent reached its 8-turn limit. Continue?": "智能体已达到 8 轮上限。要继续吗？",
   "The alias cannot exceed 80 characters.": "别名不能超过 80 个字符。",
   "The answer is still being written off screen; jump to the end and follow it again.": "回复正在屏幕之外继续生成；跳到末尾即可重新跟随。",
   "The attachments don't fit the configured context, so sending will fail with 'context full'. Raise the context in Settings, remove files or start a new chat.": "附件超出了当前配置的上下文，发送会因“上下文已满”而失败。请在设置中调大上下文、移除部分文件，或新建一个聊天。",

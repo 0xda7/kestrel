@@ -7,6 +7,9 @@ import Foundation
 struct PendingAgentContinuation: Identifiable, Equatable {
     let conversationID: UUID
     var turnsUsed: Int
+    /// The configured budget the run exhausted, so the card names the real
+    /// limit instead of a hardcoded turn count.
+    var turnLimit: Int
     var toolsExecuted: Int
     var id: UUID { conversationID }
 }

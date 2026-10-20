@@ -1682,13 +1682,32 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    /// Ends an agent run on turn-budget exhaustion (never a user stop): the
+    /// transcript gets the bilingual pause notice naming the one-tap continue
+    /// action, and the run parks on the continuation card so "Continuar"
+    /// resumes it with a fresh budget over the same history.
+    private func pauseForTurnExhaustion(conversation id: UUID, turnsUsed: Int) {
+        let limit = Self.configuredAgentTurnLimit
+        if pendingAgentContinuation == nil,
+           let i = conversations.firstIndex(where: { $0.id == id }) {
+            conversations[i].messages.append(ChatMessage(
+                role: "assistant", content: Self.turnBudgetExhaustedNotice(limit: limit)))
+            conversations[i].updated = Date()
+            save()
+        }
+        pendingAgentContinuation = PendingAgentContinuation(
+            conversationID: id,
+            turnsUsed: turnsUsed,
+            turnLimit: limit,
+            toolsExecuted: executedToolCount(conversation: id))
+    }
+
     private func beginToolPermissions(conversation id: UUID, context: AgentRunContext) {
         guard context.remainingTurns > 0 else {
             agentContext = context
-            pendingAgentContinuation = PendingAgentContinuation(
-                conversationID: id,
-                turnsUsed: Self.configuredAgentTurnLimit - max(0, context.remainingTurns),
-                toolsExecuted: executedToolCount(conversation: id))
+            pauseForTurnExhaustion(
+                conversation: id,
+                turnsUsed: Self.configuredAgentTurnLimit - max(0, context.remainingTurns))
             return
         }
         agentContext = context
@@ -1731,10 +1750,7 @@ final class ChatStore: ObservableObject {
         context.remainingTurns -= 1
         agentContext = context
         guard context.remainingTurns > 0 else {
-            pendingAgentContinuation = PendingAgentContinuation(
-                conversationID: id,
-                turnsUsed: Self.configuredAgentTurnLimit,
-                toolsExecuted: executedToolCount(conversation: id))
+            pauseForTurnExhaustion(conversation: id, turnsUsed: Self.configuredAgentTurnLimit)
             return
         }
         stream(into: conversationIndex, port: context.port, temperature: context.temperature,
@@ -2205,6 +2221,14 @@ final class ChatStore: ObservableObject {
     /// Bilingual notice for a request that cannot fit the engine's window.
     nonisolated static func contextOverflowNotice(estimated: Int, window: Int) -> String {
         "Este mensaje no cabe en la ventana de contexto (≈\(estimated) tokens > \(window)). Resume el historial («Recuperar velocidad»), archiva turnos con la herramienta de memoria, abre un chat nuevo o sube el contexto en Ajustes. / This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
+    }
+
+    /// Bilingual notice for an agent run paused because its tool-turn budget
+    /// ran out (not a user stop). Names the continuation card's one-tap
+    /// action so the pause reads as recoverable, not as the model going
+    /// silent mid-mission.
+    nonisolated static func turnBudgetExhaustedNotice(limit: Int) -> String {
+        "Misión en pausa: el agente agotó su presupuesto de \(limit) turnos de herramientas antes de terminar. Pulsa «Continuar» en la tarjeta para retomarla donde quedó, con un presupuesto nuevo y el historial intacto. / Mission paused: the agent used up its \(limit) tool-turn budget before finishing. Tap \"Continue\" on the card to pick up where it left off, with a fresh budget and the transcript intact."
     }
 
     nonisolated static func compactionCutoff(messages: [ChatMessage], alreadyCompacted: Int,
@@ -3506,6 +3530,7 @@ struct NativeChatView: View {
                     continueAction: { chat.respondToAgentContinuation(true) },
                     stopAction: { chat.respondToAgentContinuation(false) },
                     turnsUsed: chat.pendingAgentContinuation?.turnsUsed,
+                    turnLimit: chat.pendingAgentContinuation?.turnLimit,
                     toolsExecuted: chat.pendingAgentContinuation?.toolsExecuted)
                     .environmentObject(loc)
                     .flippedUpsideDown()

@@ -8,6 +8,7 @@ struct AgentContinuationCard: View {
     let continueAction: () -> Void
     let stopAction: () -> Void
     var turnsUsed: Int?
+    var turnLimit: Int?
     var toolsExecuted: Int?
     @EnvironmentObject private var loc: Localizer
 
@@ -21,8 +22,8 @@ struct AgentContinuationCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(loc.t("El agente alcanzó el límite de 8 turnos. ¿Continuar?",
-                        "The agent reached its 8-turn limit. Continue?"),
+            Label(loc.t("El agente alcanzó el límite de \(turnLimit ?? turnsUsed ?? 0) turnos. ¿Continuar?",
+                        "The agent reached its \(turnLimit ?? turnsUsed ?? 0)-turn limit. Continue?"),
                   systemImage: "arrow.clockwise.circle")
                 .font(.callout)
             if let summary {
