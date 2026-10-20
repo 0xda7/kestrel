@@ -34,7 +34,13 @@ enum SettingsArchive {
         var count = 0
         for (key, value) in config where allowed.contains(key) {
             if value is NSNull { defaults.removeObject(forKey: key) }
-            else { defaults.set(restoredValue(value), forKey: key) }
+            // Numeric keys never land as String: a mistyped import value is
+            // coerced, and garbage drops to the declared default.
+            else if let typed = SettingsNumericCoercion.typedImportValue(restoredValue(value), forKey: key) {
+                defaults.set(typed, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
             count += 1
         }
         return count

@@ -69,6 +69,11 @@ public struct KestrelApp: App {
             UserDefaults.standard.set(extra, forKey: SettingsKeys.extraArgs)
         }
 
+        // A legacy writer stored the chat sampling numbers as strings, which
+        // @AppStorage(Double/Int) silently replaces with the declared default:
+        // rewrite them typed so tuned values actually apply.
+        SettingsNumericCoercion.migrateMistypedNumerics()
+
         // Heal the stored engine path: legacy builds or paths from another machine
         // fall back to the bundled engine.
         let defaults = UserDefaults.standard
