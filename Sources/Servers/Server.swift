@@ -329,6 +329,36 @@ struct ServerSettings {
                                           reserveMB: vramReserveMB)
     }
 
+    // MARK: Live engine window
+
+    /// The window of the engine actually running on a port. `resolvedCtx`
+    /// reruns the VRAM solver on every read, so a turn that starts while free
+    /// VRAM differs from launch time gets judged against a window the running
+    /// engine does not have — the overflow wedge where a 64K engine refuses a
+    /// request the app still believes fits a 128K window. In-flight chat
+    /// decisions (turn guard, auto-compaction, response-token clamp) must use
+    /// the published live value instead.
+    private static func liveCtxKey(port: Int) -> String { "liveEngineCtx.\(port)" }
+
+    static func publishLiveCtx(_ ctx: Int, port: Int) {
+        UserDefaults.standard.set(ctx, forKey: liveCtxKey(port: port))
+    }
+
+    static func clearLiveCtx(port: Int) {
+        UserDefaults.standard.removeObject(forKey: liveCtxKey(port: port))
+    }
+
+    static func liveCtx(port: Int) -> Int? {
+        let value = UserDefaults.standard.integer(forKey: liveCtxKey(port: port))
+        return value > 0 ? value : nil
+    }
+
+    /// Window for in-flight chat decisions on a port: the live engine's real
+    /// size when one answers there, else the freshly computed estimate.
+    static func liveResolvedCtx(port: Int) -> Int {
+        liveCtx(port: port) ?? fromDefaults().resolvedCtx
+    }
+
     var arguments: [String] {
         if routerMode { return routerArguments }
         // Quantized KV requires FA, so it stays forced. Elsewhere the AMD kernel rides
@@ -2115,6 +2145,10 @@ final class ServerController: ObservableObject {
         launchedSettings = settings
         activeDflashModelPath = args.contains("draft-dflash") ? settings.modelPath : nil
         dflashAcceptance = nil
+        // Judge in-flight chat decisions against the window this engine is
+        // being started with; watchHealth overwrites it with the engine's own
+        // /props n_ctx once it answers.
+        ServerSettings.publishLiveCtx(settings.resolvedCtx, port: settings.port)
 
         let pipe = Pipe()
         p.standardOutput = pipe
@@ -2136,6 +2170,9 @@ final class ServerController: ObservableObject {
                 self.healthTask?.cancel()
                 self.stopDiscovery()
                 EngineLock.remove(pid: proc.processIdentifier)
+                if let port = self.launchedSettings?.port {
+                    ServerSettings.clearLiveCtx(port: port)
+                }
                 // a router that died leaves its model children behind, holding their weights
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {
                     EngineLock.reapStrayEngines()
@@ -2423,6 +2460,22 @@ final class ServerController: ObservableObject {
                     // Pre-warm slot 0 with the last session's prefix so an external
                     // client's first request skips the multi-minute cold prefill.
                     await self?.restoreExternalSlot(port: port)
+                    // The engine's own n_ctx is the authoritative window (it
+                    // accounts for the server's internal reserve, which the
+                    // launch estimate cannot); the value published at launch
+                    // only stands in until here.
+                    var propsComponents = URLComponents()
+                    propsComponents.scheme = "http"
+                    propsComponents.host = "127.0.0.1"
+                    propsComponents.port = port
+                    propsComponents.path = "/props"
+                    if let propsURL = propsComponents.url,
+                       let (propsData, _) = try? await URLSession.shared.data(from: propsURL),
+                       let props = try? JSONSerialization.jsonObject(with: propsData) as? [String: Any],
+                       let generation = props["default_generation_settings"] as? [String: Any],
+                       let engineCtx = generation["n_ctx"] as? Int, engineCtx > 0 {
+                        ServerSettings.publishLiveCtx(engineCtx, port: port)
+                    }
                     return
                 }
                 try? await Task.sleep(for: .seconds(2))
