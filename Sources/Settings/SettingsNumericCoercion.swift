@@ -75,6 +75,7 @@ enum SettingsNumericCoercion {
         SettingsKeys.ngl: .int,
         SettingsKeys.parallelSlots: .int,
         SettingsKeys.port: .int,
+        SettingsKeys.engineControlTimeoutSeconds: .int,
         SettingsKeys.routerModelsMax: .int,
         SettingsKeys.splitGroupSize: .int,
         SettingsKeys.threads: .int,
@@ -123,6 +124,23 @@ enum SettingsNumericCoercion {
         // Response-token window headroom (T3-1, census W3-3; one setting,
         // three sites).
         SettingsKeys.chatResponseMarginTokens: .int,
+        // The compaction family's remaining secretly-run constants (T3-1,
+        // census W3-7..W3-12): summarize budget/temperature, minimum tail,
+        // memory-recall limits, and the tool-result caps.
+        SettingsKeys.chatCompactionSummaryMaxTokens: .int,
+        SettingsKeys.chatCompactionSummarizeTemp: .double,
+        SettingsKeys.chatCompactionMinTailMessages: .int,
+        SettingsKeys.chatRecallMaxResults: .int,
+        SettingsKeys.chatRecallMaxCharacters: .int,
+        SettingsKeys.chatToolResultMaxTokens: .int,
+        SettingsKeys.chatToolResultMinTokens: .int,
+        // Agent-tool resource limits (T3-1, census W3-13/W3-14): the
+        // JavaScript sandbox and the memory-archive hook delivery policy.
+        SettingsKeys.jsSandboxDefaultTimeoutMS: .int,
+        SettingsKeys.jsSandboxMaxTimeoutMS: .int,
+        SettingsKeys.jsSandboxMaxOutputCharacters: .int,
+        SettingsKeys.memoryArchiveHookQueueLimit: .int,
+        SettingsKeys.memoryArchiveHookTimeout: .double,
         // Bool states, read directly (fromDefaults, bare bool(forKey:), or
         // `as? Bool ?? default`).
         SettingsKeys.agentToolsEnabled: .bool,

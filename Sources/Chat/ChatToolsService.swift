@@ -470,8 +470,10 @@ enum ChatToolsService {
 
     /// Cap on how much of a tool result re-enters the model's context: giant
     /// outputs (a full-file grep, a verbose shell dump) starve small models and
-    /// blow the KV budget. The marker tells the model more existed.
-    static let toolResultContextLimit = 12_000
+    /// blow the KV budget. The marker tells the model more existed. The
+    /// declared default is the operator's `chatToolResultMaxTokens` (T3-1,
+    /// census W3-11).
+    static let toolResultContextLimit = ChatDefaults.toolResultMaxTokens
 
     static func clampedToolResult(_ result: String, cap: Int = toolResultContextLimit) -> String {
         guard result.count > cap else { return result }
@@ -480,12 +482,18 @@ enum ChatToolsService {
     }
 
     /// Dynamic cap for a tool result entering the context: a quarter of the
-    /// window's remaining headroom (≈4 chars/token), floored at 2,000 and
-    /// never above the static limit. Near a full window, tool dumps shrink
-    /// instead of evicting the conversation itself.
-    nonisolated static func dynamicToolResultCap(windowTokens: Int, usedTokens: Int) -> Int {
+    /// window's remaining headroom (≈4 chars/token), floored at the
+    /// operator's `chatToolResultMinTokens` and never above the
+    /// `chatToolResultMaxTokens` ceiling. Near a full window, tool dumps
+    /// shrink instead of evicting the conversation itself.
+    nonisolated static func dynamicToolResultCap(windowTokens: Int, usedTokens: Int,
+                                                 in defaults: UserDefaults = .standard) -> Int {
+        let maxTokens = SettingsNumericCoercion.int(SettingsKeys.chatToolResultMaxTokens,
+                                                    default: ChatDefaults.toolResultMaxTokens, in: defaults)
+        let minTokens = SettingsNumericCoercion.int(SettingsKeys.chatToolResultMinTokens,
+                                                    default: ChatDefaults.toolResultMinTokens, in: defaults)
         let remaining = max(windowTokens - max(usedTokens, 0), 0)
-        return min(max(remaining / 4 * 4, 2_000), toolResultContextLimit)
+        return min(max(remaining / 4 * 4, minTokens), maxTokens)
     }
 
     /// Structural validation of a tool's JSON Schema before it is offered to

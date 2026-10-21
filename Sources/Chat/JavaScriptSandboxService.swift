@@ -7,9 +7,30 @@ import WebKit
 
 enum JavaScriptSandboxService {
     static let toolName = "run_javascript"
+    /// Declared sandbox limits (T3-1, census W3-13): absent settings keys
+    /// fall to these, and every runtime read goes through the typed helpers
+    /// below so the operator's values drive the real clamps.
     static let defaultTimeoutMS = 10_000
     static let maximumTimeoutMS = 30_000
     static let maximumOutputCharacters = 8_192
+
+    /// The operator's sandbox limits (T3-1, census W3-13): absent key ->
+    /// the declared default above; a drifted String is reported and the
+    /// declared default applies.
+    static func sandboxDefaultTimeoutMS(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.jsSandboxDefaultTimeoutMS,
+                                    default: defaultTimeoutMS, in: defaults)
+    }
+
+    static func sandboxMaxTimeoutMS(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.jsSandboxMaxTimeoutMS,
+                                    default: maximumTimeoutMS, in: defaults)
+    }
+
+    static func sandboxOutputCharacterCap(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.jsSandboxMaxOutputCharacters,
+                                    default: maximumOutputCharacters, in: defaults)
+    }
 
     static let tool: BuiltinToolInfo = BuiltinToolInfo(
         displayName: "JavaScript sandbox",
@@ -26,7 +47,7 @@ enum JavaScriptSandboxService {
                         "code": ["type": "string", "description": "JavaScript source to execute"],
                         "timeout_ms": [
                             "type": "number",
-                            "description": "Execution timeout in milliseconds, default 10000, max 30000"
+                            "description": "Execution timeout in milliseconds, default \(defaultTimeoutMS), max \(maximumTimeoutMS)"
                         ]
                     ],
                     "required": ["code"]
@@ -40,9 +61,10 @@ enum JavaScriptSandboxService {
             return ToolExecutionResult(content: "Missing required parameter: code", isError: true)
         }
         let requested = (arguments["timeout_ms"] as? NSNumber)?.doubleValue
+        let maxTimeout = sandboxMaxTimeoutMS()
         let timeout = requested.map { value in
-            value.isFinite && value > 0 ? min(Int(value), maximumTimeoutMS) : defaultTimeoutMS
-        } ?? defaultTimeoutMS
+            value.isFinite && value > 0 ? min(Int(value), maxTimeout) : sandboxDefaultTimeoutMS()
+        } ?? sandboxDefaultTimeoutMS()
         let session = JavaScriptSandboxSession()
         return await withTaskCancellationHandler {
             await session.run(code: code, timeoutMS: timeout)
@@ -57,8 +79,9 @@ enum JavaScriptSandboxService {
         else if let result { lines.append("=> \(result)") }
         var content = lines.joined(separator: "\n")
         if content.isEmpty { content = "(no output)" }
-        if content.count > maximumOutputCharacters {
-            content = String(content.prefix(maximumOutputCharacters)) + "\n[output truncated]"
+        let cap = sandboxOutputCharacterCap()
+        if content.count > cap {
+            content = String(content.prefix(cap)) + "\n[output truncated]"
         }
         return ToolExecutionResult(content: content, isError: error != nil)
     }

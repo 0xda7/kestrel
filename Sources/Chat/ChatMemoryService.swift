@@ -32,7 +32,12 @@ enum ChatMemoryService {
     /// Characters of a message shown in a listing or a recall hit. Enough to
     /// recognise a topic without spending the context the archive just freed.
     static let previewCharacters = 200
-    static let maximumRecallCharacters = 6_000
+    /// The recall-reply cap is the operator's `chatRecallMaxCharacters`
+    /// (T3-1, census W3-12); absent key falls to the declared default.
+    static func recallCharacterCap(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.chatRecallMaxCharacters,
+                                    default: ChatDefaults.recallMaxCharacters, in: defaults)
+    }
 
     static let tools: [BuiltinToolInfo] = [
         BuiltinToolInfo(

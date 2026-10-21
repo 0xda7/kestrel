@@ -31,6 +31,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.dynamicMoePolicy) private var dynamicMoePolicy = "cache"
     @AppStorage(SettingsKeys.persistCache) private var persistCache = false
     @AppStorage(SettingsKeys.port) private var port = 8080
+    @AppStorage(SettingsKeys.engineControlTimeoutSeconds) private var engineControlTimeoutSeconds = EngineHTTP.defaultTimeoutSeconds
     @AppStorage(SettingsKeys.ngl) private var ngl = 99
     @AppStorage(SettingsKeys.ncmoe) private var ncmoe = 0
     @AppStorage(SettingsKeys.ctx) private var ctx = 16384
@@ -489,6 +490,11 @@ struct SettingsView: View {
                                 help: loc.t("Puerto local del servidor (API compatible con OpenAI y chat web).",
                                             "Local server port (OpenAI-compatible API and web chat).")) {
                         DeferredSettingsIntegerField(value: $port, in: 1...65_535, width: 120)
+                    }
+                    SettingsRow(icon: "clock.badge.exclamationmark",
+                                title: "Engine control timeout (s)",
+                                help: "Idle bound for the engine's control requests (health probes, stream stop, slot save/restore): with no bytes for this long, the engine counts as wedged. Longer paths such as summarize pass their own explicit timeouts. Applies on next launch.") {
+                        DeferredSettingsIntegerField(value: $engineControlTimeoutSeconds, in: 2...120, width: 120)
                     }
                     SettingsRow(icon: "engine.combustion",
                                 title: loc.t("Motor de inferencia", "Inference engine"),

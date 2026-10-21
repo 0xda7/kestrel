@@ -32,10 +32,25 @@ actor MemoryArchiveHook {
         var messages: [Message]
     }
 
-    /// Beyond this the oldest are dropped: a receiver that has been down for days must not fill
-    /// the disk, and the newest turns are the ones worth keeping.
-    private static let queueLimit = 500
-    private static let attemptTimeout: TimeInterval = 15
+    /// Declared delivery-policy bounds (T3-1, census W3-14): absent settings
+    /// keys fall to these. Beyond the queue bound the oldest are dropped — a
+    /// receiver that has been down for days must not fill the disk — and
+    /// each delivery attempt gets the timeout before it counts as failed.
+    static let declaredQueueLimit = 500
+    static let declaredAttemptTimeout: TimeInterval = 15
+
+    /// The operator's delivery policy (T3-1, census W3-14): absent key ->
+    /// the declared default; a drifted String is reported and the declared
+    /// default applies.
+    static func queueLimit(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.memoryArchiveHookQueueLimit,
+                                    default: declaredQueueLimit, in: defaults)
+    }
+
+    static func attemptTimeout(in defaults: UserDefaults = .standard) -> TimeInterval {
+        SettingsNumericCoercion.double(SettingsKeys.memoryArchiveHookTimeout,
+                                       default: declaredAttemptTimeout, in: defaults)
+    }
 
     private var draining = false
 
@@ -154,8 +169,9 @@ actor MemoryArchiveHook {
 
     private func trim() {
         let files = pending()
-        guard files.count > Self.queueLimit else { return }
-        for f in files.prefix(files.count - Self.queueLimit) {
+        let limit = Self.queueLimit()
+        guard files.count > limit else { return }
+        for f in files.prefix(files.count - limit) {
             do {
                 try FileManager.default.removeItem(at: f)
             } catch {
@@ -165,7 +181,7 @@ actor MemoryArchiveHook {
                 AppLog.chat.warning("memory archive hook could not drop \(f.lastPathComponent) while trimming the queue: \(error.localizedDescription)")
             }
         }
-        AppLog.chat.warning("memory archive hook queue over \(Self.queueLimit), dropped the oldest")
+        AppLog.chat.warning("memory archive hook queue over \(Self.queueLimit()), dropped the oldest")
     }
 
     /// Census W8 :135/:136 — an unreadable queue file used to be DELETED,
@@ -246,7 +262,7 @@ actor MemoryArchiveHook {
         if let secret = Self.secret {
             request.setValue("Bearer \(secret)", forHTTPHeaderField: "Authorization")
         }
-        request.timeoutInterval = Self.attemptTimeout
+        request.timeoutInterval = Self.attemptTimeout()
         request.httpBody = body
 
         do {

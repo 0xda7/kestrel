@@ -43,6 +43,18 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.chatCompactionTrigger) private var compactionTrigger = ChatDefaults.compactionTrigger
     @AppStorage(SettingsKeys.chatCompactionKeepTailFraction) private var compactionKeepTailFraction = ChatDefaults.compactionKeepTailFraction
     @AppStorage(SettingsKeys.chatResponseMarginTokens) private var responseMarginTokens = ChatDefaults.responseMarginTokens
+    @AppStorage(SettingsKeys.chatCompactionSummaryMaxTokens) private var compactionSummaryMaxTokens = ChatDefaults.compactionSummaryMaxTokens
+    @AppStorage(SettingsKeys.chatCompactionSummarizeTemp) private var compactionSummarizeTemp = ChatDefaults.compactionSummarizeTemp
+    @AppStorage(SettingsKeys.chatCompactionMinTailMessages) private var compactionMinTailMessages = ChatDefaults.compactionMinTailMessages
+    @AppStorage(SettingsKeys.chatRecallMaxResults) private var recallMaxResults = ChatDefaults.recallMaxResults
+    @AppStorage(SettingsKeys.chatRecallMaxCharacters) private var recallMaxCharacters = ChatDefaults.recallMaxCharacters
+    @AppStorage(SettingsKeys.chatToolResultMaxTokens) private var toolResultMaxTokens = ChatDefaults.toolResultMaxTokens
+    @AppStorage(SettingsKeys.chatToolResultMinTokens) private var toolResultMinTokens = ChatDefaults.toolResultMinTokens
+    @AppStorage(SettingsKeys.jsSandboxDefaultTimeoutMS) private var jsSandboxDefaultTimeoutMS = JavaScriptSandboxService.defaultTimeoutMS
+    @AppStorage(SettingsKeys.jsSandboxMaxTimeoutMS) private var jsSandboxMaxTimeoutMS = JavaScriptSandboxService.maximumTimeoutMS
+    @AppStorage(SettingsKeys.jsSandboxMaxOutputCharacters) private var jsSandboxMaxOutputCharacters = JavaScriptSandboxService.maximumOutputCharacters
+    @AppStorage(SettingsKeys.memoryArchiveHookQueueLimit) private var archiveHookQueueLimit = MemoryArchiveHook.declaredQueueLimit
+    @AppStorage(SettingsKeys.memoryArchiveHookTimeout) private var archiveHookTimeout = MemoryArchiveHook.declaredAttemptTimeout
     @AppStorage(SettingsKeys.chatPasteLongTextLength) private var pasteLongTextLength = 2500
     @AppStorage(SettingsKeys.chatMaxImageMegapixels) private var maxImageMegapixels = 1.0
     @AppStorage(SettingsKeys.chatPDFAsImages) private var pdfAsImages = false
@@ -72,6 +84,12 @@ struct ChatAdvancedSettingsSection: View {
                                 help: "Fraction of the window auto-compaction must leave un-summarized, so recent turns stay verbatim; the rest becomes the running summary.")
                 integerStepper("Response margin (tokens)", value: $responseMarginTokens, range: 0...4096, step: 64,
                                help: "Headroom kept between the prompt and the context window when capping a response. A larger margin leaves room for engine overhead and long tool turns.")
+                integerStepper("Summary budget (tokens)", value: $compactionSummaryMaxTokens, range: 128...8192, step: 128,
+                               help: "Response budget of the summarize call that condenses old turns; the compaction prompt reserves the same room, so the two always agree.")
+                parameterSlider("Summarize temperature", value: $compactionSummarizeTemp, range: 0...1,
+                                help: "Sampling temperature of the summarizer that condenses old turns. Low keeps summaries factual and close to the transcript.")
+                integerStepper("Keep last N messages", value: $compactionMinTailMessages, range: 1...50,
+                               help: "Auto-compaction never summarizes away this many newest messages, so the recent exchange always stays verbatim.")
                 SettingsRow(icon: "text.cursor",
                             title: loc.t("Animación de escritura fluida", "Smooth typing animation"),
                             help: loc.t("Anima la aparición del texto token a token. Desactívalo si prefieres que el texto aparezca de golpe o notas parpadeo.",
@@ -275,11 +293,23 @@ struct ChatAdvancedSettingsSection: View {
                             }
                         }
                     }
+                    integerStepper("Tool result ceiling (characters)", value: $toolResultMaxTokens, range: 2_000...100_000, step: 1_000,
+                                   help: "Most of a tool result that may re-enter the model's context. Giant outputs are truncated to this with a marker telling the model more existed.")
+                    integerStepper("Tool result floor (characters)", value: $toolResultMinTokens, range: 0...20_000, step: 500,
+                                   help: "Minimum room a tool result keeps even when the context window is nearly full, so the model still sees what its tool call returned.")
                     SettingsRow(icon: "curlybraces",
                                 title: loc.t("Sandbox JavaScript para agentes", "JavaScript sandbox for agents"),
                                 help: loc.t("Añade una herramienta que ejecuta JavaScript en un entorno aislado para cálculos o transformaciones de datos.",
                                        "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.")) {
                         SettingsToggle(isOn: $jsSandboxEnabled)
+                    }
+                    if jsSandboxEnabled {
+                        integerStepper("Sandbox default timeout (ms)", value: $jsSandboxDefaultTimeoutMS, range: 1_000...60_000, step: 1_000,
+                                       help: "Timeout used when the model does not pass one to the JavaScript sandbox tool.")
+                        integerStepper("Sandbox max timeout (ms)", value: $jsSandboxMaxTimeoutMS, range: 5_000...300_000, step: 5_000,
+                                       help: "Largest timeout the JavaScript sandbox accepts; larger requests are clamped to this.")
+                        integerStepper("Sandbox output cap (characters)", value: $jsSandboxMaxOutputCharacters, range: 1_000...100_000, step: 1_000,
+                                       help: "Console output captured from the sandbox is truncated to this length.")
                     }
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
@@ -348,6 +378,14 @@ struct ChatAdvancedSettingsSection: View {
                                 set: { MemoryArchiveHook.setReceiverToken($0) }), width: 220)
                                 .autocorrectionDisabled()
                         }
+                        integerStepper("Recall max results", value: $recallMaxResults, range: 1...50,
+                                       help: "Most archived turns one memory_recall call returns when the model asks for more.")
+                        integerStepper("Recall max characters", value: $recallMaxCharacters, range: 500...50_000, step: 500,
+                                       help: "Character budget of one memory_recall reply; past this, the oldest hits are left out.")
+                        integerStepper("Archive queue limit", value: $archiveHookQueueLimit, range: 10...10_000, step: 10,
+                                       help: "Pending deliveries kept on disk for the archive hook; past this, the oldest are dropped so a down receiver cannot fill the disk.")
+                        parameterSlider("Archive delivery timeout (s)", value: $archiveHookTimeout, range: 1...60,
+                                        help: "Seconds one delivery attempt to the archive receiver may take before it counts as failed and is retried.")
                     }
                 }
             }
@@ -490,6 +528,18 @@ struct ChatAdvancedSettingsSection: View {
         compactionTrigger = ChatDefaults.compactionTrigger
         compactionKeepTailFraction = ChatDefaults.compactionKeepTailFraction
         responseMarginTokens = ChatDefaults.responseMarginTokens
+        compactionSummaryMaxTokens = ChatDefaults.compactionSummaryMaxTokens
+        compactionSummarizeTemp = ChatDefaults.compactionSummarizeTemp
+        compactionMinTailMessages = ChatDefaults.compactionMinTailMessages
+        recallMaxResults = ChatDefaults.recallMaxResults
+        recallMaxCharacters = ChatDefaults.recallMaxCharacters
+        toolResultMaxTokens = ChatDefaults.toolResultMaxTokens
+        toolResultMinTokens = ChatDefaults.toolResultMinTokens
+        jsSandboxDefaultTimeoutMS = JavaScriptSandboxService.defaultTimeoutMS
+        jsSandboxMaxTimeoutMS = JavaScriptSandboxService.maximumTimeoutMS
+        jsSandboxMaxOutputCharacters = JavaScriptSandboxService.maximumOutputCharacters
+        archiveHookQueueLimit = MemoryArchiveHook.declaredQueueLimit
+        archiveHookTimeout = MemoryArchiveHook.declaredAttemptTimeout
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
         memoryToolsEnabled = true; toolsRuntime = ""

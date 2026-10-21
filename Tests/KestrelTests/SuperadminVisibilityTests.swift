@@ -5,14 +5,16 @@
 import Foundation
 @testable import KestrelCore
 
-/// T3-1 (census W3-1..W3-4): the four mandate-A1 constants the engine ran on
-/// secretly are now real settings. These checks pin the wiring contract for
-/// each: a seeded value drives the behavior, an absent key falls to the
-/// declared default (so changing a ChatDefaults/ServerSettings constant is
-/// caught), and both cache-reuse writers read the one setting. Sabotage
-/// drills: remove a registry entry -> TypedSettingsRegistryTests
-/// .testRegistryIsComplete RED; change ChatDefaults.compactionTrigger ->
-/// testCompactionTriggerSettingDrivesAutoCompaction RED.
+/// T3-1 (census W3-1..W3-4 and W3-7..W3-15): the mandate-A1 constants and
+/// their W3 siblings the engine ran on secretly are now real settings. These
+/// checks pin the wiring contract for each: a seeded value drives the
+/// behavior, an absent key falls to the declared default (so changing a
+/// ChatDefaults/ServerSettings/service constant is caught), and — for the
+/// cache-reuse value — both writers read the one setting. Sabotage drills:
+/// remove a registry entry -> TypedSettingsRegistryTests
+/// .testRegistryIsComplete RED; change a declared-default constant (e.g.
+/// ChatDefaults.compactionTrigger, ChatDefaults.compactionSummaryMaxTokens)
+/// -> the setting's wiring check RED.
 final class SuperadminVisibilityTests: CheckCase {
     private var suite: UserDefaults!
 
@@ -118,10 +120,134 @@ final class SuperadminVisibilityTests: CheckCase {
         for key in [SettingsKeys.chatCompactionTrigger,
                     SettingsKeys.chatCompactionKeepTailFraction,
                     SettingsKeys.chatResponseMarginTokens,
-                    SettingsKeys.cacheReuseWindowSize] {
+                    SettingsKeys.cacheReuseWindowSize,
+                    SettingsKeys.chatCompactionSummaryMaxTokens,
+                    SettingsKeys.chatCompactionSummarizeTemp,
+                    SettingsKeys.chatCompactionMinTailMessages,
+                    SettingsKeys.chatRecallMaxResults,
+                    SettingsKeys.chatRecallMaxCharacters,
+                    SettingsKeys.chatToolResultMaxTokens,
+                    SettingsKeys.chatToolResultMinTokens,
+                    SettingsKeys.jsSandboxDefaultTimeoutMS,
+                    SettingsKeys.jsSandboxMaxTimeoutMS,
+                    SettingsKeys.jsSandboxMaxOutputCharacters,
+                    SettingsKeys.memoryArchiveHookQueueLimit,
+                    SettingsKeys.memoryArchiveHookTimeout,
+                    SettingsKeys.engineControlTimeoutSeconds] {
             XCTAssertTrue(SettingsNumericCoercion.isRegistered(key), "\(key) must be registered typed")
             XCTAssertTrue(SettingsKeys.resettableOptionKeys.contains(key), "\(key) must be resettable")
         }
+    }
+
+    /// The summarize budget and temperature come from one setting pair:
+    /// seeded values land in the request body, absent keys fall to the
+    /// declared defaults, and the compaction prompt reserves the same budget
+    /// it asks the engine for (the lockstep the census demanded). Sabotage
+    /// drill: change ChatDefaults.compactionSummaryMaxTokens -> RED.
+    func testSummarizeBudgetAndTempComeFromOneSetting() {
+        let absent = ChatStore.summarizeRequestBody(prompt: "p", model: "m", in: suite)
+        XCTAssertEqual(absent["max_tokens"] as? Int, 512,
+                       "the declared default is the literal the census recorded")
+        XCTAssertEqual(absent["temperature"] as? Double, 0.3)
+        suite.set(768, forKey: SettingsKeys.chatCompactionSummaryMaxTokens)
+        suite.set(0.1, forKey: SettingsKeys.chatCompactionSummarizeTemp)
+        let seeded = ChatStore.summarizeRequestBody(prompt: "p", model: nil, in: suite)
+        XCTAssertEqual(seeded["max_tokens"] as? Int, 768)
+        XCTAssertEqual(seeded["temperature"] as? Double, 0.1)
+        XCTAssertNil(seeded["model"])
+        XCTAssertEqual(ChatStore.compactionSummaryMaxTokens(in: suite), 768,
+                       "the prompt reservation reads the same setting the body carries")
+    }
+
+    /// The min-tail setting replaces the hardwired -4: the cutoff keeps the
+    /// operator's N newest messages, the already-compacted +2 floor still
+    /// applies, and an absent key falls to the declared default.
+    func testMinTailMessagesSettingDrivesCutoff() {
+        XCTAssertEqual(ChatStore.compactionMinTailMessages(in: suite),
+                       ChatDefaults.compactionMinTailMessages)
+        XCTAssertEqual(ChatStore.compactionMinTailMessages(in: suite), 4,
+                       "the declared default is the literal the census recorded")
+        let messages = (0..<10).map { ChatMessage(role: $0.isMultiple(of: 2) ? "user" : "assistant",
+                                                  content: "turn \($0)") }
+        XCTAssertEqual(ChatStore.compactionCutoff(messages: messages, alreadyCompacted: 0,
+                                                  minTailMessages: 4), 6)
+        XCTAssertEqual(ChatStore.compactionCutoff(messages: messages, alreadyCompacted: 0,
+                                                  minTailMessages: 6), 4)
+        // The +2 already-compacted floor rides along as derived logic.
+        XCTAssertNil(ChatStore.compactionCutoff(messages: messages, alreadyCompacted: 5,
+                                                minTailMessages: 4))
+        suite.set(6, forKey: SettingsKeys.chatCompactionMinTailMessages)
+        XCTAssertEqual(ChatStore.compactionMinTailMessages(in: suite), 6)
+    }
+
+    /// The recall limits come from settings: the results cap follows its key
+    /// (a missing model argument still falls to the tool-contract 4), and
+    /// the character cap follows its own.
+    func testRecallLimitsComeFromSettings() {
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: [:], in: suite), 4)
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: ["max_results": 100], in: suite),
+                       ChatDefaults.recallMaxResults)
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: ["max_results": 100], in: suite), 20,
+                       "the declared default is the literal the census recorded")
+        XCTAssertEqual(ChatMemoryService.recallCharacterCap(in: suite), 6_000)
+        suite.set(5, forKey: SettingsKeys.chatRecallMaxResults)
+        suite.set(1_000, forKey: SettingsKeys.chatRecallMaxCharacters)
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: [:], in: suite), 4)
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: ["max_results": 100], in: suite), 5)
+        XCTAssertEqual(ChatStore.recallResultLimit(arguments: ["max_results": 2], in: suite), 2)
+        XCTAssertEqual(ChatMemoryService.recallCharacterCap(in: suite), 1_000)
+    }
+
+    /// The tool-result caps come from settings: the dynamic cap never goes
+    /// below the operator's floor nor above the operator's ceiling, absent
+    /// keys fall to the declared defaults, and the static ceiling is the
+    /// same single source the clamp's default parameter uses.
+    func testToolResultCapsComeFromSettings() {
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 16_384, usedTokens: 16_000, in: suite),
+                       2_000, "the declared default is the literal the census recorded")
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 32_768, usedTokens: 0, in: suite),
+                       12_000)
+        XCTAssertEqual(ChatToolsService.toolResultContextLimit, ChatDefaults.toolResultMaxTokens,
+                       "the static ceiling is the one single-sourced constant")
+        suite.set(3_000, forKey: SettingsKeys.chatToolResultMaxTokens)
+        suite.set(500, forKey: SettingsKeys.chatToolResultMinTokens)
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 16_384, usedTokens: 16_000, in: suite), 500)
+        XCTAssertEqual(ChatToolsService.dynamicToolResultCap(windowTokens: 32_768, usedTokens: 0, in: suite), 3_000)
+    }
+
+    /// The sandbox limits come from settings; absent keys fall to the
+    /// declared defaults execute() and formatReply() clamp with.
+    func testJsSandboxLimitsComeFromSettings() {
+        XCTAssertEqual(JavaScriptSandboxService.sandboxDefaultTimeoutMS(in: suite), 10_000)
+        XCTAssertEqual(JavaScriptSandboxService.sandboxMaxTimeoutMS(in: suite), 30_000)
+        XCTAssertEqual(JavaScriptSandboxService.sandboxOutputCharacterCap(in: suite), 8_192)
+        suite.set(5_000, forKey: SettingsKeys.jsSandboxDefaultTimeoutMS)
+        suite.set(60_000, forKey: SettingsKeys.jsSandboxMaxTimeoutMS)
+        suite.set(4_096, forKey: SettingsKeys.jsSandboxMaxOutputCharacters)
+        XCTAssertEqual(JavaScriptSandboxService.sandboxDefaultTimeoutMS(in: suite), 5_000)
+        XCTAssertEqual(JavaScriptSandboxService.sandboxMaxTimeoutMS(in: suite), 60_000)
+        XCTAssertEqual(JavaScriptSandboxService.sandboxOutputCharacterCap(in: suite), 4_096)
+    }
+
+    /// The archive hook's delivery policy comes from settings; absent keys
+    /// fall to the declared defaults trim() and the delivery attempt use.
+    func testMemoryArchiveHookLimitsComeFromSettings() {
+        XCTAssertEqual(MemoryArchiveHook.queueLimit(in: suite), 500)
+        XCTAssertEqual(MemoryArchiveHook.attemptTimeout(in: suite), 15)
+        suite.set(3, forKey: SettingsKeys.memoryArchiveHookQueueLimit)
+        suite.set(2.5, forKey: SettingsKeys.memoryArchiveHookTimeout)
+        XCTAssertEqual(MemoryArchiveHook.queueLimit(in: suite), 3)
+        XCTAssertEqual(MemoryArchiveHook.attemptTimeout(in: suite), 2.5)
+    }
+
+    /// The control-plane idle bound comes from the setting; the absent key
+    /// falls to the declared 10 s (so changing the declared constant flips
+    /// this check — the tripwire), and a seeded value reads through.
+    func testEngineControlTimeoutComesFromSetting() {
+        XCTAssertEqual(EngineHTTP.defaultTimeoutSeconds, 10)
+        XCTAssertEqual(EngineHTTP.controlTimeoutSeconds(in: suite), EngineHTTP.defaultTimeoutSeconds)
+        suite.set(5, forKey: SettingsKeys.engineControlTimeoutSeconds)
+        XCTAssertEqual(EngineHTTP.controlTimeoutSeconds(in: suite), 5)
     }
 }
 
@@ -135,6 +261,13 @@ extension SuperadminVisibilityTests {
             .init(name: "testKeepTailFractionSettingDrivesTailTokens") { $0.testKeepTailFractionSettingDrivesTailTokens() },
             .init(name: "testResponseMarginSettingDrivesClampAndBudget") { $0.testResponseMarginSettingDrivesClampAndBudget() },
             .init(name: "testCacheReuseWindowSizeDrivesBothWriters") { $0.testCacheReuseWindowSizeDrivesBothWriters() },
+            .init(name: "testSummarizeBudgetAndTempComeFromOneSetting") { $0.testSummarizeBudgetAndTempComeFromOneSetting() },
+            .init(name: "testMinTailMessagesSettingDrivesCutoff") { $0.testMinTailMessagesSettingDrivesCutoff() },
+            .init(name: "testRecallLimitsComeFromSettings") { $0.testRecallLimitsComeFromSettings() },
+            .init(name: "testToolResultCapsComeFromSettings") { $0.testToolResultCapsComeFromSettings() },
+            .init(name: "testJsSandboxLimitsComeFromSettings") { $0.testJsSandboxLimitsComeFromSettings() },
+            .init(name: "testMemoryArchiveHookLimitsComeFromSettings") { $0.testMemoryArchiveHookLimitsComeFromSettings() },
+            .init(name: "testEngineControlTimeoutComesFromSetting") { $0.testEngineControlTimeoutComesFromSetting() },
             .init(name: "testSecretSettingsAreResettable") { $0.testSecretSettingsAreResettable() },
         ])
 }

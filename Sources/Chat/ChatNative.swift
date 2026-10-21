@@ -1894,6 +1894,63 @@ final class ChatStore: ObservableObject {
                                                       in: defaults)
         return Int((Double(window) * fraction).rounded())
     }
+    /// The summarize request's response budget (T3-1, census W3-7): the
+    /// operator's setting, which the compaction prompt reserves too.
+    nonisolated static func compactionSummaryMaxTokens(
+        in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.chatCompactionSummaryMaxTokens,
+                                    default: ChatDefaults.compactionSummaryMaxTokens,
+                                    in: defaults)
+    }
+
+    /// The minimum un-summarized tail (T3-1, census W3-9): auto-compaction
+    /// never summarizes away the operator's N newest messages.
+    nonisolated static func compactionMinTailMessages(
+        in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.chatCompactionMinTailMessages,
+                                    default: ChatDefaults.compactionMinTailMessages,
+                                    in: defaults)
+    }
+
+    /// Cap on memory_recall results (T3-1, census W3-10): the tool-contract
+    /// default of 4 when the model passes no max_results stays a literal.
+    nonisolated static func recallMaxResults(
+        in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.chatRecallMaxResults,
+                                    default: ChatDefaults.recallMaxResults,
+                                    in: defaults)
+    }
+
+    /// Result count one memory_recall call returns (T3-1, census W3-10):
+    /// the model's max_results argument, capped by the operator's setting;
+    /// no argument keeps the tool-contract default of 4.
+    nonisolated static func recallResultLimit(arguments: [String: Any],
+                                              in defaults: UserDefaults = .standard) -> Int {
+        max(1, min(recallMaxResults(in: defaults),
+                   (arguments["max_results"] as? NSNumber)?.intValue ?? 4))
+    }
+
+    /// The compaction summarize request body (T3-1, census W3-7/W3-8): the
+    /// response budget and sampling temperature are the operator's settings,
+    /// and the compaction prompt reserves the same budget — one source per
+    /// number, so the prompt reservation and the request cannot drift apart.
+    nonisolated static func summarizeRequestBody(prompt: String, model: String?,
+                                                 in defaults: UserDefaults = .standard) -> [String: Any] {
+        let instructions = "You summarize conversations. Write a compact summary (at most ~250 words) of the conversation below, in the same language the conversation itself uses. Preserve key facts, decisions, names, numbers, code references and pending questions. Reply with the summary only."
+        var body: [String: Any] = [
+            "messages": [["role": "system", "content": instructions],
+                         ["role": "user", "content": prompt]],
+            "stream": false,
+            "temperature": SettingsNumericCoercion.double(SettingsKeys.chatCompactionSummarizeTemp,
+                                                          default: ChatDefaults.compactionSummarizeTemp,
+                                                          in: defaults),
+            "max_tokens": compactionSummaryMaxTokens(in: defaults),
+            "chat_template_kwargs": ["enable_thinking": false],
+        ]
+        if let model { body["model"] = model }
+        return body
+    }
+
 
     /// A turn may never reserve more room than the window has left after the
     /// prompt: an uncapped repetition loop otherwise decodes to the window
@@ -1913,7 +1970,7 @@ final class ChatStore: ObservableObject {
     /// them, because a wedge-proof partial summary beats a permanent deadlock.
     nonisolated static func compactionPrompt(summary: String?, messages: [ChatMessage],
                                              window: Int,
-                                             summaryResponseTokens: Int = 512,
+                                             summaryResponseTokens: Int = ChatDefaults.compactionSummaryMaxTokens,
                                              margin: Int = ChatDefaults.responseMarginTokens)
                                              -> (prompt: String, dropped: Int) {
         func line(_ m: ChatMessage) -> String {
@@ -1966,8 +2023,9 @@ final class ChatStore: ObservableObject {
     }
 
     nonisolated static func compactionCutoff(messages: [ChatMessage], alreadyCompacted: Int,
-                                             keepTokens: Int = 0) -> Int? {
-        var cutoff = messages.count - 4
+                                             keepTokens: Int = 0,
+                                             minTailMessages: Int = ChatDefaults.compactionMinTailMessages) -> Int? {
+        var cutoff = messages.count - minTailMessages
         if keepTokens > 0 {
             var kept = 0
             var i = messages.count - 1
@@ -2063,7 +2121,7 @@ final class ChatStore: ObservableObject {
                 .trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty else {
             return ToolExecutionResult(content: "query is required.", isError: true)
         }
-        let limit = max(1, min(20, (arguments["max_results"] as? NSNumber)?.intValue ?? 4))
+        let limit = Self.recallResultLimit(arguments: arguments)
         let c = conversations[i]
         guard let blocks = c.archived, !blocks.isEmpty else {
             return ToolExecutionResult(content: "Nothing has been archived in this conversation.",
@@ -2081,7 +2139,7 @@ final class ChatStore: ObservableObject {
         var out = ""
         for index in hits {
             let line = "[\(index)] \(c.messages[index].role): \(texts[index] ?? "")\n\n"
-            if out.count + line.count > ChatMemoryService.maximumRecallCharacters { break }
+            if out.count + line.count > ChatMemoryService.recallCharacterCap() { break }
             out += line
         }
         return ToolExecutionResult(content: out, isError: false)
@@ -2102,7 +2160,8 @@ final class ChatStore: ObservableObject {
         let start = conversations[i].summarizedCount ?? 0
         guard let cutoff = Self.compactionCutoff(messages: conversations[i].messages,
                                                  alreadyCompacted: start,
-                                                 keepTokens: Self.compactionKeepTailTokens(window: limit, in: d))
+                                                 keepTokens: Self.compactionKeepTailTokens(window: limit, in: d),
+                                                 minTailMessages: Self.compactionMinTailMessages(in: d))
         else { return }
         compact(conversation: id, index: i, from: start, through: cutoff, port: port)
     }
@@ -2132,6 +2191,7 @@ final class ChatStore: ObservableObject {
         let built = Self.compactionPrompt(summary: conversations[i].summary,
                                           messages: Array(conversations[i].messages[start..<cutoff]),
                                           window: ServerSettings.liveResolvedCtx(port: port),
+                                          summaryResponseTokens: Self.compactionSummaryMaxTokens(),
                                           margin: Self.responseMarginTokens())
         if built.dropped > 0 {
             AppLog.chat.warning("compaction prompt dropped \(built.dropped) leading message(s) to fit the window")
@@ -2185,16 +2245,8 @@ final class ChatStore: ObservableObject {
         // busy engine, which the session's 10 s probe default must not cut off.
         var req = EngineHTTP.request(url: url, method: "POST", timeout: 60,
                                      apiKey: ServerSettings.activeAPIKey())
-        let instructions = "You summarize conversations. Write a compact summary (at most ~250 words) of the conversation below, in the same language the conversation itself uses. Preserve key facts, decisions, names, numbers, code references and pending questions. Reply with the summary only."
-        var body: [String: Any] = [
-            "messages": [["role": "system", "content": instructions],
-                         ["role": "user", "content": prompt]],
-            "stream": false,
-            "temperature": 0.3,
-            "max_tokens": 512,
-            "chat_template_kwargs": ["enable_thinking": false],
-        ]
-        if let model = ServerSettings.activeRouterModel() { body["model"] = model }
+        let body = Self.summarizeRequestBody(prompt: prompt,
+                                             model: ServerSettings.activeRouterModel())
         // Census W8 ChatNative:2014-2017: every failure stage names itself —
         // a single opaque nil once hid whether the body encode, the send, the
         // HTTP status or the response shape failed. The wedge-proof caller

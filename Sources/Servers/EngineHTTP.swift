@@ -17,10 +17,26 @@ import Foundation
 /// prefill) pass an explicit per-request timeout, which overrides the
 /// session default.
 enum EngineHTTP {
-    /// 10 s with no bytes is a wedged engine, not a slow one.
+    /// Declared default (T3-1, census W3-15): 10 s with no bytes is a wedged
+    /// engine, not a slow one. The operator's `engineControlTimeoutSeconds`
+    /// overrides it; the value applies when this session is built, i.e. on
+    /// next launch. Paths that legitimately run longer pass an explicit
+    /// per-request timeout — those overrides (60 s summarize, 30 s resume,
+    /// 5 s stream-delete, 30 s slot save) are engineered per-path liveness
+    /// decisions with their rationale at each site, not secretly-run globals.
+    static let defaultTimeoutSeconds = 10
+
+    /// The operator's control-plane idle bound (T3-1, census W3-15):
+    /// absent key -> the declared default; a drifted String is reported and
+    /// the declared default applies.
+    static func controlTimeoutSeconds(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.engineControlTimeoutSeconds,
+                                    default: defaultTimeoutSeconds, in: defaults)
+    }
+
     static let session: URLSession = {
         let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 10
+        cfg.timeoutIntervalForRequest = TimeInterval(controlTimeoutSeconds())
         cfg.timeoutIntervalForResource = 60
         return URLSession(configuration: cfg)
     }()

@@ -58,6 +58,10 @@ enum SettingsKeys {
     static let mtpDisabledModels = "mtpDisabledModels"
     static let dflashWarningAcknowledged = "dflashWarningAcknowledged"
     static let port = "port"
+    /// Idle bound for the engine control plane's shared session (census
+    /// W3-15): a request with no bytes for this long is a wedged engine.
+    /// Applies when the session is built, i.e. on next launch.
+    static let engineControlTimeoutSeconds = "engineControlTimeoutSeconds"
     static let ngl = "ngl"
     static let ncmoe = "ncmoe"
     /// Last user-set ncmoe per model file, restored when that model is re-selected.
@@ -92,10 +96,19 @@ enum SettingsKeys {
 
     /// Sent as a bearer token with each delivery, for receivers that want one.
     static let memoryArchiveHookSecret = "memoryArchiveHookSecret"
+    /// Delivery policy for the memory-archive hook (census W3-14): the queue
+    /// drops its oldest past this many pending files, and each delivery
+    /// attempt gets this many seconds before it is treated as failed.
+    static let memoryArchiveHookQueueLimit = "memoryArchiveHookQueueLimit"
+    static let memoryArchiveHookTimeout = "memoryArchiveHookTimeout"
     static let embeddings = "embeddings"
     static let agentToolsEnabled = "agentToolsEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
+    /// Resource limits of the JavaScript sandbox tool (census W3-13).
+    static let jsSandboxDefaultTimeoutMS = "jsSandboxDefaultTimeoutMS"
+    static let jsSandboxMaxTimeoutMS = "jsSandboxMaxTimeoutMS"
+    static let jsSandboxMaxOutputCharacters = "jsSandboxMaxOutputCharacters"
     /// Stop sequences for chat sampling, comma/newline separated.
     static let chatStopSequences = "chatStopSequences"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
@@ -196,6 +209,24 @@ enum SettingsKeys {
     /// (census W3-3): one setting drives three sites — the context-trap turn
     /// guard, clampedResponseTokens, and the compaction-prompt budget.
     static let chatResponseMarginTokens = "chatResponseMarginTokens"
+    /// Response budget of the compaction summarizer (census W3-7): the
+    /// compaction prompt reserves this many tokens and the summarize request
+    /// asks for the same — one setting keeps the two sides in lockstep.
+    static let chatCompactionSummaryMaxTokens = "chatCompactionSummaryMaxTokens"
+    /// Sampling temperature of the compaction summarizer (census W3-8).
+    static let chatCompactionSummarizeTemp = "chatCompactionSummarizeTemp"
+    /// Newest messages auto-compaction always leaves un-summarized
+    /// (census W3-9; was a hardwired 4).
+    static let chatCompactionMinTailMessages = "chatCompactionMinTailMessages"
+    /// Cap on memory_recall results (census W3-10): the tool-contract
+    /// default of 4 when the model passes no max_results stays a literal.
+    static let chatRecallMaxResults = "chatRecallMaxResults"
+    /// Character cap on one memory_recall reply (census W3-12).
+    static let chatRecallMaxCharacters = "chatRecallMaxCharacters"
+    /// Tool-result context caps (census W3-11): the static ceiling and the
+    /// dynamic cap's floor.
+    static let chatToolResultMaxTokens = "chatToolResultMaxTokens"
+    static let chatToolResultMinTokens = "chatToolResultMinTokens"
     static let chatShowSystemMessage = "chatShowSystemMessage"
     static let smoothTyping = "smoothTyping"
     static let chatFontScale = "chatFontScale"
@@ -266,7 +297,7 @@ enum SettingsKeys {
     /// never hides or deletes downloaded models. Profiles and the Keychain API key
     /// live outside UserDefaults and are untouched.
     static let resettableOptionKeys = [
-        serverBinary, port, ngl, ncmoe, ctx, contextAutomatic, threads, flashAttn, noMmap, jinja,
+        serverBinary, port, engineControlTimeoutSeconds, ngl, ncmoe, ctx, contextAutomatic, threads, flashAttn, noMmap, jinja,
         vramReserve, gpuIndex, gpuList, whisperModel, speechInputMethod, whisperLoadPolicy,
         audioOperation, audioLanguage, audioTargetLanguage, audioExportFormat,
         audioFollowTranscript, audioTranscriptMode, audioExportTrack,
@@ -274,7 +305,9 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
-        memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
+        jsSandboxDefaultTimeoutMS, jsSandboxMaxTimeoutMS, jsSandboxMaxOutputCharacters,
+        memoryToolsEnabled, memoryArchiveHookQueueLimit, memoryArchiveHookTimeout,
+        toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
         dynamicMoe, dynamicMoeSlots, dynamicMoePrefetch, dynamicMoePolicy, routerMode, routerModelsMax,
@@ -291,7 +324,9 @@ enum SettingsKeys {
         chatPasteLongTextLength, chatMaxImageMegapixels,
         chatPDFAsImages,
         chatAutoCompact, chatCompactionTrigger, chatCompactionKeepTailFraction,
-        chatResponseMarginTokens, chatShowSystemMessage, smoothTyping,
+        chatResponseMarginTokens, chatCompactionSummaryMaxTokens, chatCompactionSummarizeTemp,
+        chatCompactionMinTailMessages, chatRecallMaxResults, chatRecallMaxCharacters,
+        chatToolResultMaxTokens, chatToolResultMinTokens, chatShowSystemMessage, smoothTyping,
         imagenAspect, imagenBaseSize, imagenSteps, imagenFormat, imagenOffloadCPU, imagenGPU,
     ]
 
@@ -317,6 +352,25 @@ enum ChatDefaults {
     /// Response-token headroom subtracted when clamping a turn to the
     /// window (census W3-3; was a 256 literal at three independent sites).
     static let responseMarginTokens = 256
+    /// Summarize request budget (census W3-7): the compaction prompt
+    /// reserves this many response tokens and the summarize call asks for
+    /// the same — one setting keeps the two sides in lockstep.
+    static let compactionSummaryMaxTokens = 512
+    /// Sampling temperature of the compaction summarizer (census W3-8).
+    static let compactionSummarizeTemp = 0.3
+    /// Minimum un-summarized tail messages auto-compaction keeps (census
+    /// W3-9; was the hardwired -4; the +2 already-compacted floor stays
+    /// derived logic).
+    static let compactionMinTailMessages = 4
+    /// Cap on memory_recall results (census W3-10): the tool-contract
+    /// default of 4 when the model passes no max_results stays a literal.
+    static let recallMaxResults = 20
+    /// Character cap on one memory_recall reply (census W3-12).
+    static let recallMaxCharacters = 6_000
+    /// Tool-result context caps (census W3-11): the static ceiling and the
+    /// dynamic cap's floor.
+    static let toolResultMaxTokens = 12_000
+    static let toolResultMinTokens = 2_000
 }
 
 // MARK: - Logging
