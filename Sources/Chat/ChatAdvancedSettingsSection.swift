@@ -13,20 +13,6 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.agentToolsEnabled) private var agentToolsEnabled = false
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
-    @AppStorage(SettingsKeys.latchDelegateEnabled) private var latchDelegateEnabled = false
-    @AppStorage(SettingsKeys.latchPrimaryEnabled) private var latchPrimaryEnabled = false
-    @AppStorage(SettingsKeys.latchBinaryPath) private var latchBinaryPath = ""
-    @AppStorage(SettingsKeys.latchDelegateTimeout) private var latchDelegateTimeout = 300
-    @AppStorage(SettingsKeys.piPrimaryEnabled) private var piPrimaryEnabled = false
-    @AppStorage(SettingsKeys.piBinaryPath) private var piBinaryPath = ""
-    @AppStorage(SettingsKeys.piModel) private var piModel = ""
-    @AppStorage(SettingsKeys.piProvider) private var piProvider = ""
-    @AppStorage(SettingsKeys.piTimeout) private var piTimeout = 900
-    @AppStorage(SettingsKeys.piContextCharacters) private var piContextCharacters = 12_000
-    /// provider/model pairs the generated sidecar config offers; refreshed on
-    /// appear because routes and keys can change while this pane is closed.
-    @State private var bridgePairs: [(provider: String, model: String)] = []
-    @AppStorage(SettingsKeys.piThinkingLevel) private var piThinkingLevel = ""
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
@@ -286,92 +272,6 @@ struct ChatAdvancedSettingsSection: View {
                                        "Adds a tool that runs JavaScript in a sandbox for calculations or data transforms.")) {
                         SettingsToggle(isOn: $jsSandboxEnabled)
                     }
-                    SettingsRow(icon: "arrowshape.turn.up.right.circle",
-                                title: loc.t("Delegar a latch", "Delegate to latch"),
-                                help: loc.t("Añade una herramienta que entrega una tarea autónoma al agente latch y espera su informe final. Requiere el binario de latch instalado.",
-                                       "Adds a tool that hands a self-contained task to the latch agent and waits for its final report. Requires the latch binary to be installed.")) {
-                        SettingsToggle(isOn: $latchDelegateEnabled)
-                    }
-                    SettingsRow(icon: "bird",
-                                title: loc.t("Latch como asistente principal", "Latch as primary assistant"),
-                                help: loc.t("Las conversaciones nuevas responden con latch (proceso independiente, sin motor ni pasarela). Se puede cambiar por conversación desde el chip de la cabecera. Requiere el binario de latch instalado.",
-                                       "New conversations are answered by latch (its own process, no engine or gateway). Switchable per conversation from the header chip. Requires the latch binary to be installed.")) {
-                        SettingsToggle(isOn: $latchPrimaryEnabled)
-                    }
-                    if latchDelegateEnabled {
-                        SettingsRow(icon: "wrench.and.screwdriver",
-                                    title: loc.t("Binario de latch", "Latch binary"),
-                                    help: loc.t("Ruta al ejecutable latch-harness. Se amplía ~ al usarla.",
-                                           "Path to the latch-harness executable. ~ expands when used.")) {
-                            DeferredSettingsTextField("", text: $latchBinaryPath,
-                                                      prompt: LatchDelegateService.defaultBinaryPath,
-                                                      width: 220)
-                        }
-                        integerStepper(loc.t("Tiempo límite de delegación (s)", "Delegation timeout (s)"),
-                                       value: $latchDelegateTimeout, range: 30...900,
-                                       help: loc.t("Cuánto esperar el informe del delegado antes de detenerlo.",
-                                                   "How long to wait for the delegate's report before stopping it."))
-                    }
-                    SettingsRow(icon: "petal.superscript",
-                                title: loc.t("pi como asistente principal (llm-space)", "pi as primary assistant (llm-space)"),
-                                help: loc.t("Las conversaciones nuevas responden con el runtime pi (proceso independiente, sin motor ni pasarela), el motor del proyecto llm-space. Kestrel genera la configuración de proveedores de pi desde sus propios Ajustes → Proveedores. Se puede cambiar por conversación desde el chip de la cabecera. Requiere el binario pi instalado (npm i -g @earendil-works/pi-coding-agent --ignore-scripts).",
-                                       "New conversations are answered by the pi runtime (its own process, no engine or gateway), the engine of the llm-space project. Kestrel generates pi's provider configuration from its own Settings → Providers. Switchable per conversation from the header chip. Requires the pi binary installed (npm i -g @earendil-works/pi-coding-agent --ignore-scripts).")) {
-                        SettingsToggle(isOn: $piPrimaryEnabled)
-                    }
-                    // pi rows stay visible whether or not pi is the global
-                    // primary: a conversation can select pi per-chat from the
-                    // header chip, and config that silently applies while
-                    // hidden is exactly how the assistant selection broke
-                    // before. Provider/model are a picker over the pairs the
-                    // generated sidecar config actually contains — a model
-                    // that cannot run is not selectable, and empty means pi
-                    // picks from its own configuration.
-                    SettingsRow(icon: "wrench.and.screwdriver",
-                                title: loc.t("Binario de pi", "pi binary"),
-                                help: loc.t("Ruta al ejecutable pi. Se amplía ~ al usarla.",
-                                       "Path to the pi executable. ~ expands when used.")) {
-                        DeferredSettingsTextField("", text: $piBinaryPath,
-                                                  prompt: PiDelegateService.defaultBinaryPath,
-                                                  width: 220)
-                    }
-                    SettingsRow(icon: "cpu",
-                                title: loc.t("Modelo de pi", "pi model"),
-                                help: loc.t("Par proveedor/modelo que se pasa a pi. La lista sale de los proveedores configurados en Ajustes → Proveedores; vacío deja que pi elija de su propia configuración.",
-                                       "Provider/model pair passed to pi. The list comes from the providers configured in Settings → Providers; empty lets pi choose from its own configuration.")) {
-                        Picker("", selection: piPairSelection) {
-                            Text(loc.t("elección de pi", "pi's own choice")).tag("")
-                            ForEach(Array(bridgePairs.enumerated()), id: \.offset) { _, pair in
-                                Text("\(pair.provider) / \(pair.model)")
-                                    .tag("\(pair.provider)/\(pair.model)")
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 220)
-                    }
-                    if bridgePairs.isEmpty {
-                        Label(loc.t("Sin proveedores para pi: añade uno en Ajustes → Proveedores (con URL, modelo y clave).",
-                                    "No providers for pi: add one in Settings → Providers (with URL, model and key)."),
-                              systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .padding(.leading, 34)
-                    }
-                    SettingsRow(icon: "brain",
-                                title: loc.t("Nivel de pensamiento de pi", "pi thinking level"),
-                                help: loc.t("Nivel pasado a pi --thinking cuando el pensamiento está activado (off, minimal, low, medium, high, xhigh, max). Vacío usa el nivel de la propia configuración de pi. Con el pensamiento desactivado Kestrel manda --thinking off.",
-                                       "Level passed to pi --thinking when thinking is on (off, minimal, low, medium, high, xhigh, max). Empty keeps pi's own configured level. With thinking off, Kestrel sends --thinking off.")) {
-                        DeferredSettingsTextField("", text: $piThinkingLevel,
-                                                  prompt: loc.t("elección de pi", "pi's own choice"),
-                                                  width: 220)
-                    }
-                    integerStepper(loc.t("Tiempo límite de pi (s)", "pi timeout (s)"),
-                                   value: $piTimeout, range: 30...1800,
-                                   help: loc.t("Cuánto esperar una respuesta de pi antes de detenerlo.",
-                                               "How long to wait for a pi reply before stopping it."))
-                    integerStepper(loc.t("Contexto de pi (caracteres)", "pi context (characters)"),
-                                   value: $piContextCharacters, range: 2_000...48_000, step: 1_000,
-                                   help: loc.t("Cuánto transcript reciente ve pi en cada turno; lo más viejo se recorta primero y tu último mensaje siempre va entero. Menos caracteres = menos tokens por mensaje.",
-                                               "How much recent transcript pi sees per turn; oldest messages drop first and your latest message always rides whole. Fewer characters = fewer tokens per message."))
                     integerStepper(loc.t("Turnos máximos del agente", "Maximum agent turns"),
                                    value: $agenticMaxTurns, range: 1...100,
                                    help: loc.t("Máximo de rondas herramienta→respuesta que el agente encadena en un turno antes de detenerse.",
@@ -410,7 +310,6 @@ struct ChatAdvancedSettingsSection: View {
                 }
                 .onAppear {
                     blockedToolModels = ToolSupport.blockedModels
-                    refreshBridgePairs()
                 }
             }
 
@@ -531,31 +430,6 @@ struct ChatAdvancedSettingsSection: View {
         return false
     }
 
-    /// One picker value "provider/model" driving the two stored settings.
-    /// Split with maxSplits 1 so model ids containing a slash survive.
-    private var piPairSelection: Binding<String> {
-        Binding(
-            get: {
-                let provider = piProvider.trimmingCharacters(in: .whitespacesAndNewlines)
-                return provider.isEmpty ? "" : "\(provider)/\(piModel)"
-            },
-            set: { newValue in
-                guard !newValue.isEmpty else {
-                    piProvider = ""
-                    piModel = ""
-                    return
-                }
-                let parts = newValue.split(separator: "/", maxSplits: 1).map(String.init)
-                piProvider = parts.first ?? ""
-                piModel = parts.count > 1 ? parts[1] : ""
-            })
-    }
-
-    private func refreshBridgePairs() {
-        PiBridge.migrateLegacySidecarConfigIfNeeded()
-        LatchBridge.migrateLegacySidecarConfigIfNeeded()
-        bridgePairs = PiBridge.configuredPairs()
-    }
 
     /// Every row ends its control in the same column, so sliders, steppers and
     /// fields do not each stop at a different place.
@@ -609,8 +483,6 @@ struct ChatAdvancedSettingsSection: View {
         backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
-        latchDelegateEnabled = false; latchPrimaryEnabled = false
-        latchBinaryPath = ""; latchDelegateTimeout = 300
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; MemoryArchiveHook.setReceiverToken("")
     }

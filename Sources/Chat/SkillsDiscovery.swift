@@ -26,9 +26,9 @@ struct DiscoveredSkill: Equatable {
 /// Prompt Space sheet renders the list.
 enum SkillsDiscovery {
     /// Folders scanned for `<subfolder>/SKILL.md`, in priority order, with
-    /// `~` expanded to absolute paths. The pi agent tree leads so an
-    /// operator-curated skill wins over the generic agent conventions;
-    /// Kestrel's own Application Support folder comes last.
+    /// `~` expanded to absolute paths. An operator-curated tree wins over
+    /// the generic agent conventions; Kestrel's own Application Support
+    /// folder comes last.
     static var discoveryPaths: [String] {
         let home = NSHomeDirectory() as NSString
         // Same base as PromptLibrary's store (Application Support with a
@@ -37,7 +37,6 @@ enum SkillsDiscovery {
             .applicationSupportDirectory, .userDomainMask, true).first
             ?? NSHomeDirectory() + "/Library/Application Support"
         return [
-            home.appendingPathComponent(".pi/agent/skills"),
             home.appendingPathComponent(".claude/skills"),
             home.appendingPathComponent(".codex/skills"),
             home.appendingPathComponent(".agents/skills"),

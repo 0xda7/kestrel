@@ -302,6 +302,16 @@ struct ServerSettings {
     static let dynamicMoeTensorOverride = #"\.ffn_(up|down|gate|gate_up)_(ch|)exps=MTL0"#
     static let kvCacheTypes = ["f16", "q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl", "turbo4", "turbo3"]
 
+    /// Gemma attention takes flash-attention paths that fall through to the
+    /// generic Metal kernel, which requires K and V to share a type — a mixed
+    /// pair aborts the whole engine at load (GGML_ASSERT in ggml-metal-ops,
+    /// observed twice 2026-10-14 with gemma-4-12b + q8_0/q4_0). The turbo vec
+    /// kernels that tolerate mixed pairs never engage for gemma, so its K and
+    /// V are equalized at launch on the smaller of the two types.
+    static func kvTypesMustMatch(forModel path: String) -> Bool {
+        path.lowercased().contains("gemma")
+    }
+
     var usesTurboKV: Bool {
         cacheTypeK.hasPrefix("turbo") || cacheTypeV.hasPrefix("turbo")
     }
@@ -323,9 +333,13 @@ struct ServerSettings {
     /// pushes KV out of VRAM and drops generation ~20×) at launch.
     var resolvedCtx: Int {
         guard contextAutomatic else { return ctx }
+        // Scale by the pair the launch actually runs with (post-gemma
+        // equalization), so the solver budgets the KV bytes that will really
+        // be allocated — not one type's scale of them.
+        let kv = effectiveCacheTypes
         return Self.routerCtx(forModel: modelPath, requested: ctx,
                                           ncmoe: ncmoe,
-                                          kvScale: Estimator.kvTypeScale(cacheTypeK),
+                                          kvScale: Self.kvScale(k: kv.k, v: kv.v),
                                           reserveMB: vramReserveMB,
                                           ubatch: effectiveUbatch ?? 512)
     }
@@ -360,11 +374,45 @@ struct ServerSettings {
         liveCtx(port: port) ?? fromDefaults().resolvedCtx
     }
 
+    /// The K/V pair actually launched with. Gemma's attention hits the
+    /// same-type-requiring generic Metal kernel (see kvTypesMustMatch), so
+    /// a mixed pair is equalized on the smaller type at launch; this is
+    /// that post-equalization pair. Benchmark records, labels and shares
+    /// read it so they describe what ran, not what was merely configured
+    /// (the configured pair stays in `cacheTypeK`/`cacheTypeV`).
+    var effectiveCacheTypes: (k: String, v: String) {
+        Self.effectiveCacheTypes(forModel: modelPath, k: cacheTypeK, v: cacheTypeV)
+    }
+
+    /// `effectiveCacheTypes` keyed by an explicit model path, so callers that
+    /// serve many models at once (the router preset) equalize each section
+    /// against its own model — the instance property keys on `modelPath`,
+    /// which is empty in router mode and would never equalize anything.
+    static func effectiveCacheTypes(forModel path: String, k: String, v: String) -> (k: String, v: String) {
+        guard k != v, kvTypesMustMatch(forModel: path) else { return (k, v) }
+        return Estimator.kvTypeScale(v) < Estimator.kvTypeScale(k) ? (v, v) : (k, k)
+    }
+
+    /// Average scale of a K/V pair. `ModelSpec.kvBytesPerToken` counts K and V
+    /// bytes combined at f16, so a pair's true footprint scales by the mean of
+    /// both types — the same formula Hardware.swift's estimator and the DFlash
+    /// planner already use. Scaling by K alone mis-estimates every mixed pair
+    /// (K=f16/V=q4 under-fits, K=q4/V=f16 over-fits and can spill).
+    nonisolated static func kvScale(k: String, v: String) -> Double {
+        (Estimator.kvTypeScale(k) + Estimator.kvTypeScale(v)) / 2
+    }
+
     var arguments: [String] {
         if routerMode { return routerArguments }
         // Quantized KV requires FA, so it stays forced. Elsewhere the AMD kernel rides
         // on "auto": an explicit "1" would drop uncovered models to the CPU fallback.
         let faValue = kvNeedsFlashAttention ? "1" : (effectiveFaAmd ? "auto" : flashAttn)
+        // Equalize K/V for models whose attention hits the same-type-requiring
+        // generic Metal kernel (see kvTypesMustMatch); the smaller type keeps
+        // VRAM at or below what the mixed pair already reserved.
+        let effectiveKV = effectiveCacheTypes
+        let effCacheTypeK = effectiveKV.k
+        let effCacheTypeV = effectiveKV.v
         var args = [
             "-m", modelPath,
             "-ngl", String(ngl),
@@ -388,9 +436,17 @@ struct ServerSettings {
             if Self.projectorNeedsCPU(mmproj) { args.append("--no-mmproj-offload") }
             if imageMaxTokens > 0 { args += ["--image-max-tokens", String(imageMaxTokens)] }
         }
-        if jinja || mmproj != nil { args.append("--jinja") }
-        if cacheTypeK != "f16" { args += ["-ctk", cacheTypeK] }
-        if cacheTypeV != "f16" { args += ["-ctv", cacheTypeV] }
+        // Chat tooling is mutually exclusive with --embeddings by construction:
+        // an embeddings-dedicated context has no sampler chain or grammar
+        // support, so any chat/tool request against it fails with HTTP 400
+        // "Failed to initialize samplers, failed to parse grammar" (the
+        // 2026-10-14 incident: an added decision-model card launched with
+        // --embeddings --jinja --tools all --ui-mcp-proxy). Applies to any
+        // server whose embeddings toggle is on, primary or added.
+        let chatToolingBlocked = embeddings
+        if (jinja || mmproj != nil) && !chatToolingBlocked { args.append("--jinja") }
+        if effCacheTypeK != "f16" { args += ["-ctk", effCacheTypeK] }
+        if effCacheTypeV != "f16" { args += ["-ctv", effCacheTypeV] }
         // localhost-only endpoint; feeds the speculative-decoding readout in Diagnostics
         args.append("--metrics")
         args += ["--cache-ram", String(cacheRAM)]
@@ -407,8 +463,16 @@ struct ServerSettings {
         if let counts = layerBalancedTensorSplit {
             args += ["--tensor-split", counts.map(String.init).joined(separator: ",")]
         }
-        if embeddings { args.append("--embeddings") }
-        if agentToolsEnabled {
+        // --embeddings dedicates the entire process to /v1/embeddings: chat
+        // requests then fail with "context does not support logits
+        // computation" (the 2026-10-14 all-night every-model-silent outage)
+        // and the load-time warmup can abort the engine outright. It stays
+        // available for a dedicated second RAG server — never on the primary
+        // server the native chat talks to.
+        if embeddings && port != Self.fromDefaults().port {
+            args.append("--embeddings")
+        }
+        if agentToolsEnabled && !chatToolingBlocked {
             if !args.contains("--jinja") { args.append("--jinja") }
             args += ["--tools", "all"]
             // The MCP proxy endpoint is REQUIRED for agent tools: without it
@@ -418,8 +482,19 @@ struct ServerSettings {
             // /cors-proxy relay, so it stays loopback-only unless the LAN
             // refusal above has been satisfied with an API key.
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
+            // Re-authored LFM2-family templates defeat the engine's static
+            // tool-format detectors, and the generic fallback emits a grammar
+            // the engine itself rejects ("expecting newline or end at ::=",
+            // the 2026-10-14 Agent Tools outage). When the model's embedded
+            // template speaks the LFM2 call syntax without a detectable
+            // marker, hand the engine a copy carrying the inert marker
+            // comment so its specialized LFM2 parser/grammar drives the
+            // tools (see EngineToolTemplate for the full chain).
+            if let derivedTemplate = EngineToolTemplate.derivedTemplateFile(forModel: modelPath) {
+                args += ["--chat-template-file", derivedTemplate]
+            }
         }
-        if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
+        if (uiMcpProxy || agentToolsEnabled) && !chatToolingBlocked { args.append("--ui-mcp-proxy") }
         if persistCache && effectiveFaAmd {
             args += ["--slot-save-path", Self.slotCacheDir(port: port).path]
         }
@@ -450,7 +525,11 @@ struct ServerSettings {
             }
         }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
-        args += extraArgTokens.cli
+        // Loopback-only bind unless the operator enabled LAN with a key: a
+        // `--host` token from extraArgs would otherwise override the app's
+        // own bind (later duplicates win) and bypass the start() refusal.
+        args += Self.loopbackGuardedCLI(extraArgTokens.cli,
+                                        lanAllowed: localNetworkDiscovery && apiKeyEnabled)
         return args
     }
 
@@ -555,7 +634,11 @@ struct ServerSettings {
             args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         }
         if let ui = Self.chatUIPath { args += ["--path", ui] }
-        args += extraArgTokens.cli
+        // Loopback-only bind unless the operator enabled LAN with a key: a
+        // `--host` token from extraArgs would otherwise override the app's
+        // own bind (later duplicates win) and bypass the start() refusal.
+        args += Self.loopbackGuardedCLI(extraArgTokens.cli,
+                                        lanAllowed: localNetworkDiscovery && apiKeyEnabled)
         return args
     }
 
@@ -596,8 +679,14 @@ struct ServerSettings {
             if seenAliases.contains(alias) { alias += "-\(abs(path.hashValue) % 1000)" }
             seenAliases.insert(alias)
 
+            // Same gemma equalization as `arguments` and `benchmarkArguments`,
+            // applied per path: the router serves many models and only its
+            // gemma sections hit the same-type-requiring generic Metal kernel.
+            // A mixed pair written raw here aborts that model's child engine
+            // at load — the same GGML_ASSERT the launch path equalizes away.
+            let kv = Self.effectiveCacheTypes(forModel: path, k: cacheTypeK, v: cacheTypeV)
             let modelCtx = Self.routerCtx(forModel: path, requested: ctx, ncmoe: ncmoeByPath[path] ?? 0,
-                                          kvScale: Estimator.kvTypeScale(cacheTypeK),
+                                          kvScale: Self.kvScale(k: kv.k, v: kv.v),
                                           reserveMB: vramReserveMB,
                                           ubatch: effectiveUbatch ?? 512)
             var lines = ["[\(alias)]", "model = \(path)", "n-gpu-layers = \(ngl)",
@@ -611,8 +700,8 @@ struct ServerSettings {
                 if imageMaxTokens > 0 { lines.append("image-max-tokens = \(imageMaxTokens)") }
             }
             if jinja || mmproj != nil { lines.append("jinja = true") }
-            if cacheTypeK != "f16" { lines.append("cache-type-k = \(cacheTypeK)") }
-            if cacheTypeV != "f16" { lines.append("cache-type-v = \(cacheTypeV)") }
+            if kv.k != "f16" { lines.append("cache-type-k = \(kv.k)") }
+            if kv.v != "f16" { lines.append("cache-type-v = \(kv.v)") }
             lines.append("cache-ram = \(cacheRAM)")
             if cacheReuse && mmproj == nil { lines.append("cache-reuse = 256") }
             if parallelSlots > 0 { lines.append("parallel = \(parallelSlots)") }
@@ -648,6 +737,46 @@ struct ServerSettings {
             sections.append(lines.joined(separator: "\n"))
         }
         return sections.joined(separator: "\n\n") + "\n"
+    }
+
+    /// KES-01/KES-06 loopback guard: the engine binds loopback unless the
+    /// operator turned LAN on AND enabled the API key (start() refuses every
+    /// other non-loopback bind). But user extraArgs ride AFTER the app's own
+    /// `--host` token, and getopt lets the LAST duplicate flag win — a typed
+    /// or imported `--host 0.0.0.0` would re-bind the engine to the LAN
+    /// behind that refusal's back. Non-loopback `--host` tokens are therefore
+    /// dropped from the extra-arg stream unless the LAN policy authorized
+    /// them; loopback values always pass (no behavior change for them).
+    /// Pure and static so the guard is unit-testable.
+    nonisolated static func loopbackGuardedCLI(_ tokens: [String], lanAllowed: Bool) -> [String] {
+        guard !lanAllowed else { return tokens }
+        let loopback: Set<String> = ["127.0.0.1", "localhost", "::1"]
+        var out: [String] = []
+        out.reserveCapacity(tokens.count)
+        var i = 0
+        while i < tokens.count {
+            let token = tokens[i]
+            if token == "--host" {
+                // Two-token form: a trailing flag with no value stays (there
+                // is no bind to widen), a pair stays only when loopback.
+                if i + 1 < tokens.count {
+                    if loopback.contains(tokens[i + 1]) { out += [token, tokens[i + 1]] }
+                    i += 2
+                    continue
+                }
+                out.append(token)
+                i += 1
+                continue
+            }
+            if token.hasPrefix("--host=") {
+                if loopback.contains(String(token.dropFirst("--host=".count))) { out.append(token) }
+                i += 1
+                continue
+            }
+            out.append(token)
+            i += 1
+        }
+        return out
     }
 
     /// Splits the Extra arguments field: `KEY=VALUE` with an UPPERCASE name becomes an
@@ -689,8 +818,12 @@ struct ServerSettings {
         args += ["-t", String(threads)]
         if let ub = effectiveUbatch { args += ["-ub", String(ub), "-b", String(ub)] }
         if effectiveDynamicMoe { args += ["-ot", Self.dynamicMoeTensorOverride] }
-        if cacheTypeK != "f16" { args += ["-ctk", cacheTypeK] }
-        if cacheTypeV != "f16" { args += ["-ctv", cacheTypeV] }
+        // Same gemma equalization as the server launch (effectiveCacheTypes):
+        // llama-bench hits the same same-type-requiring kernel, so a mixed
+        // pair would abort at load instead of measuring anything.
+        let benchKV = effectiveCacheTypes
+        if benchKV.k != "f16" { args += ["-ctk", benchKV.k] }
+        if benchKV.v != "f16" { args += ["-ctv", benchKV.v] }
         if kvNeedsFlashAttention || flashAttn == "on" {
             args += ["-fa", "1"]
         } else if effectiveFaAmd {
@@ -1755,7 +1888,8 @@ final class ServerManager: ObservableObject {
     /// The instance the chat and benchmark act on.
     @Published var activeID: UUID
 
-    private static let storeKey = "multiServerProfiles"
+    /// Persisted added-server profiles.
+    nonisolated static let storeKey = "multiServerProfiles"
     private var pendingPersist: Task<Void, Never>?
 
     private init() {
@@ -1945,11 +2079,12 @@ final class ServerController: ObservableObject {
     var serverURL: URL { URL(string: "http://127.0.0.1:\(currentPort)/")! }
 
     /// Web chat URL carrying the app's language and the real device names, so the
-    /// bundled console reports what's in use instead of guessing.
+    /// bundled console reports what's in use instead of guessing. English is
+    /// the product language (a stale stored "lang" is cleared at launch), so
+    /// the console is always asked for English.
     var webChatURL: URL {
-        let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
         var comps = URLComponents(string: "http://127.0.0.1:\(currentPort)/")!
-        var items = [URLQueryItem(name: "lang", value: lang)]
+        var items = [URLQueryItem(name: "lang", value: "en")]
         if let gpu = ServerController.availableGPUs().max(by: { $0.vramMB < $1.vramMB })?.name {
             items.append(URLQueryItem(name: "gpu", value: gpu))
         }
@@ -1988,15 +2123,8 @@ final class ServerController: ObservableObject {
 
     func start(_ settings: ServerSettings) {
         guard state == .stopped || isFailed else { return }
-        // The sidecars' kestrel-local entries name the model that is about
-        // to load; refresh them so pi and latch never see a stale model id.
-        PiBridge.sync()
-        LatchBridge.sync()
         guard FileManager.default.fileExists(atPath: settings.serverBinary) else {
-            let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-            let msg = lang == "es"
-                ? "No se encontró el motor llama-server en:\n\(settings.serverBinary)\nReinstala Kestrel (debe incluir Resources/bin/llama-server) o elige otro motor en Ajustes."
-                : "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
+            let msg = "The llama-server engine was not found at:\n\(settings.serverBinary)\nReinstall Kestrel (it must include Resources/bin/llama-server) or choose another engine in Settings."
             fileLog.append("[start] \(msg.replacingOccurrences(of: "\n", with: " "))")
             state = .failed(msg)
             return
@@ -2007,17 +2135,13 @@ final class ServerController: ObservableObject {
             // can reach this Mac, over plaintext HTTP where the key is the
             // only gate. Agent tools previously triggered this refusal; the
             // key is now required for ANY non-loopback bind, tools or not.
-            state = .failed(Self.lanWithoutKeyRefusalMessage(
-                language: UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"))
+            state = .failed(Self.lanWithoutKeyRefusalMessage())
             return
         }
         if settings.routerMode {
             let models = LocalModel.scan(in: ServerSettings.modelsDirectory)
             guard !models.isEmpty else {
-                let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-                state = .failed(lang == "es"
-                    ? "No hay modelos descargados en la carpeta de modelos"
-                    : "No models downloaded in the models folder")
+                state = .failed("No models downloaded in the models folder")
                 return
             }
             if settings.usesTurboKV,
@@ -2036,16 +2160,13 @@ final class ServerController: ObservableObject {
             }
         } else {
             guard FileManager.default.fileExists(atPath: settings.modelPath) else {
-                state = .failed("Selecciona un modelo en la pestaña Modelos")
+                state = .failed("Select a model in the Models tab")
                 return
             }
             // TurboQuant weight quants (tq3_1s/tq4_1s) decode to garbage, so refuse
             // rather than serve it.
             if ServerSettings.modelIsTurboQuantWeights(at: settings.modelPath) {
-                let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-                state = .failed(lang == "es"
-                    ? "Modelo TurboQuant no soportado: la cuantización de pesos TurboQuant (tq3_1s/tq4_1s) produce salida incorrecta en este motor, tanto en modelos densos como MoE. Usa un modelo en cuantización estándar (Q4_K, Q5_K, Q6_K, Q8_0…)."
-                    : "TurboQuant model not supported: TurboQuant weight quantization (tq3_1s/tq4_1s) produces incorrect output on this engine, for both dense and MoE models. Use a standard-quant model (Q4_K, Q5_K, Q6_K, Q8_0…).")
+                state = .failed("TurboQuant model not supported: TurboQuant weight quantization (tq3_1s/tq4_1s) produces incorrect output on this engine, for both dense and MoE models. Use a standard-quant model (Q4_K, Q5_K, Q6_K, Q8_0…).")
                 return
             }
             if settings.usesTurboKV &&
@@ -2090,36 +2211,17 @@ final class ServerController: ObservableObject {
     }
 
     private func failTurboKV(model: String) {
-        let lang = UserDefaults.standard.string(forKey: SettingsKeys.language) ?? "en"
-        state = .failed(lang == "es"
-            ? "TurboQuant KV no es compatible con \(model) o con la combinación elegida: requiere Metal AMD y cabezas con padding 128, 256, 384, 512 o 640; en MLA, Turbo en valores también requiere Turbo en claves; q4_0 no se puede mezclar con Turbo."
-            : "TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
-    }
-
-    /// Masks every `--api-key <secret>` pair in an argv list so logs and
-    /// diagnostics can carry the full launch line without leaking the key
-    /// (KES-03). Static and pure so the masking contract is unit-testable.
-    nonisolated static func redactArguments(_ items: [String]) -> [String] {
-        var out = items
-        var i = 0
-        while i < out.count {
-            if out[i] == "--api-key", i + 1 < out.count {
-                out[i + 1] = "***"
-                i += 1
-            }
-            i += 1
-        }
-        return out
+        state = .failed("TurboQuant KV is not compatible with \(model) or the selected combination: it requires AMD Metal and heads padded to 128, 256, 384, 512 or 640; on MLA, Turbo values also require Turbo keys; q4_0 cannot be mixed with Turbo.")
     }
 
     /// KES-01: any non-loopback bind without an API key is refused — LAN
     /// mode is plaintext HTTP, so the key is the only gate between the LAN
     /// and this machine's engine (and its agent tools). Pure and static so
-    /// the refusal contract is unit-testable.
-    nonisolated static func lanWithoutKeyRefusalMessage(language: String) -> String {
-        language == "es"
-            ? "No se puede iniciar en la red local: el servidor HTTP sin cifrar exige «Proteger la API con clave». Activa la clave en Ajustes o desactiva el descubrimiento local."
-            : "Cannot start on the local network: the plaintext HTTP server requires \"Protect the API with a key\". Enable the key in Settings or turn local discovery off."
+    /// the refusal contract is unit-testable. English only: the product
+    /// language is English and the retired language picker's stored "es" is
+    /// cleared at launch.
+    nonisolated static func lanWithoutKeyRefusalMessage() -> String {
+        "Cannot start on the local network: the plaintext HTTP server requires \"Protect the API with a key\". Enable the key in Settings or turn local discovery off."
     }
 
     /// Header at the top of the server log: version, engine, model, GPUs and the
@@ -2146,11 +2248,15 @@ final class ServerController: ObservableObject {
                        "GGML_METAL_NCB",
                        "KESTREL_MGPU_PEER", "KESTREL_MGPU_PEER_DISABLE", "KESTREL_MGPU_EVENTS"]
         let env = settings.environment
-        // Include user-provided environment variables in diagnostic logs.
-        let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }.sorted()
-        let envLine = (envKeys + userKeys)
-            .compactMap { k in env[k].map { "\(k)=\($0)" } }
-            .joined(separator: " ")
+        // KES-03: env tokens typed into the free-form Extra arguments field
+        // ("OPENAI_API_KEY=sk-…") are credentials. Show their NAMES only —
+        // the banner flows into the in-app log and from there into the
+        // shareable diagnostics export. argv and env masking both come from
+        // the ONE redaction implementation (SecretRedactor); no parallel
+        // copies, so a rule improved here improves every surface at once.
+        let userKeys = settings.extraArgTokens.env.keys.filter { !envKeys.contains($0) }
+        let envLine = SecretRedactor.environmentLine(environment: env, appSetKeys: envKeys,
+                                                     userKeys: Array(userKeys))
         let moeLine = settings.effectiveDynamicMoe
             ? "ncmoe=0 dynamic-moe=K\(settings.effectiveDynamicMoeSlots)"
             : "ncmoe=\(settings.ncmoe)"
@@ -2167,10 +2273,10 @@ final class ServerController: ObservableObject {
          GPUs detected:
         \(gpus.isEmpty ? "    (none)" : gpus)
          GPU select: \(gpuSel) | force-VRAM-buffers: \(env["GGML_METAL_SHARED_BUFFERS_DISABLE"] == "1" ? "yes" : "no")
-         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.cacheTypeK) ctv=\(settings.cacheTypeV) cacheRAM=\(settings.cacheRAM)
+         settings: ngl=\(settings.ngl) \(moeLine) ctx=\(settings.resolvedCtx)\(settings.contextAutomatic ? " (auto)" : "") fa=\(settings.flashAttn) ctk=\(settings.effectiveCacheTypes.k) ctv=\(settings.effectiveCacheTypes.v) cacheRAM=\(settings.cacheRAM)
          dflash : \(settings.routerMode ? "per-model router plan" : settings.dflashPlanSummary)
          env: \(envLine)
-         args: \(redactArguments(settings.arguments).joined(separator: " "))
+         args: \(SecretRedactor.arguments(settings.arguments).joined(separator: " "))
         ========================================================
 
         """
@@ -2186,7 +2292,18 @@ final class ServerController: ObservableObject {
                 ($0, Estimator.ncmoeForSelection(path: $0, models: models))
             })
             let ini = settings.routerPresetINI(modelPaths: paths, ncmoeByPath: ncmoeByPath)
-            try? ini.write(to: ServerSettings.routerPresetPath(port: settings.port), atomically: true, encoding: .utf8)
+            let presetURL = ServerSettings.routerPresetPath(port: settings.port)
+            do {
+                try ini.write(to: presetURL, atomically: true, encoding: .utf8)
+            } catch {
+                // A failed write would launch against the STALE preset file —
+                // the engine would come up serving the wrong models, silently.
+                // Fail the launch with the exact cause instead.
+                let msg = "No se pudo escribir el preset del router (\(presetURL.lastPathComponent)): \(error.localizedDescription) / could not write the router preset: the engine is not started against a stale model list"
+                fileLog.append("[start] \(msg)")
+                state = .failed(msg)
+                return
+            }
         }
 
         prewarmActive = !settings.routerMode && settings.persistCache && settings.effectiveFaAmd
@@ -2357,6 +2474,19 @@ final class ServerController: ObservableObject {
         }
     }
 
+    /// SIGKILL escalation shared by the engine-kill paths: `terminate()` was
+    /// already sent; if the child ignores it past the grace period, take the
+    /// process down and sweep the router's orphaned model children. Detached
+    /// with a structured sleep so the caller's own verdict never waits on
+    /// the grace period.
+    nonisolated static func escalateKill(pid: pid_t, after grace: TimeInterval) {
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(grace))
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            EngineLock.reapStrayEngines()
+        }
+    }
+
     func stop() {
         AudioStudioController.shared.shutdown()
         SpeechDictationController.shared.shutdown()
@@ -2377,11 +2507,7 @@ final class ServerController: ObservableObject {
             let port = currentPort
             // SIGKILL fallback in case the deferred terminate stalls: the engine's
             // working set has to be freed.
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
-                if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-                // children that outlived their engine are adopted by launchd by now
-                EngineLock.reapStrayEngines()
-            }
+            Self.escalateKill(pid: pid, after: 6)
             if prewarm {
                 // Snapshot slot 0 to disk before killing the engine, so the next
                 // launch can restore the fixed external-client prefix. Best-effort,
@@ -2453,30 +2579,19 @@ final class ServerController: ObservableObject {
     /// POST /slots/0?action=save|restore (best-effort, short timeout). Used to
     /// pre-warm the external-client prefix across engine restarts.
     nonisolated static func slotAction(_ action: String, port: Int, file: String) async {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: action)]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url, timeoutInterval: 30)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() { req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": file])
-        _ = try? await URLSession.shared.data(for: req)
+        // 30 s: a save flushes the whole slot KV through loopback to disk.
+        guard let req = EngineHTTP.slotRequest(port: port, action: action,
+                                               filename: file, timeout: 30) else { return }
+        _ = try? await EngineHTTP.session.data(for: req)
     }
 
     /// Same request on the way out, where an await would never resume. Bounded so
     /// a busy engine cannot hold the quit open.
     nonisolated static func slotSaveBlocking(port: Int, file: String, timeout: TimeInterval) {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: "save")]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url, timeoutInterval: timeout)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() { req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": file])
+        guard let req = EngineHTTP.slotRequest(port: port, action: "save",
+                                               filename: file, timeout: timeout) else { return }
         let done = DispatchSemaphore(value: 0)
-        let task = URLSession.shared.dataTask(with: req) { _, _, _ in done.signal() }
+        let task = EngineHTTP.session.dataTask(with: req) { _, _, _ in done.signal() }
         task.resume()
         if done.wait(timeout: .now() + timeout) == .timedOut { task.cancel() }
     }
@@ -2504,7 +2619,9 @@ final class ServerController: ObservableObject {
                 // The engine answers {"status":"ok"} — parse it exactly. A
                 // substring check flipped a port collision with any foreign
                 // service whose body happened to contain "ok" into "running".
-                if let (data, response) = try? await URLSession.shared.data(from: url),
+                // Control session: a wedged engine fails this probe in 10 s
+                // instead of stalling the 2 s poll loop for a minute.
+                if let (data, response) = try? await EngineHTTP.session.data(from: url),
                    (response as? HTTPURLResponse)?.statusCode == 200,
                    let body = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                    body["status"] == "ok" {
@@ -2539,16 +2656,16 @@ final class ServerController: ObservableObject {
                 try? await Task.sleep(for: .seconds(2))
             }
             await MainActor.run {
-                self?.state = .failed("El servidor no respondió al health check")
+                self?.state = .failed("El servidor no respondió al health check / the server did not answer the health check — see the log in Settings")
                 self?.stopDiscovery()
                 if let p = self?.process {
                     let pid = p.processIdentifier
+                    // Record the PID like stop() does: a restart must wait for
+                    // this engine to release the port instead of racing it.
+                    self?.lastStoppedPID = pid
                     Self.reapChildren(of: pid)
                     p.terminate()
-                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 6) {
-                        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-                        EngineLock.reapStrayEngines()
-                    }
+                    Self.escalateKill(pid: pid, after: 6)
                 }
             }
         }

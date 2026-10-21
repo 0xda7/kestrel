@@ -153,8 +153,6 @@ struct RemoteProvidersSection: View {
                 if trimmed.isEmpty { routesWithKeys.remove(id) }
                 else { routesWithKeys.insert(id) }
                 routeKeyDrafts[id] = ""
-                PiBridge.sync()
-                LatchBridge.sync()
             }
             .buttonStyle(.borderless)
             .disabled((routeKeyDrafts[id] ?? "").isEmpty && !hasKey)
@@ -170,11 +168,6 @@ struct RemoteProvidersSection: View {
 
     private func persist() {
         InferenceRoutes.save(routes)
-        // The sidecars' provider configs follow Kestrel's routes; a stale
-        // entry there is how chat ended up answering through a provider the
-        // user never picked.
-        PiBridge.sync()
-        LatchBridge.sync()
     }
 
     private func test(_ route: InferenceRoute) async {

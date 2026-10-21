@@ -4,6 +4,7 @@
 
 import Foundation
 import CryptoKit
+import Darwin
 import os
 import Security
 
@@ -13,7 +14,6 @@ import Security
 /// and `ProfileStore` all reference these constants, so a typo is a compile
 /// error instead of a silent bug.
 enum SettingsKeys {
-    static let language = "lang"
     /// "bundled" or "custom". Not a path: two installs share this domain.
     static let engineKind = "engineKind"
     /// Only read when engineKind is "custom".
@@ -96,28 +96,6 @@ enum SettingsKeys {
     static let agentToolsEnabled = "agentToolsEnabled"
     static let toolsRuntime = "toolsRuntime"
     static let jsSandboxEnabled = "jsSandboxEnabled"
-    /// latch_delegate tool: path to the latch harness binary, on/off, timeout.
-    static let latchBinaryPath = "latchBinaryPath"
-    static let latchDelegateEnabled = "latchDelegateEnabled"
-    static let latchDelegateTimeout = "latchDelegateTimeout"
-    /// When on, new conversations answer through the latch harness instead of
-    /// the model engine. Per-conversation overrides can still flip back.
-    static let latchPrimaryEnabled = "latchPrimaryEnabled"
-    /// pi sidecar (llm-space / earendil-works engine): binary path, model
-    /// pattern, provider, and timeout. All runtime-selectable — nothing
-    /// model-specific is compiled in.
-    static let piBinaryPath = "piBinaryPath"
-    static let piPrimaryEnabled = "piPrimaryEnabled"
-    static let piModel = "piModel"
-    static let piProvider = "piProvider"
-    static let piTimeout = "piTimeout"
-    /// Char budget of the transcript pi sees per turn (oldest messages drop
-    /// first; the newest user message is always kept whole). Bounds the
-    /// per-turn token cost of the one-shot sidecar.
-    static let piContextCharacters = "piContextCharacters"
-    /// Thinking level passed to `pi --thinking` when thinking is on
-    /// (off|minimal|low|medium|high|xhigh|max; empty = pi's own default).
-    static let piThinkingLevel = "piThinkingLevel"
     /// Stop sequences for chat sampling, comma/newline separated.
     static let chatStopSequences = "chatStopSequences"
     /// memory_list / memory_archive / memory_recall. Off for setups where an
@@ -261,6 +239,13 @@ enum SettingsKeys {
     static let imagenQueueGrid = "imagenQueueGrid"
     static let imagenCanvasGrid = "imagenCanvasGrid"
 
+    /// A stale "lang" value from pre-English-only builds lingers in upgraded
+    /// defaults; Server.swift no longer reads it (English is hardcoded), so a
+    /// stored "es" is ignored rather than honored.
+    static func clearStaleLanguage() {
+        UserDefaults.standard.removeObject(forKey: "lang")
+    }
+
     /// Tunable option keys (engine / GPU / inference / chat). Resetting clears these
     /// so `@AppStorage` falls back to its declared defaults. The models folder, the
     /// selected model and onboarding state are deliberately NOT included, so a reset
@@ -275,8 +260,6 @@ enum SettingsKeys {
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
         extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
-        latchBinaryPath, latchDelegateEnabled, latchDelegateTimeout, latchPrimaryEnabled,
-        piBinaryPath, piPrimaryEnabled, piModel, piProvider, piTimeout, piThinkingLevel,
         memoryToolsEnabled, toolsUnsupportedModels, mcpServers, uiMcpProxy,
         cacheTypeK, cacheTypeV, mlock, cacheRAM,
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
@@ -424,6 +407,10 @@ final class BenchmarkLog: @unchecked Sendable {
     let directory: URL
     private let queue = DispatchQueue(label: "kestrel.benchlog")
     private let retentionDays: Int
+    /// Last prune time (touched only on the log's serial queue): pruning on
+    /// every append would rewrite the whole file per run; hourly is enough
+    /// to keep a long session from accumulating multi-MB beyond the window.
+    private var lastPrune = Date.distantPast
     static let runMarker = "=== Kestrel benchmark · "
 
     init(retentionDays: Int = 3) {
@@ -443,6 +430,10 @@ final class BenchmarkLog: @unchecked Sendable {
             try? h.write(contentsOf: Data(text.utf8))
             try? h.synchronize()   // survive a machine freeze mid-run
             try? h.close()
+            if Date().timeIntervalSince(lastPrune) > 3600 {
+                lastPrune = Date()
+                prune()
+            }
         }
     }
 
@@ -732,6 +723,34 @@ enum Keychain {
 
 // MARK: - Local secret store (machine-generated, machine-local secrets)
 
+/// The one way secret-bearing files are written (engine key, provider route
+/// keys, chat history): the destination must never
+/// exist with permissions looser than 0600 at ANY instant — not at creation
+/// (the open must carry the mode), and not on overwrite (a truncate-rewrite
+/// of a legacy looser file is world-readable until a follow-up chmod, and
+/// `.atomic` writes rename a default-mode temp into place first). Both hold
+/// here because the content lands in a fresh 0600 temp file inside the same
+/// directory, which then replaces the target in one rename(2) — the rename
+/// keeps the temp's mode, so the final file is 0600 on every path, and a
+/// crash mid-write can never leave a half-written secret behind.
+enum OwnerOnlyFile {
+    @discardableResult
+    static func write(_ data: Data, to url: URL) -> Bool {
+        let fm = FileManager.default
+        let temp = url.deletingLastPathComponent()
+            .appendingPathComponent(".owner-only-\(UUID().uuidString).tmp")
+        guard fm.createFile(atPath: temp.path, contents: data,
+                            attributes: [.posixPermissions: 0o600]) else { return false }
+        // rename(2) atomically replaces an existing target or moves over a
+        // missing one; either way the inode (and its 0600 mode) is the temp's.
+        guard rename(temp.path, url.path) == 0 else {
+            try? fm.removeItem(at: temp)
+            return false
+        }
+        return true
+    }
+}
+
 /// File-backed storage for machine-local secrets — the local
 /// engine's API key and the remote provider keys. Unlike the Keychain,
 /// reading a 0600 file in a 0700 Application Support folder never involves an
@@ -771,18 +790,23 @@ enum LocalSecretStore {
     @discardableResult
     static func store(_ name: String, _ value: String) -> Bool {
         let fileURL = url(name)
-        try? FileManager.default.createDirectory(atPath: fileURL.deletingLastPathComponent().path,
-                                                 withIntermediateDirectories: true,
-                                                 attributes: [.posixPermissions: 0o700])
-        do {
-            try value.write(to: fileURL, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600],
-                                                  ofItemAtPath: fileURL.path)
+        let dirURL = fileURL.deletingLastPathComponent()
+        let fm = FileManager.default
+        try? fm.createDirectory(atPath: dirURL.path,
+                                withIntermediateDirectories: true,
+                                attributes: [.posixPermissions: 0o700])
+        // Idempotent tighten on every write, not only at creation: a directory
+        // that already existed (0755 from an older build or a restored backup)
+        // must not keep the 0600-files-in-a-0700-folder invariant broken.
+        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dirURL.path)
+        // OwnerOnlyFile: 0600 with no write-then-chmod window on ANY path —
+        // fresh creation and legacy-loose overwrite alike (see its doc).
+        let wrote = OwnerOnlyFile.write(Data(value.utf8), to: fileURL)
+        if wrote {
             cache.withLock { $0[name] = value }
             return true
-        } catch {
-            return false
         }
+        return false
     }
 
     static func delete(_ name: String) {
@@ -885,5 +909,13 @@ enum ToolRuntimeLocator {
             if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
         }
         return nil
+    }
+}
+
+extension String {
+    /// Blank (whitespace/newline-only) strings collapse to nil — the same
+    /// "unset" meaning as a missing optional.
+    var nilIfBlank: String? {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }

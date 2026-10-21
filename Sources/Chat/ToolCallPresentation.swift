@@ -6,7 +6,7 @@ import Foundation
 
 struct ToolCallPresentation: Equatable {
     enum Kind: Equatable {
-        case read, write, edit, shell, grep, glob, javaScript, dateTime, search, delegate, generic
+        case read, write, edit, shell, grep, glob, javaScript, dateTime, search, generic
     }
 
     struct Edit: Equatable, Identifiable {
@@ -82,18 +82,6 @@ struct ToolCallPresentation: Equatable {
         case "get_datetime":
             return ToolCallPresentation(kind: .dateTime, title: "Date and time", path: nil,
                                         code: nil, language: "text", detail: nil,
-                                        edits: [], result: result)
-        case LatchDelegateService.toolName:
-            let task = args["task"] as? String ?? ""
-            let firstLine = task.split(separator: "\n", omittingEmptySubsequences: true).first
-                .map(String.init) ?? "Delegated task"
-            let attach = (args["attach"] as? [Any])?.count
-            let timeout = (args["timeout_seconds"] as? NSNumber)?.intValue
-            var detail: String? = timeout.map { "timeout \($0) s" }
-            if let attach { detail = (detail.map { $0 + " · " } ?? "") + "\(attach) attached" }
-            return ToolCallPresentation(kind: .delegate,
-                                        title: firstLine.isEmpty ? "Latch delegate" : String(firstLine.prefix(90)),
-                                        path: nil, code: task, language: "text", detail: detail,
                                         edits: [], result: result)
         default:
             if call.name.localizedCaseInsensitiveContains("search") {

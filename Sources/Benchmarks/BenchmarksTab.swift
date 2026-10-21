@@ -270,8 +270,8 @@ struct BenchmarksView: View {
                     } else if isMoEModel {
                         chip("ncmoe \(cfg.ncmoe)", active: cfg.ncmoe > 0)
                     }
-                    chip("K:\(cfg.cacheTypeK)", active: cfg.cacheTypeK != "f16")
-                    chip("V:\(cfg.cacheTypeV)", active: cfg.cacheTypeV != "f16")
+                    chip("K:\(cfg.effectiveCacheTypes.k)", active: cfg.effectiveCacheTypes.k != "f16")
+                    chip("V:\(cfg.effectiveCacheTypes.v)", active: cfg.effectiveCacheTypes.v != "f16")
                     chip(engineName, active: cfg.serverBinary != ServerSettings.defaultBinary)
                     chip(faChipText(cfg.benchmarkFlashAttentionRoute),
                          active: cfg.benchmarkFlashAttentionRoute != "off",

@@ -39,12 +39,14 @@ final class ContextTrapTests: CheckCase {
         XCTAssertEqual(estimate, 800 / 4 + 4000 / 4)
     }
 
-    func testOverflowNoticeNamesBothLanguagesAndNumbers() {
+    func testOverflowNoticeNamesTheNumbersInEnglish() {
         let notice = ChatStore.contextOverflowNotice(estimated: 70871, window: 65536)
         XCTAssertTrue(notice.contains("70871"))
         XCTAssertTrue(notice.contains("65536"))
         XCTAssertTrue(notice.contains("context window"))
-        XCTAssertTrue(notice.contains("ventana de contexto"))
+        // English-only agent path: no second language rides the notice.
+        XCTAssertFalse(notice.contains("ventana"))
+        XCTAssertFalse(notice.contains(" / "))
     }
 }
 
@@ -57,6 +59,6 @@ extension ContextTrapTests {
             .init(name: "testManualContextPassesThrough") { $0.testManualContextPassesThrough() },
             .init(name: "testAutomaticContextNeverExceedsTheCeiling") { $0.testAutomaticContextNeverExceedsTheCeiling() },
             .init(name: "testEstimatedRequestTokensCountsTextAndSystem") { $0.testEstimatedRequestTokensCountsTextAndSystem() },
-            .init(name: "testOverflowNoticeNamesBothLanguagesAndNumbers") { $0.testOverflowNoticeNamesBothLanguagesAndNumbers() },
+            .init(name: "testOverflowNoticeNamesTheNumbersInEnglish") { $0.testOverflowNoticeNamesTheNumbersInEnglish() },
         ])
 }

@@ -7,7 +7,7 @@ import SwiftUI
 // MARK: - About
 
 enum AppInfo {
-    static let version = "0.89.5"
+    static let version = "0.89.12"
     /// True for the pre-AVX2 legacy build (Info.plist KestrelNoAVX2). Kept on its own
     /// update channel so it never pulls an AVX2 DMG that would SIGILL on those CPUs.
     static let isNoAVX2 = Bundle.main.object(forInfoDictionaryKey: "KestrelNoAVX2") as? Bool ?? false
@@ -19,7 +19,6 @@ enum AppInfo {
     static let featureRequestURL = repositoryURL + "/issues/new?template=feature_request.yml"
     static let discussionsURL = repositoryURL + "/discussions"
     static let sponsorURL = "https://github.com/0xda7/kestrel#support-the-project"
-    static let donateNoteES = "Si Kestrel te resulta útil, puedes apoyar el desarrollo con una donación."
     static let donateNoteEN = "If Kestrel is useful to you, you can support development with a donation."
 }
 

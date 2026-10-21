@@ -1,9 +1,85 @@
+## [0.89.12] — 2026-10-14
+
+- Fix: pass the operator-stored gateway key to the embedded agent again —
+  the harness refuses to boot without it (0.89.10 over-scrubbed it, killing
+  every agent turn: no tools, no answers, empty context bar). Isolation and
+  hidden-login removal unchanged; 415/415 checks.
+
 # Changelog
 
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 
+
+## [0.89.11] — 2026-10-14
+
+- **Laya is a native agent capability.** The chat agent gets a built-in
+  `laya_decide` tool: hand it any document (path or inline text) and it
+  returns a Laya decision card — typed choices with per-option confidence
+  bars, yes/no with probability, anchored scores — at ~33 ms per question.
+  Question sets: the seeded "Medical Triage" set, your own sets stored in
+  the app's laya-questions folder, or ad-hoc questions JSON. Every failure
+  states exactly what to do (e.g. the engine card must be started by hand).
+- The engine integration uses llama-server's /v1/systemone endpoint on the
+  "Laya Decisions" card; nothing starts in the background, ever.
+
+## [0.89.10] — 2026-10-14
+
+- **Fix: the embeddings toggle can no longer silence the chat server.**
+  `--embeddings` dedicates the whole engine process to embeddings — every
+  chat request then fails with "context does not support logits
+  computation" (the 2026-10-14 all-night outage where no model answered)
+  and the load warmup can abort the engine. The flag is now ignored on the
+  primary chat server and only applies to a dedicated second server.
+- **Fix: gemma models no longer abort the engine at load.** Gemma attention
+  falls through to the generic Metal flash-attention kernel, which requires
+  K and V to share a cache type; a mixed pair (observed: q8_0/q4_0) hit the
+  GGML_ASSERT twice on 2026-10-14. Mixed K/V for gemma is now equalized on
+  the smaller type at launch.
+- **English only.** Spanish UI support removed by operator directive: the
+  language picker is gone and every label resolves to English.
+- **The embedded chat agent runs in its own home.** Its sessions and
+  history lived under the user's real ZCode data — chat history showed up
+  inside the ZCode app and the agent read that app's settings. It now runs
+  with an isolated home under Kestrel's Application Support.
+- **No hidden provider login.** The embedded z.ai/gateway bootstrap
+  (builtin provider config + baked-in key) is removed. Providers are
+  exclusively what you configure in Settings → Providers, each carrying its
+  own key; the local engine stays the default.
+
+## [0.89.9] — 2026-10-14
+
+- **Fix: a failed turn can no longer poison the conversation.** Strict chat
+  templates (medical finetunes and many small models ship the "roles must
+  alternate" Jinja) rejected any history with consecutive user messages —
+  exactly what a failed/empty assistant turn leaves behind, so one error
+  made every later message fail with 400. The request seam now merges
+  consecutive user turns; the contract check pins the merged form.
+
+## [0.89.8] — 2026-10-14
+
+- **Laya served from Kestrel, not from hidden processes.** A one-time
+  "Laya Decisions" server card is seeded on the Servers tab (port 8098,
+  ctx 2048, never auto-started, deletable — deletion sticks). Start and
+  stop it yourself; the app spawns nothing in the background.
+- Companion  CLI no longer self-spawns an engine: it points at the
+  app-managed server and says exactly what to start if it is down.
+
+## [0.89.7] — 2026-10-14
+
+- **Fix: the latch agent now boots from Kestrel chat.** The harness needs
+  two facts the Latch desktop app provides and a GUI child never saw: the
+  bundled provider config path and the gateway key. Kestrel now passes both
+  (with a stored-key override via the local secret store). Root-caused by
+  instrumented reproduction — the harness answered AGENT-OK with the facts
+  supplied, and 409/409 checks stay green.
+
+## [0.89.6] — 2026-10-14
+
+- **Engine upgraded to current llama.cpp** under Kestrel's full patch series (re-based 7/7 clean, byte-identical round-trip verified). Brings the ModernBERT decision architecture: **Laya loads and answers typed questions** (`/v1/systemone`), plus three weeks of upstream fixes. Old engine remains beside the new one as a backup file.
+- **Pi removed entirely; Latch is the sole agent.** Chat turns stream through latch live; "Agent (latch + tools)" is a one-click toggle with working directory and budget shown. No pi code, settings, or sidecar writes remain; the app never touches `~/.pi`.
+- Empty latch turns surface as failures with diagnostics — never a blank reply.
 
 ## [0.89.5] - 2026-10-13
 

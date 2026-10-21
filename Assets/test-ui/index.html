@@ -133,11 +133,10 @@ let aiName       = "Assistant";
 let modelLoaded  = false;
 
 // ── i18n ──────────────────────────────────────────────────────────────
-// Spanish and English are built in, like the app. Any other language is loaded
-// from lang/<code>.json — the same community overlay files the app ships,
-// copied next to this page. The English text is the lookup key, with English as
-// the fallback, so a missing or partial translation never shows blank.
-// The app passes the chosen language as ?lang=; otherwise we use the browser's.
+// Spanish and English are built in, like the app. The community overlay files
+// (lang/<code>.json) were retired with the English-only product: none ship in
+// the bundle anymore, and the fetch below falls back to English when the file
+// is absent. The app passes ?lang=en; otherwise we use the browser's language.
 const EN = {
   maxTokens: "Max tokens", clear: "Clear chat", send: "Send", stop: "Stop",
   placeholder: "Type your message… (Enter sends, Shift+Enter newline)",

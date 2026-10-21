@@ -167,7 +167,7 @@ final class BenchmarkController: ObservableObject {
         === Kestrel benchmark · \(Date().formatted(.iso8601)) ===
         model:  \(model)
         GPU:    \(settings.gpuLabel)
-        engine: \(settings.engineTag)\(settings.effectiveDynamicMoe ? " · dMoE K\(settings.effectiveDynamicMoeSlots)" : settings.ncmoe > 0 ? " · ncmoe \(settings.ncmoe)" : "") · K:\(settings.cacheTypeK) V:\(settings.cacheTypeV)
+        engine: \(settings.engineTag)\(settings.effectiveDynamicMoe ? " · dMoE K\(settings.effectiveDynamicMoeSlots)" : settings.ncmoe > 0 ? " · ncmoe \(settings.ncmoe)" : "") · K:\(settings.effectiveCacheTypes.k) V:\(settings.effectiveCacheTypes.v)
         FA:     \(settings.benchmarkFlashAttentionLabel)
         args:   \(settings.benchmarkArguments.joined(separator: " "))
         =========================
@@ -307,7 +307,7 @@ final class BenchmarkController: ObservableObject {
             let engine = s.serverBinary == ServerSettings.defaultBinary ? "bundled" : "externo"
             history.insert(BenchResult(date: .now, model: name, ncmoe: s.ncmoe,
                                        dmoeK: s.effectiveDynamicMoe ? s.effectiveDynamicMoeSlots : nil, pp: pp, tg: tg,
-                                       ctk: s.cacheTypeK, ctv: s.cacheTypeV, engine: engine,
+                                       ctk: s.effectiveCacheTypes.k, ctv: s.effectiveCacheTypes.v, engine: engine,
                                        fa: s.benchmarkFlashAttentionRoute,
                                        gpu: s.gpuLabel, peer: s.mgpuPeer && s.isSplitting, profile: base.makeProfile(name: name),
                                        ppN: nil, tgN: s.benchTGClamped,
@@ -392,7 +392,7 @@ final class BenchmarkController: ObservableObject {
             let engine = settings.serverBinary == ServerSettings.defaultBinary ? "bundled" : "externo"
             history.insert(BenchResult(date: .now, model: name, ncmoe: settings.ncmoe,
                                        dmoeK: settings.effectiveDynamicMoe ? settings.effectiveDynamicMoeSlots : nil, pp: pp, tg: tg,
-                                       ctk: settings.cacheTypeK, ctv: settings.cacheTypeV, engine: engine,
+                                       ctk: settings.effectiveCacheTypes.k, ctv: settings.effectiveCacheTypes.v, engine: engine,
                                        fa: settings.benchmarkFlashAttentionRoute,
                                        gpu: settings.gpuLabel, peer: settings.mgpuPeer && settings.isSplitting, profile: settings.makeProfile(name: name),
                                        ppN: settings.benchPPClamped, tgN: settings.benchTGClamped,
@@ -869,7 +869,7 @@ final class BenchmarkController: ObservableObject {
             let engine = finalSettings.serverBinary == ServerSettings.defaultBinary ? "bundled" : "externo"
             history.insert(BenchResult(date: .now, model: name, ncmoe: recommended,
                                        pp: finalPp, tg: finalTg,
-                                       ctk: finalSettings.cacheTypeK, ctv: finalSettings.cacheTypeV,
+                                       ctk: finalSettings.effectiveCacheTypes.k, ctv: finalSettings.effectiveCacheTypes.v,
                                        engine: engine, fa: finalSettings.benchmarkFlashAttentionRoute,
                                        gpu: finalSettings.gpuLabel, peer: finalSettings.mgpuPeer && finalSettings.isSplitting,
                                        profile: finalSettings.makeProfile(name: "\(name) ncmoe \(recommended)"),
@@ -911,7 +911,7 @@ final class BenchmarkController: ObservableObject {
         let engine = cfg.serverBinary == ServerSettings.defaultBinary ? "bundled" : "externo"
         history.insert(BenchResult(date: .now, model: name, ncmoe: cfg.ncmoe,
                                        dmoeK: cfg.effectiveDynamicMoe ? cfg.effectiveDynamicMoeSlots : nil, pp: pp, tg: tg,
-                                   ctk: cfg.cacheTypeK, ctv: cfg.cacheTypeV, engine: engine,
+                                   ctk: cfg.effectiveCacheTypes.k, ctv: cfg.effectiveCacheTypes.v, engine: engine,
                                    fa: cfg.benchmarkFlashAttentionRoute,
                                    gpu: cfg.gpuLabel, peer: cfg.mgpuPeer && cfg.isSplitting, profile: cfg.makeProfile(name: name),
                                    ppN: nil, tgN: nil, kind: nil, accept: nil, shared: true),

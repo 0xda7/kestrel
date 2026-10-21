@@ -144,38 +144,6 @@ struct Conversation: Identifiable, Codable {
     /// Last exchange's context tokens, per chat so the bar follows the open
     /// conversation and persists with the KV cache. Optional for old JSON.
     var contextUsed: Int? = nil
-    /// Assistant backend for this conversation: "latch" answers through the
-    /// latch harness, "pi" through the pi runtime (llm-space engine), nil uses
-    /// the model engine. Optional so older JSON decodes and older builds ignore
-    /// the extra key.
-    var assistantMode: String? = nil
-    /// Pi agent opt-in for this conversation: false/nil keeps
-    /// pi confined (--no-tools, chat budget); true enables pi's native tools
-    /// for this chat only, with a larger budget and a warning banner.
-    /// Optional so older JSON decodes.
-    var piAgentMode: Bool? = nil
-}
-
-/// A thread-safe holder for a sidecar Process, filled on the launch thread
-/// inside `onLaunch` and read by stop() on the main actor — no hop window.
-final class SidecarProcessBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var process: Process?
-    func store(_ process: Process) {
-        lock.lock()
-        self.process = process
-        lock.unlock()
-    }
-    func load() -> Process? {
-        lock.lock()
-        defer { lock.unlock() }
-        return process
-    }
-    func clear() {
-        lock.lock()
-        process = nil
-        lock.unlock()
-    }
 }
 
 struct ChatBranch: Identifiable, Codable, Equatable {
@@ -367,7 +335,7 @@ final class StreamBuffer: @unchecked Sendable {
     }
 }
 
-private struct AgentRunContext {
+struct AgentRunContext {
     let port: Int
     let temperature: Double
     let maxTokens: Int
@@ -439,26 +407,13 @@ final class ChatStore: ObservableObject {
     /// True while the current generation flows through a remote provider:
     /// engine-only paths (stream resume, engine stop, stall-kills-engine) stand down.
     private var activeStreamRemote = false
-    /// Running latch-harness process while a latch-mode reply streams; Stop
-    /// terminates it. Latch mode never sets `activeStream`, so the engine
-    /// DELETE below is naturally inert for these runs.
-    private var latchProcess: Process?
-    /// Running pi runtime process while a pi-mode reply streams; Stop
-    /// terminates it, same contract as latchProcess. Pi mode never sets
-    /// `activeStream`, so the engine stop path never fires against it.
-    private var piProcess: Process?
-    /// Synchronously-published handles for the current sidecar runs. The
-    /// MainActor properties above are set via a detached hop AFTER
-    /// process.run(), so stop() in that window would find nil and a runaway
-    /// sidecar would run to its full budget; the boxes are created before the
-    /// task starts and filled inside onLaunch on the launch thread itself,
-    /// closing that window. Box per run; cleared in finish().
-    let latchProcessBox = SidecarProcessBox()
-    let piProcessBox = SidecarProcessBox()
     private var lastStreamActivity = Date()
     private var sawFirstToken = false
     private var slotConvID: UUID?
-    private var agentContext: AgentRunContext?
+    // Internal (not private) so the check suite can arrange a pending agent
+    // run and pin the queued-steering delivery across the continuation-card
+    // boundary; production code touches it exactly as before.
+    var agentContext: AgentRunContext?
 
     var agentFlowActive: Bool {
         generating || pendingToolPermission != nil || pendingAgentContinuation != nil || agentContext != nil
@@ -677,21 +632,6 @@ final class ChatStore: ObservableObject {
         save()
     }
 
-    /// Per-conversation assistant backend: "latch", "pi", or nil (model engine).
-    func setConversationAssistantMode(_ c: Conversation, _ mode: String?) {
-        guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
-        conversations[i].assistantMode = (mode?.isEmpty ?? true) ? nil : mode
-        save()
-    }
-
-    /// Per-conversation pi agent opt-in. Enabling restores pi's
-    /// native tool surface for this chat only — the user's explicit act.
-    func setConversationAgentMode(_ c: Conversation, _ enabled: Bool) {
-        guard let i = conversations.firstIndex(where: { $0.id == c.id }) else { return }
-        conversations[i].piAgentMode = enabled ? true : nil
-        save()
-    }
-
     /// Folder picker for a project, so the menu entry is one line at each call site.
     func pickProjectWorkingDirectory(_ p: ChatProject) {
         let panel = NSOpenPanel()
@@ -782,268 +722,6 @@ final class ChatStore: ObservableObject {
                continuationInstruction: "Continue exactly where the previous response stopped. Do not repeat any text.")
     }
 
-    /// Global "latch as primary assistant" toggle (Chat advanced settings).
-    var globalLatchPrimary: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// True when this conversation should be answered by the latch harness:
-    /// an explicit per-conversation choice wins; otherwise the global
-    /// "latch as primary assistant" toggle decides for new/default chats.
-    func latchWanted(for c: Conversation) -> Bool {
-        if let mode = c.assistantMode { return mode == "latch" }
-        return UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// Global "pi (llm-space) as primary assistant" toggle (Chat advanced
-    /// settings). Lower precedence than any per-conversation mode.
-    var globalPiPrimary: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKeys.piPrimaryEnabled)
-    }
-
-    /// True when this conversation should be answered by the pi runtime.
-    /// Precedence: per-conversation assistantMode first ("pi" or "latch");
-    /// otherwise the global primary toggle (pi wins only if latch primary is
-    /// off — one primary assistant at a time, deterministic and legible).
-    func piWanted(for c: Conversation) -> Bool {
-        if let mode = c.assistantMode { return mode == "pi" }
-        return globalPiPrimary
-            && !UserDefaults.standard.bool(forKey: SettingsKeys.latchPrimaryEnabled)
-    }
-
-    /// One-shot prompt for a pi run: a char-bounded recent transcript and the
-    /// standing instruction. The system prompt rides `--system-prompt` as a
-    /// real system message instead of prompt preamble, so the
-    /// context here is exactly the conversation.
-    private func piPrompt(for i: Int,
-                          continuationInstruction: String?) -> String {
-        // Char budget is user-tunable: a long chat re-sends this much
-        // every turn, so the default (12k chars ≈ 3k tokens) weighs cost
-        // against continuity; the newest user message always rides whole.
-        let storedBudget = UserDefaults.standard.integer(forKey: SettingsKeys.piContextCharacters)
-        let maximumContextCharacters = storedBudget >= 2_000 ? min(storedBudget, 48_000) : 12_000
-        var budget = maximumContextCharacters
-        var lines: [String] = []
-        for message in conversations[i].messages.reversed() {
-            guard message.role == "user" || message.role == "assistant" else { continue }
-            if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Reasoning must never re-enter the transcript as assistant text:
-            // a leaked <think> block reads as a broken assistant turn.
-            if message.role == "assistant" {
-                body = body.replacingOccurrences(
-                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
-                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard !body.isEmpty else { continue }
-            let line = (message.role == "user" ? "User: " : "Assistant: ") + body
-            if line.count > budget {
-                lines.insert("… " + line.prefix(budget), at: 0)
-                break
-            }
-            budget -= line.count + 1
-            lines.insert(line, at: 0)
-            if budget <= 0 { break }
-        }
-        var prompt = ""
-        if !lines.isEmpty {
-            prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
-        }
-        if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
-        prompt += "Answer as the assistant directly; your reply becomes the next assistant message."
-        return prompt
-    }
-
-    nonisolated static var piUnavailableMessage: String {
-        "pi no está disponible: no se encontró el binario pi (ruta por omisión /usr/local/bin/pi). No se ha usado el motor como sustituto silencioso; cambia el modo de este chat o instala el runtime pi. / pi is unavailable: the pi binary was not found (default path /usr/local/bin/pi). The engine was not silently used instead; switch this chat's mode or install the pi runtime."
-    }
-
-    nonisolated static func piExitMessage(status: Int32) -> String {
-        "pi terminó de forma anómala (estado \(status)). / pi exited abnormally (status \(status))."
-    }
-
-    /// Empty-success guard: the run ended cleanly but produced
-    /// no visible text, so this surfaces instead of a blank bubble.
-    nonisolated static var piEmptyReplyMessage: String {
-        "pi completó el turno sin producir respuesta visible. / pi completed the turn without producing a visible reply."
-    }
-
-    nonisolated static var piEmptyReplyNote: String {
-        "Razonamiento capturado del turno / Reasoning captured during the turn:"
-    }
-
-    private func sendPiMode(i: Int, port: Int, system: String, thinking: Bool,
-                            continuationInstruction: String?) {
-        // Silent-strand guard: pi falls back to its built-in default provider
-        // when the requested provider/model pair is missing from its config,
-        // and a dead fallback key produces an empty reply with exit 0 and no
-        // stderr. Refuse the turn here, with the fix in the message, instead
-        // of publishing an empty bubble.
-        if let problem = PiBridge.validate(provider: PiDelegateService.configuredProvider,
-                                           model: PiDelegateService.configuredModel) {
-            conversations[i].messages.append(ChatMessage(role: "assistant", content: problem))
-            return
-        }
-        conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
-        let convID = conversations[i].id
-        let toolCwd = effectiveWorkingDirectory(for: convID)
-        let agentMode = conversations[i].piAgentMode == true
-        // the system prompt rides --system-prompt; the fallback
-        // persona (sidecar is a conversational assistant, not a repo manager)
-        // applies only when the conversation carries no prompt of its own.
-        let systemForRun = system.trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty ? nil : system
-        // Agent opt-in gets its own larger budget; chats stay at the chat cap.
-        let budget = agentMode ? PiDelegateService.agentTimeoutSeconds
-                               : PiDelegateService.chatTimeoutSeconds
-        let prompt = piPrompt(for: i,
-                              continuationInstruction: continuationInstruction)
-        let buffer = StreamBuffer()
-        let pump = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let snap = buffer.take() else {
-                    try? await Task.sleep(for: .milliseconds(40))
-                    continue
-                }
-                if snap.done { break }   // finish() publishes the final transcript
-                self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: nil)
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-        }
-        let store = self
-        // `store` already carries the strong reference; a `weak self` capture
-        // here would be dead weight (and a Swift 6 concurrency warning).
-        task = Task.detached(priority: .userInitiated) { [buffer, pump] in
-            PiDelegateService.ensureSessionsDirectory()
-            let outcome = await PiDelegateService.runStreaming(
-                argv: PiDelegateService.argv(prompt: prompt, thinking: thinking,
-                                             agentMode: agentMode,
-                                             systemPrompt: systemForRun),
-                workingDirectory: toolCwd,
-                timeout: budget,
-                onLaunch: { proc in
-                    store.piProcessBox.store(proc)
-                    Task { @MainActor in store.piProcess = proc }
-                },
-                onOutput: { reasoning, visible in
-                    buffer.write(reasoning: reasoning, visible: visible, speed: nil)
-                })
-            if Task.isCancelled {
-                // stop() terminated the process; keep whatever streamed.
-                let partial: String
-                switch outcome.outcome {
-                case .completed(let output), .exited(_, let output):
-                    partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                case .failed(let reason):
-                    partial = reason
-                }
-                buffer.finish()
-                await MainActor.run {
-                    store.finish(conversation: convID, text: partial, speed: nil,
-                                 model: "pi")
-                }
-                pump.cancel()
-                return
-            }
-            let reply: String
-            switch outcome.outcome {
-            case .completed(let output):
-                let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                let captured = outcome.reasoning.trimmingCharacters(
-                    in: .whitespacesAndNewlines)
-                if produced.isEmpty {
-                    // Empty-success guard: the run ended cleanly
-                    // but said nothing (e.g. the whole budget went to thinking
-                    // or reasoning). Surface the failure — never a blank bubble.
-                    reply = captured.isEmpty
-                        ? Self.piEmptyReplyMessage
-                        : Self.piEmptyReplyMessage
-                            + "\n\n" + Self.piEmptyReplyNote
-                            + "\n\n" + outcome.reasoning
-                } else if outcome.reasoning.isEmpty {
-                    reply = produced
-                } else {
-                    // Compose reasoning into the message with the same
-                    // <think> convention the local engine path uses, so it
-                    // renders in the reasoning panel, persists with the
-                    // conversation, and rides history exactly like local
-                    // replies instead of being discarded.
-                    reply = "<think>" + outcome.reasoning + "</think>" + produced
-                }
-            case .exited(let status, let output):
-                let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                reply = partial.isEmpty
-                    ? Self.piExitMessage(status: status)
-                    : partial + "\n\n" + Self.piExitMessage(status: status)
-            case .failed(let reason):
-                reply = reason
-            }
-            buffer.finish()
-            await MainActor.run {
-                store.finish(conversation: convID, text: reply, speed: nil,
-                             model: "pi")
-            }
-            pump.cancel()
-        }
-    }
-
-    /// One-shot prompt for a latch run: the conversation's system prompt, a
-    /// char-bounded recent transcript (attachments already ride inline inside
-    /// wireContent) and the standing instruction. Bounded so a long history can
-    /// never push argv past the kernel limit; newest messages are kept.
-    private func latchPrompt(for i: Int, system: String,
-                             continuationInstruction: String?) -> String {
-        let maximumContextCharacters = 24_000
-        var budget = maximumContextCharacters
-        var lines: [String] = []
-        for message in conversations[i].messages.reversed() {
-            guard message.role == "user" || message.role == "assistant" else { continue }
-            if message.role == "assistant", message.content.isEmpty { continue } // reply slot
-            var body = message.wireContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Reasoning must never re-enter the transcript as assistant text:
-            // a leaked <think> block reads as a broken assistant turn.
-            if message.role == "assistant" {
-                body = body.replacingOccurrences(
-                    of: "<think>[\\s\\S]*?</think>", with: "", options: .regularExpression)
-                if let range = body.range(of: "<think>") { body = String(body[..<range.lowerBound]) }
-                body = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            guard !body.isEmpty else { continue }
-            let line = (message.role == "user" ? "User: " : "Assistant: ") + body
-            if line.count > budget {
-                lines.insert("… " + line.prefix(budget), at: 0)
-                break
-            }
-            budget -= line.count + 1
-            lines.insert(line, at: 0)
-            if budget <= 0 { break }
-        }
-        var prompt = ""
-        let trimmedSystem = system.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedSystem.isEmpty { prompt += trimmedSystem + "\n\n" }
-        if !lines.isEmpty {
-            prompt += "Transcript so far:\n" + lines.joined(separator: "\n\n") + "\n\n"
-        }
-        if let continuationInstruction { prompt += continuationInstruction + "\n\n" }
-        prompt += "Answer as the assistant directly; your reply becomes the next assistant message."
-        return prompt
-    }
-
-    nonisolated static var latchUnavailableMessage: String {
-        "latch no está disponible: no se encontró el binario latch-harness (ruta por omisión ~/.latch/bin/latch-harness). No se ha usado el motor como sustituto silencioso; cambia el modo de este chat o instala latch. / latch is unavailable: the latch-harness binary was not found (default path ~/.latch/bin/latch-harness). The engine was not silently used instead; switch this chat's mode or install latch."
-    }
-
-    nonisolated static func latchExitMessage(status: Int32) -> String {
-        "latch terminó de forma anómala (estado \(status)). / latch exited abnormally (status \(status))."
-    }
-
-    /// Empty-success guard for the latch primary path: the run ended cleanly
-    /// but stdout carried nothing, so this surfaces instead of a blank bubble.
-    nonisolated static var latchEmptyReplyMessage: String {
-        "latch completó el turno sin producir salida visible. / latch completed the turn without producing visible output."
-    }
-
     private func stream(into i: Int, port: Int, temperature: Double, maxTokens: Int,
                         system: String, thinking: Bool,
                         sampling: ChatSamplingSettings = ChatSamplingSettings(),
@@ -1053,128 +731,6 @@ final class ChatStore: ObservableObject {
         generating = true
         generatingConvID = conversations[i].id
         live.reset()
-        // Latch mode answers through the harness process: no engine, no
-        // gateway, no port. The branch returns BEFORE startWatchdog so the
-        // engine idle watchdog (30/180 s) never fires against latch's
-        // multi-minute runs, and activeStream stays nil so stop() never sends
-        // an engine DELETE for these runs.
-        // Pi mode (llm-space engine sidecar) answers through the pi process:
-        // no engine, no gateway, no port. The branch returns BEFORE
-        // startWatchdog so the engine idle watchdog never fires against pi's
-        // long agent turns, and activeStream stays nil so stop() never sends
-        // an engine DELETE for these runs.
-        if piWanted(for: conversations[i]) {
-            guard PiDelegateService.isInstalled else {
-                conversations[i].messages.append(
-                    ChatMessage(role: "assistant", content: Self.piUnavailableMessage))
-                conversations[i].updated = Date()
-                generating = false
-                generatingConvID = nil
-                live.reset()
-                save()
-                return
-            }
-            sendPiMode(i: i, port: port, system: system, thinking: thinking,
-                       continuationInstruction: continuationInstruction)
-            return
-        }
-        if latchWanted(for: conversations[i]) {
-            guard LatchDelegateService.isInstalled else {
-                conversations[i].messages.append(
-                    ChatMessage(role: "assistant", content: Self.latchUnavailableMessage))
-                conversations[i].updated = Date()
-                generating = false
-                generatingConvID = nil
-                live.reset()
-                save()
-                return
-            }
-            conversations[i].messages.append(ChatMessage(role: "assistant", content: ""))
-            let convID = conversations[i].id
-            let toolCwd = effectiveWorkingDirectory(for: convID)
-            let prompt = latchPrompt(for: i, system: system,
-                                     continuationInstruction: continuationInstruction)
-            let buffer = StreamBuffer()
-            let pump = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    guard let snap = buffer.take() else {
-                        try? await Task.sleep(for: .milliseconds(40))
-                        continue
-                    }
-                    if snap.done { break }   // finish() publishes the final transcript
-                    self?.live.update(reasoning: snap.reasoning, visible: snap.visible, speed: snap.speed)
-                    // Length-adaptive cadence (see the pi pump note).
-                    let n = snap.visible.count
-                    let ms = n > 12_000 ? 600 : n > 6_000 ? 350 : n > 2_500 ? 180 : 80
-                    try? await Task.sleep(for: .milliseconds(ms))
-                }
-            }
-            let store = self
-            // `store` already carries the strong reference; a `weak self`
-            // capture here would be dead weight (and a Swift 6 warning).
-            task = Task.detached(priority: .userInitiated) { [buffer, pump] in
-                // Boxed: onOutput is @Sendable (the pipe-reader thread), so
-                // the accumulator is only touched through a lock — which also
-                // fixes the unfenced read below.
-                let streamedText = OSAllocatedUnfairLock<String>(initialState: "")
-                let outcome = await LatchDelegateService.runStreaming(
-                    argv: [LatchDelegateService.binaryPath, "-p", prompt],
-                    workingDirectory: toolCwd,
-                    timeout: LatchDelegateService.maximumTimeoutSeconds,
-                    onLaunch: { proc in
-                        // Synchronous publish closes the stop() race window;
-                        // the MainActor hop below is only for the UI-facing
-                        // property.
-                        store.latchProcessBox.store(proc)
-                        Task { @MainActor in store.latchProcess = proc }
-                    },
-                    onOutput: { _, fullSoFar in
-                        // StreamBuffer is snapshot-replace: hand it the full
-                        // text so far, never a fragment.
-                        streamedText.withLock { $0 = fullSoFar }
-                        buffer.write(reasoning: "", visible: fullSoFar, speed: nil)
-                    })
-                if Task.isCancelled {
-                    // stop() terminated the process; keep whatever streamed.
-                    // The partial comes from the buffer's last snapshot — the
-                    // captured var is written on the pipe-reader thread with
-                    // no fence, so it is not safe to read here.
-                    let partial = buffer.take().map { $0.visible }
-                        ?? streamedText.withLock { $0 }
-                    let trimmed = partial.trimmingCharacters(in: .whitespacesAndNewlines)
-                    buffer.finish()
-                    await MainActor.run {
-                        store.finish(conversation: convID, text: trimmed, speed: nil,
-                                     model: "latch")
-                    }
-                    pump.cancel()
-                    return
-                }
-                let reply: String
-                switch outcome {
-                case .completed(let output):
-                    let produced = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Empty-success guard (same contract as the pi path): a
-                    // clean exit with no visible output surfaces a failure
-                    // notice instead of finish() silently deleting the reply.
-                    reply = produced.isEmpty ? Self.latchEmptyReplyMessage : produced
-                case .exited(let status, let output):
-                    let partial = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    reply = partial.isEmpty
-                        ? Self.latchExitMessage(status: status)
-                        : partial + "\n\n" + Self.latchExitMessage(status: status)
-                case .failed(let reason):
-                    reply = reason
-                }
-                buffer.finish()
-                await MainActor.run {
-                    store.finish(conversation: convID, text: reply, speed: nil,
-                                 model: "latch")
-                }
-                pump.cancel()
-            }
-            return
-        }
         startWatchdog(port: port)
         // The user can switch or delete conversations mid-stream; the result
         // must land in the one this request started from, found by id.
@@ -1188,7 +744,6 @@ final class ChatStore: ObservableObject {
         activeStreamRemote = sendRoute?.isConfigured == true
         let toolsEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled)
         let javaScriptEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled)
-        let latchEnabled = LatchDelegateService.isEnabled
         let memoryToolsEnabled = ChatMemoryService.isEnabled
         let agentTurnLimit = Self.configuredAgentTurnLimit
         let enabledToolNames = conversations[i].enabledToolNames
@@ -1199,7 +754,7 @@ final class ChatStore: ObservableObject {
             (system.isEmpty ? "" : system + "\n\n")
             + "File tools work inside \($0). Use paths relative to it, and never call them for text that only exists in this conversation."
         } ?? system
-        if toolsEnabled || javaScriptEnabled || latchEnabled || memoryToolsEnabled {
+        if toolsEnabled || javaScriptEnabled || memoryToolsEnabled {
             systemWithCwd += "\n\n" + Self.agentDisciplinePrompt
         }
 
@@ -1373,7 +928,6 @@ final class ChatStore: ObservableObject {
                         }
                     }
                     if javaScriptEnabled { availableTools.append(JavaScriptSandboxService.tool) }
-                    if LatchDelegateService.isEnabled { availableTools.append(LatchDelegateService.tool) }
                     if memoryToolsEnabled { availableTools.append(contentsOf: ChatMemoryService.tools) }
                     availableTools += await KestrelMCPService.shared.discoverTools()
                     if ToolSupport.isBlocked(ToolSupport.currentModelIdentity) { availableTools = [] }
@@ -1547,9 +1101,7 @@ final class ChatStore: ObservableObject {
                     // shape, and it does it on every tool, so the model stops getting them
                     let rejected = raw.contains("peg-native") && !availableTools.isEmpty
                     if rejected { ToolSupport.block(ToolSupport.currentModelIdentity) }
-                    let message = rejected
-                        ? "Este modelo escribe mal las llamadas a herramientas y el motor cortó la respuesta; se le han desactivado, vuelve a enviar / this model writes tool calls in the wrong shape and the engine stopped the answer; they are now off for it, send again"
-                        : raw
+                    let message = rejected ? Self.toolsRejectedMessage : raw
                     await MainActor.run { store?.lastError = message }
                 }
             }
@@ -1663,8 +1215,6 @@ final class ChatStore: ObservableObject {
         generatingConvID = nil
         live.reset()
         task = nil
-        piProcessBox.clear()
-        latchProcessBox.clear()
         watchdog?.cancel()
         watchdog = nil
         save()
@@ -1820,7 +1370,20 @@ final class ChatStore: ObservableObject {
         lastError = nil
         guard shouldContinue, var context = agentContext,
               let conversationIndex = conversations.firstIndex(where: { $0.id == pending.conversationID }) else {
-            agentContext = nil
+            // Declining ends the agent run here. A steering message queued
+            // while the continuation card waited must not be orphaned by
+            // that: the next manual send() clears queuedMessage — the exact
+            // silent drop the turn-end delivery exists to prevent — so it
+            // starts its own turn now with this run's parameters, the same
+            // delivery the engine stop path performs. With nothing queued (or
+            // no conversation left to deliver into) this reduces to the old
+            // behavior: clear the context and stop.
+            if let context = agentContext,
+               conversations.contains(where: { $0.id == pending.conversationID }) {
+                deliverQueuedMessage(conversation: pending.conversationID, context: context)
+            } else {
+                agentContext = nil
+            }
             return
         }
         context.remainingTurns = Self.configuredAgentTurnLimit
@@ -1862,9 +1425,6 @@ final class ChatStore: ObservableObject {
                         serverID: serverID, name: remoteName, arguments: arguments)
                 } else if request.name == JavaScriptSandboxService.toolName {
                     result = await JavaScriptSandboxService.execute(arguments: arguments)
-                } else if request.name == LatchDelegateService.toolName {
-                    result = await LatchDelegateService.execute(
-                        arguments: arguments, workingDirectory: context.workingDirectory)
                 } else if ChatMemoryService.toolNames.contains(request.name) {
                     result = await MainActor.run {
                         self?.runMemoryTool(request.name, arguments: arguments)
@@ -1956,19 +1516,12 @@ final class ChatStore: ObservableObject {
     nonisolated private static func slotFile(_ id: UUID) -> String { "\(id.uuidString).bin" }
 
     /// POST /slots/0?action=save|restore (best-effort; a missing file on restore
-    /// just means a cold prefill, which is harmless).
+    /// just means a cold prefill, which is harmless). Same shared request the
+    /// server controller issues, with the same 30 s bound.
     nonisolated private func slotAction(_ action: String, convID: UUID, port: Int) async {
-        guard var comps = URLComponents(string: "http://127.0.0.1:\(port)/slots/0") else { return }
-        comps.queryItems = [URLQueryItem(name: "action", value: action)]
-        guard let url = comps.url else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() {
-            req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-        }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["filename": Self.slotFile(convID)])
-        _ = try? await URLSession.shared.data(for: req)
+        guard let req = EngineHTTP.slotRequest(port: port, action: action,
+                                               filename: Self.slotFile(convID), timeout: 30) else { return }
+        _ = try? await EngineHTTP.session.data(for: req)
     }
 
     /// Before a turn: if slot 0 doesn't already hold this conversation, restore
@@ -2124,7 +1677,26 @@ final class ChatStore: ObservableObject {
             }
             return ["role": m.role, "content": text]
         }
-        return history
+        // Strict templates (many small and medical finetunes ship the
+        // assertive "roles must alternate" Jinja) reject consecutive
+        // same-role messages with a 400 — which is exactly what a failed
+        // assistant turn leaves behind: user, (no reply), user. Merge
+        // consecutive user turns into one so a broken turn can never
+        // poison every later message in the conversation. Tool messages
+        // keep their required position (they follow their assistant call).
+        var alternationSafe: [[String: Any]] = []
+        for message in history {
+            if message["role"] as? String == "user",
+               let last = alternationSafe.last, last["role"] as? String == "user",
+               let text = message["content"] as? String,
+               let lastText = last["content"] as? String {
+                alternationSafe[alternationSafe.count - 1]["content"] =
+                    (lastText.isEmpty ? text : lastText + "\n\n" + text)
+            } else {
+                alternationSafe.append(message)
+            }
+        }
+        return alternationSafe
     }
 
     /// Per-conversation usage rollup (roadmap item 6). Prompt tokens are
@@ -2220,7 +1792,7 @@ final class ChatStore: ObservableObject {
 
     /// Bilingual notice for a request that cannot fit the engine's window.
     nonisolated static func contextOverflowNotice(estimated: Int, window: Int) -> String {
-        "Este mensaje no cabe en la ventana de contexto (≈\(estimated) tokens > \(window)). Resume el historial («Recuperar velocidad»), archiva turnos con la herramienta de memoria, abre un chat nuevo o sube el contexto en Ajustes. / This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
+        "This message doesn't fit the context window (≈\(estimated) tokens > \(window)). Summarize the history (\"Recover speed\"), archive turns with the memory tool, start a new chat, or raise the context size in Settings."
     }
 
     /// Bilingual notice for an agent run paused because its tool-turn budget
@@ -2422,12 +1994,13 @@ final class ChatStore: ObservableObject {
     /// Non-streamed completion that condenses old turns. Returns nil on any
     /// failure; compaction is then retried after the next exchange.
     nonisolated private static func summarize(prompt: String, port: Int) async -> String? {
-        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/chat/completions")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let key = ServerSettings.activeAPIKey() {
-            req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-        }
+        guard let url = URL(string: "http://127.0.0.1:\(port)/v1/chat/completions") else { return nil }
+        // Explicit 60 s idle bound — the same one URLSession.shared gave this
+        // request before it moved to the shared control session: a summarize
+        // prefill of a long history legitimately takes tens of seconds on a
+        // busy engine, which the session's 10 s probe default must not cut off.
+        var req = EngineHTTP.request(url: url, method: "POST", timeout: 60,
+                                     apiKey: ServerSettings.activeAPIKey())
         let instructions = "You summarize conversations. Write a compact summary (at most ~250 words) of the conversation below, in the same language the conversation itself uses. Preserve key facts, decisions, names, numbers, code references and pending questions. Reply with the summary only."
         var body: [String: Any] = [
             "messages": [["role": "system", "content": instructions],
@@ -2439,7 +2012,7 @@ final class ChatStore: ObservableObject {
         ]
         if let model = ServerSettings.activeRouterModel() { body["model"] = model }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
+        guard let (data, response) = try? await EngineHTTP.session.data(for: req),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
@@ -2455,7 +2028,8 @@ final class ChatStore: ObservableObject {
     }
 
     /// Maps llama-server HTTP errors ({"error":{"message":…}}) to readable,
-    /// actionable text, following the same bilingual style as Server.diagnose.
+    /// actionable, English-only text (agent-reaching strings never carry a
+    /// second language).
     nonisolated private static func describeServerError(status: Int, body: String) -> String {
         var message = body
         if let data = body.data(using: .utf8),
@@ -2466,15 +2040,15 @@ final class ChatStore: ObservableObject {
         }
         if message.lowercased().contains("reasoning effort")
             || message.lowercased().contains("reasoning_effort") {
-            return "El modelo no acepta ese esfuerzo de razonamiento; elige otro o «Predeterminado del modelo» en los ajustes del chat. El motor respondió: \(message.prefix(200)) / the model does not accept that reasoning effort; pick another one or “Model default” in the chat settings. The engine answered: \(message.prefix(200))"
+            return "The model does not accept that reasoning effort; pick another one or “Model default” in the chat settings. The engine answered: \(message.prefix(200))"
         }
         if message.lowercased().contains("context") {
-            return "Contexto lleno: el mensaje, los archivos adjuntos y el historial juntos superan el contexto. Sube el contexto en Ajustes, adjunta menos o inicia un chat nuevo / context full: your message, attached files and history together exceed the context. Raise the context size in Settings, attach less, or start a new chat"
+            return "Context full: your message, attached files and history together exceed the context. Raise the context size in Settings, attach less, or start a new chat."
         }
         // std::bad_function_call comes from both a context overflow on a tool turn
         // and a missing ffmpeg/ffprobe on video; name both, not just video.
         if message.contains("bad_function_call") {
-            return "La solicitud falló. Con herramientas activas suele ser que el archivo o la conversación superan el contexto: súbelo en Ajustes o usa un archivo más pequeño. Si adjuntaste un video, verifica que ffmpeg y ffprobe estén disponibles / the request failed. With tools enabled this is usually the file or conversation exceeding the context: raise it in Settings or use a smaller file. If you attached a video, make sure ffmpeg and ffprobe are available"
+            return "The request failed. With tools enabled this is usually the file or conversation exceeding the context: raise it in Settings or use a smaller file. If you attached a video, make sure ffmpeg and ffprobe are available."
         }
         return "HTTP \(status): \(message.prefix(300))"
     }
@@ -2486,44 +2060,35 @@ final class ChatStore: ObservableObject {
             return message
         }
         if let message = error as? String, !message.isEmpty { return message }
-        return "El motor interrumpió la respuesta / the engine interrupted the response"
+        return "The engine interrupted the response."
     }
+
+    /// The model's tool calls arrive malformed and the engine cut the turn:
+    /// tools are disabled for the model and the user is told why (and that
+    /// resending now works). English-only: agent-reaching text.
+    nonisolated static let toolsRejectedMessage =
+        "This model writes tool calls in the wrong shape and the engine stopped the answer; tools are now off for it — send again."
 
     nonisolated static func emptyResponseMessage(finishReason: String?) -> String {
         if finishReason == "length" {
-            return "El modelo agotó el máximo de tokens durante el razonamiento; aumenta Máx. o desactiva Razonamiento / the model used all max tokens while reasoning; raise Max or disable Reasoning"
+            return "The model used all max tokens while reasoning; raise Max or disable Reasoning."
         }
-        return "El modelo terminó el razonamiento sin producir una respuesta visible; intenta regenerar o desactiva Razonamiento / the model finished reasoning without a visible answer; regenerate or disable Reasoning"
+        return "The model finished reasoning without a visible answer; regenerate or disable Reasoning."
     }
 
     func stop() {
         watchdog?.cancel()
         watchdog = nil
         task?.cancel()
-        // A latch run owns no engine slot: terminating its process is the stop.
-        // The box is checked first: the MainActor property is published via a
-        // detached hop and can still be nil in the launch window.
-        let latchHandle = latchProcessBox.load() ?? latchProcess
-        latchProcess = nil
-        if let proc = latchHandle {
-            proc.terminate()
-        }
-        // Same for a pi runtime run.
-        let piHandle = piProcessBox.load() ?? piProcess
-        piProcess = nil
-        if let proc = piHandle {
-            proc.terminate()
-        }
         if let stream = activeStream, !activeStreamRemote,
            let url = ChatStreamIdentity.stopURL(port: stream.port, identity: stream.identity) {
             activeStream = nil
-            var req = URLRequest(url: url)
-            req.httpMethod = "DELETE"
-            req.timeoutInterval = 5
-            if let key = ServerSettings.activeAPIKey() {
-                req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
-            }
-            Task.detached { _ = try? await URLSession.shared.data(for: req) }
+            // Fire-and-forget on purpose: stop() runs synchronously from the UI
+            // and must not suspend; the 5 s bound keeps the detached task from
+            // outliving the turn by much.
+            let req = EngineHTTP.request(url: url, method: "DELETE", timeout: 5,
+                                         apiKey: ServerSettings.activeAPIKey())
+            Task.detached { _ = try? await EngineHTTP.session.data(for: req) }
         }
     }
 
@@ -2671,18 +2236,17 @@ final class ChatStore: ObservableObject {
         let pURL = projectsURL
         Self.saveQueue.async {
             // conversations.json holds the full chat history; projects.json the
-            // project config. Both are written user-only (0600) — the enclosing
-            // Application Support folder is already 0700, so this keeps the
-            // store unreadable to other local accounts even if the folder
-            // permission drifts.
-            let permissions: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+            // project config. Both are written owner-only (0600) via the one
+            // atomic owner-only writer — the previous write-then-chmod pair
+            // left a window (default-mode temp renamed in, chmod after) where
+            // the history sat world-readable. The enclosing Application
+            // Support folder is already 0700; this keeps the store unreadable
+            // to other local accounts even if the folder permission drifts.
             if let data = try? JSONEncoder().encode(snapshot) {
-                try? data.write(to: url, options: .atomic)
-                try? FileManager.default.setAttributes(permissions, ofItemAtPath: url.path)
+                _ = OwnerOnlyFile.write(data, to: url)
             }
             if let data = try? JSONEncoder().encode(projectsSnapshot) {
-                try? data.write(to: pURL, options: .atomic)
-                try? FileManager.default.setAttributes(permissions, ofItemAtPath: pURL.path)
+                _ = OwnerOnlyFile.write(data, to: pURL)
             }
         }
     }
@@ -3161,115 +2725,6 @@ struct NativeChatView: View {
         return !(FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue)
     }
 
-    /// Shows the folder the tools are actually using, own or inherited, so it is
-    /// readable without opening the chat parameters. Clicking it changes the chat's.
-    /// Per-conversation assistant backend chip: Latch (harness process), pi
-    /// (llm-space runtime process), or the model engine. A third "Automatic"
-    /// state clears the explicit choice so the conversation follows the global
-    /// toggle again. Choosing latch/pi while the binary is missing is allowed —
-    /// the send path finishes an explicit bilingual error into the chat — but
-    /// the chip turns warning-colored so the cause is visible before sending.
-    @ViewBuilder private var assistantModeChip: some View {
-        if let conversation = chat.current {
-            let selected = conversation.assistantMode
-            let latchSelected = selected == "latch"
-            let piSelected = selected == "pi"
-            let automatic = selected == nil
-            let latch = chat.latchWanted(for: conversation)
-            let pi = chat.piWanted(for: conversation)
-            let broken = (latch && !LatchDelegateService.isInstalled)
-                || (pi && !PiDelegateService.isInstalled)
-            Menu {
-                Button {
-                    chat.setConversationAssistantMode(conversation, "latch")
-                } label: {
-                    if latchSelected {
-                        Label(loc.t("Latch", "Latch"), systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Latch", "Latch"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, "pi")
-                } label: {
-                    if piSelected {
-                        Label(loc.t("pi (llm-space)", "pi (llm-space)"), systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("pi (llm-space)", "pi (llm-space)"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, "engine")
-                } label: {
-                    if selected == "engine" {
-                        Label(loc.t("Asistente del modelo", "Model assistant"), systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Asistente del modelo", "Model assistant"))
-                    }
-                }
-                Button {
-                    chat.setConversationAssistantMode(conversation, nil)
-                } label: {
-                    if automatic {
-                        Label(loc.t("Automática (ajuste global)", "Automatic (global setting)"),
-                              systemImage: "checkmark")
-                    } else {
-                        Text(loc.t("Automática (ajuste global)", "Automatic (global setting)"))
-                    }
-                }
-                Divider()
-                // pi's tools stay OFF in chats by default; this
-                // per-conversation opt-in restores them for this chat only.
-                Toggle(isOn: Binding(
-                    get: { conversation.piAgentMode == true },
-                    set: { chat.setConversationAgentMode(conversation, $0) })) {
-                    Label(loc.t("Modo agente (pi usa herramientas)",
-                                "Agent mode (pi uses tools)"),
-                          systemImage: "wrench.and.screwdriver")
-                }
-                if conversation.piAgentMode == true {
-                    Button {
-                        chat.setConversationAgentMode(conversation, false)
-                    } label: {
-                        Label(loc.t("Desactivar modo agente", "Turn off agent mode"),
-                              systemImage: "xmark.circle")
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: latch ? "bird" : pi ? "petal.superscript" : "cpu")
-                        .font(.system(size: 10, weight: .medium))
-                    Text(automatic
-                         ? (latch ? loc.t("Auto · Latch", "Auto · Latch")
-                                  : pi ? loc.t("Auto · pi", "Auto · pi")
-                                  : loc.t("Auto · Modelo", "Auto · Model"))
-                         : latchSelected ? loc.t("Latch", "Latch")
-                         : piSelected ? loc.t("pi (llm-space)", "pi (llm-space)")
-                         : loc.t("Asistente del modelo", "Model assistant"))
-                        .lineLimit(1)
-                }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(broken ? AnyShapeStyle(Color.orange)
-                                        : AnyShapeStyle(HierarchicalShapeStyle.secondary))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .glassSurface(in: Capsule(), interactive: true)
-                .overlay(Capsule().strokeBorder(.primary.opacity(0.07)))
-                .contentShape(Capsule())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .tint(broken ? .orange : .secondary)
-            .help(broken
-                  ? loc.t("El asistente externo seleccionado (latch o pi) no tiene binario instalado; el envío mostrará el error.",
-                          "The selected external assistant (latch or pi) has no binary installed; sending will show the error.")
-                  : loc.t("Quién responde en esta conversación: latch, pi o el asistente del modelo.",
-                          "Who answers in this conversation: latch, pi, or the model assistant."))
-        }
-    }
-
     @ViewBuilder private var workingDirectoryChip: some View {
         let own = chat.current?.workingDirectory
         let inherited = chat.current.flatMap { chat.project(id: $0.projectID)?.workingDirectory }
@@ -3387,26 +2842,7 @@ struct NativeChatView: View {
                 .help(loc.t("Haz clic para renombrar la conversación (Enter guarda).",
                             "Click to rename the conversation (Enter saves)."))
             Spacer()
-            assistantModeChip
             workingDirectoryChip
-            if chat.current?.assistantMode == "pi",
-               chat.current?.piAgentMode == true {
-                // visible before sending, not after.
-                Label {
-                    Text(loc.t(
-                        "Modo agente: pi puede leer y escribir archivos en la carpeta de trabajo.",
-                        "Agent mode: pi can read and write files in the working folder."))
-                        .font(.caption2)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.orange)
-                .help(loc.t(
-                    "Herramientas de pi activas solo para este chat. El presupuesto sube a \(PiDelegateService.agentTimeoutSeconds)s. Desactívalo en el menú del asistente.",
-                    "pi's tools are active for this chat only. Its budget rises to \(PiDelegateService.agentTimeoutSeconds)s. Turn it off in the assistant menu."))
-            }
             if let branches = chat.current?.branches, branches.count > 1,
                let position = chat.currentBranchPosition {
                 Menu {
@@ -3542,9 +2978,16 @@ struct NativeChatView: View {
                     .flippedUpsideDown()
             }
             if let err = chat.lastError {
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.red)
-                    .flippedUpsideDown()
+                // Selectable so the exact engine error text (the HTTP 400
+                // "Failed to initialize samplers" line of 2026-10-14) can be
+                // copied straight out of the conversation.
+                Label {
+                    Text(err).textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .font(.caption).foregroundStyle(.red)
+                .flippedUpsideDown()
             }
             ForEach(messages.reversed()) { msg in
                 messageRow(msg, isNewest: msg.id == newestID)
@@ -3963,12 +3406,9 @@ struct NativeChatView: View {
     }
 
     private var canSend: Bool {
-        // A configured remote route replaces the local engine entirely, and a
-        // latch-mode conversation needs neither: the harness process is the
-        // whole backend.
+        // A configured remote route replaces the local engine entirely.
         let remoteReady = InferenceRoutes.active()?.isConfigured == true
-        let latchReady = LatchDelegateService.isInstalled
-        return (server.state == .running || remoteReady || latchReady)
+        return (server.state == .running || remoteReady)
             && ocrPending == 0 && transcriptionPending == 0
             && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !attachments.isEmpty || !images.isEmpty)
@@ -4672,6 +4112,8 @@ struct NativeChatView: View {
         if UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled) {
             tools.append(JavaScriptSandboxService.tool)
         }
+        // Same enable flags the send path uses, so the per-conversation
+        // picker and the offered tool set are the same list.
         if ChatMemoryService.isEnabled { tools += ChatMemoryService.tools }
         tools += await KestrelMCPService.shared.discoverTools()
         var seen = Set<String>()

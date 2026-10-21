@@ -55,13 +55,6 @@ public struct KestrelApp: App {
         // Release VRAM held by an engine orphaned by a previous force-quit.
         EngineLock.reapOrphans()
 
-        // The sidecars' provider configs are generated from Kestrel's own
-        // settings: the one-time import absorbs any hand-authored sidecar
-        // config, then the files are refreshed so neither sidecar can
-        // silently disagree with what the app says.
-        PiBridge.migrateLegacySidecarConfigIfNeeded()
-        LatchBridge.migrateLegacySidecarConfigIfNeeded()
-
         // Remove the legacy raw flag; MTP is selected automatically per model.
         if var extra = defaultsMigrationExtraArgs(), extra.contains("--spec-type draft-mtp") {
             extra = extra.replacingOccurrences(of: "--spec-type draft-mtp", with: "")
@@ -73,6 +66,9 @@ public struct KestrelApp: App {
         // @AppStorage(Double/Int) silently replaces with the declared default:
         // rewrite them typed so tuned values actually apply.
         SettingsNumericCoercion.migrateMistypedNumerics()
+        // A "lang" stored by the removed Settings picker must not leak Spanish
+        // into an English-only product; nothing reads it anymore, so clear it.
+        SettingsKeys.clearStaleLanguage()
 
         // Heal the stored engine path: legacy builds or paths from another machine
         // fall back to the bundled engine.

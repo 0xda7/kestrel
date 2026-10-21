@@ -19,9 +19,12 @@ struct EngineCheckResult: Equatable {
     var failures: [String] = []
     /// Failures we already know about and that are not this app's doing.
     var knownFailures: [String] = []
+    /// Set when test-backend-ops itself could not be launched: without it
+    /// the run ends with no backends and no reason, which is silence.
+    var launchError: String?
     var cancelled = false
 
-    var ok: Bool { failures.isEmpty && !backends.isEmpty }
+    var ok: Bool { failures.isEmpty && !backends.isEmpty && launchError == nil }
 }
 
 /// Runs the engine's own operator tests and turns their output into something a
@@ -97,6 +100,10 @@ enum EngineCheck {
     /// Plain-text section for the diagnostics file.
     static func report(_ r: EngineCheckResult, localized loc: (String, String) -> String) -> String {
         var out: [String] = ["## Engine check (test-backend-ops)"]
+        if let launchError = r.launchError {
+            out.append("FAILED TO LAUNCH: \(launchError)")
+            return out.joined(separator: "\n")
+        }
         if r.cancelled { out.append("CANCELLED by the user, the results below are incomplete") }
         if !r.device.isEmpty { out.append("GPU: \(r.device)") }
         if r.simdWidth > 0 {
@@ -123,6 +130,10 @@ enum EngineCheck {
 
     /// One-line verdict for the UI.
     static func verdict(_ r: EngineCheckResult, localized loc: (String, String) -> String) -> String {
+        if let launchError = r.launchError {
+            return loc("La comprobación no arrancó: \(launchError)",
+                       "The check failed to launch: \(launchError)")
+        }
         if r.cancelled { return loc("Comprobación cancelada", "Check cancelled") }
         if r.backends.isEmpty { return loc("El motor no completó la comprobación", "The engine did not finish the check") }
         let total = r.backends.reduce(0) { $0 + $1.total }
@@ -194,7 +205,14 @@ final class EngineChecker: ObservableObject {
             try p.run()
             process = p
         } catch {
+            // A launch failure must not be silence: the run ends with no
+            // backends, so without this the sheet closes with no verdict.
+            var failed = EngineCheckResult()
+            failed.launchError = error.localizedDescription
+            result = failed
             running = false
+            AppLog.server.error("engine check failed to launch: \(error.localizedDescription)")
+            onFinish(failed)
         }
     }
 

@@ -569,14 +569,6 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsRowGroup {
-                    SettingsRow(icon: "globe",
-                                title: loc.t("Idioma", "Language"),
-                                help: loc.t("Idioma de toda la interfaz de Kestrel. Los idiomas aportados por la comunidad aparecen automáticamente.",
-                                            "Language for the entire Kestrel interface. Community-contributed languages appear here automatically.")) {
-                        KestrelDropdown(selection: $loc.language, options: loc.availableLanguages.map {
-                            .init(value: $0, title: loc.displayName($0))
-                        })
-                    }
                     SettingsRow(icon: "paintpalette",
                                 title: loc.t("Color de la app", "App color"),
                                 help: loc.t("Color de marca de botones, iconos y controles de toda la app. Independiente del color de acento del sistema.",

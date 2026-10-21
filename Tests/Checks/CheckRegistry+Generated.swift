@@ -18,6 +18,8 @@ enum CheckRegistry {
         ("ImportSafetyTests", ImportSafetyTests.__checkSet),
         ("WhisperTranscriptTests", WhisperTranscriptTests.__checkSet),
         ("DynamicMoeOptimizationTests", DynamicMoeOptimizationTests.__checkSet),
+        ("EngineHTTPTests", EngineHTTPTests.__checkSet),
+        ("EngineToolTemplateTests", EngineToolTemplateTests.__checkSet),
         ("EstimatorTests", EstimatorTests.__checkSet),
         ("ResumableDownloadTests", ResumableDownloadTests.__checkSet),
         ("DflashPolicyTests", DflashPolicyTests.__checkSet),
@@ -25,6 +27,7 @@ enum CheckRegistry {
         ("ServerSettingsTests", ServerSettingsTests.__checkSet),
         ("VRAMWindowTests", VRAMWindowTests.__checkSet),
         ("SettingsNumericCoercionTests", SettingsNumericCoercionTests.__checkSet),
+        ("EnterpriseHardeningTests", EnterpriseHardeningTests.__checkSet),
         ("ChatMessageTests", ChatMessageTests.__checkSet),
         ("LiveStreamTests", LiveStreamTests.__checkSet),
         ("CompactionTests", CompactionTests.__checkSet),
@@ -41,7 +44,6 @@ enum CheckRegistry {
         ("SmartTitleTests", SmartTitleTests.__checkSet),
         ("SpeedEstimateTests", SpeedEstimateTests.__checkSet),
         ("ModelNameTests", ModelNameTests.__checkSet),
-        ("LatchBridgeTests", LatchBridgeTests.__checkSet),
         ("LogPresentationTests", LogPresentationTests.__checkSet),
         ("InlineMathDetectionTests", InlineMathDetectionTests.__checkSet),
         ("ModelDetectionTests", ModelDetectionTests.__checkSet),
@@ -57,11 +59,10 @@ enum CheckRegistry {
         ("MTPHeadDiscoveryTests", MTPHeadDiscoveryTests.__checkSet),
         ("SplitEnvironmentTests", SplitEnvironmentTests.__checkSet),
         ("MaskEditorTests", MaskEditorTests.__checkSet),
-        ("MetaPromptServiceTests", MetaPromptServiceTests.__checkSet),
         ("FamilyGroupTests", FamilyGroupTests.__checkSet),
-        ("PiBridgeTests", PiBridgeTests.__checkSet),
         ("SubtitleLayoutTests", SubtitleLayoutTests.__checkSet),
         ("ToolSupportTests", ToolSupportTests.__checkSet),
+        ("SurgicalChecks", SurgicalChecks.__checkSet),
     ]
 }
 

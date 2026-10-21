@@ -459,9 +459,18 @@ private struct ServerConfigurationWorkspace: View {
                 Label(loc.t("Servicios y opciones avanzadas", "Services and advanced options"), systemImage: "slider.horizontal.3")
                     .font(.system(size: 14, weight: .semibold))
                 ServerSettingRow(icon: "point.3.connected.trianglepath.dotted", title: loc.t("Servidor de embeddings", "Embeddings server"),
-                                 detail: loc.t("Expone un endpoint compatible con OpenAI", "Exposes an OpenAI-compatible endpoint")) {
+                                 detail: server.profile == nil
+                                 ? loc.t("Solo en un segundo servidor dedicado (Servidores → Añadir): el principal sirve el chat y nunca arranca en modo embeddings.",
+                                         "Only on a dedicated second server (Servers → Add): the primary serves chat and never launches embeddings-only.")
+                                 : loc.t("Expone un endpoint compatible con OpenAI", "Exposes an OpenAI-compatible endpoint")) {
                     Toggle(loc.t("Servidor de embeddings", "Embeddings server"),
                            isOn: embeddings(settings)).labelsHidden().toggleStyle(.switch)
+                        // The launch-args guard drops --embeddings on the
+                        // primary port (Server.swift): that server must never
+                        // stop serving chat. The control is inert there, so it
+                        // is disabled with a pointer to add a second server
+                        // instead of silently ignoring the flip.
+                        .disabled(server.profile == nil)
                 }
                 ServerSettingRow(icon: "network", title: loc.t("Proxy MCP para la interfaz web", "MCP proxy for the web interface"),
                                  detail: loc.t("Permite usar MCP mediante la interfaz web", "Allows MCP through the web interface")) {
@@ -959,7 +968,11 @@ private struct ServerIntegrationsWorkspace: View {
         let settings = server.effectiveSettings()
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 310), spacing: 14)], spacing: 14) {
             integration("point.3.connected.trianglepath.dotted", loc.t("Embeddings", "Embeddings"),
-                        loc.t("Búsqueda semántica y aplicaciones RAG.", "Semantic search and RAG applications."), settings.embeddings,
+                        loc.t("Búsqueda semántica y aplicaciones RAG.", "Semantic search and RAG applications."),
+                        // Same condition the launch-args builder uses: the
+                        // primary server never launches --embeddings, so its
+                        // card must not claim Enabled for the flag alone.
+                        settings.embeddings && settings.port != ServerSettings.fromDefaults().port,
                         rows: [(loc.t("Endpoint", "Endpoint"), "POST /v1/embeddings"),
                                (loc.t("Modelo", "Model"), ModelName.forPath(settings.modelPath).title),
                                (loc.t("Formato", "Format"), "OpenAI compatible")])

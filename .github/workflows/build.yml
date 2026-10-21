@@ -68,7 +68,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --name-only "$BASE_SHA"...HEAD | grep -Ev '(^|/).*\.md$|^Assets/lang/|^scripts/(extract-strings|check-translations|translation-status|sync-translations)\.py$|^\.github/|^LICENSE$|^\.gitignore$' >/dev/null; then
+          if git diff --name-only "$BASE_SHA"...HEAD | grep -Ev '(^|/).*\.md$|^\.github/|^LICENSE$|^\.gitignore$' >/dev/null; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"

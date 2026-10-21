@@ -2172,8 +2172,13 @@ final class CompactionTests: CheckCase {
         ]
         let history = ChatStore.requestHistory(system: "", summary: nil,
                                                messages: messages, from: 0)
-        XCTAssertEqual(history.map { $0["role"] as? String ?? "" }, ["user", "user"])
-        XCTAssertEqual(history.last?["content"] as? String, "¿qué pasó?")
+        // 0.89.9 contract: the dropped reasoning-only assistant leaves two
+        // consecutive user turns, which strict chat templates (the medical
+        // finetunes' "roles must alternate" Jinja) reject with a 400 — so
+        // the seam merges them into one user message. A failed turn must
+        // never poison the rest of the conversation.
+        XCTAssertEqual(history.map { $0["role"] as? String ?? "" }, ["user"])
+        XCTAssertEqual(history.last?["content"] as? String, "hola\n\n¿qué pasó?")
     }
 
     func testAttachmentsAreFoldedIntoTheWireHistory() {
@@ -2202,7 +2207,8 @@ final class CompactionTests: CheckCase {
 
     func testReasoningOnlyLengthMessageExplainsTokenLimit() {
         let message = ChatStore.emptyResponseMessage(finishReason: "length")
-        XCTAssertTrue(message.contains("máximo de tokens"))
+        XCTAssertTrue(message.contains("max tokens"))
+        XCTAssertFalse(message.contains("á"), "agent-path text stays English-only")
     }
 }
 
@@ -2358,42 +2364,24 @@ final class BenchAndProfileTests: CheckCase {
 
 @MainActor
 final class LocalizationTests: CheckCase {
-    func testDocsHaveSameSectionsInBothLanguages() {
-        XCTAssertEqual(DocsContent.es.count, DocsContent.en.count)
-        XCTAssertGreaterThanOrEqual(DocsContent.es.count, 10)
-        for (es, en) in zip(DocsContent.es, DocsContent.en) {
-            XCTAssertEqual(es.icon, en.icon, "iconos desalineados: \(es.title) / \(en.title)")
-            XCTAssertFalse(es.body.isEmpty)
-            XCTAssertFalse(en.body.isEmpty)
-        }
-    }
-
     func testDocsNeverMentionForbiddenNames() {
-        for section in DocsContent.es + DocsContent.en {
+        for section in DocsContent.en {
             XCTAssertFalse(section.body.localizedCaseInsensitiveContains("claude"),
                            "la documentación no debe mencionar asistentes de IA")
         }
     }
 
-    func testLocalizerSwitchesLanguage() {
+    func testLocalizerAlwaysResolvesEnglish() {
+        // English-only product language (operator directive 2026-10-14):
+        // the switcher is gone and t() always resolves the English half.
         let loc = Localizer()
-        loc.language = "es"
-        XCTAssertTrue(loc.isSpanish)
-        XCTAssertEqual(loc.t("hola", "hello"), "hola")
-        loc.language = "en"
+        XCTAssertEqual(loc.language, "en")
         XCTAssertFalse(loc.isSpanish)
         XCTAssertEqual(loc.t("hola", "hello"), "hello")
     }
 
-    func testDynamicMoeOptimizationStatesUseActiveLanguage() {
+    func testDynamicMoeOptimizationStatesLocalizeInEnglish() {
         let loc = Localizer()
-        loc.language = "es"
-        XCTAssertEqual(DynamicMoeOptimizationState.testingDirect(slots: 8).localized(using: loc),
-                       "Probando dMoE directo K8…")
-        XCTAssertEqual(DynamicMoeOptimizationState.optimizedSplit(slots: 64, ringSlots: 8)
-            .localized(using: loc), "Optimizado: ruta dividida K64 + ring8")
-
-        loc.language = "en"
         XCTAssertEqual(DynamicMoeOptimizationState.testingDirect(slots: 8).localized(using: loc),
                        "Testing direct dMoE K8…")
         XCTAssertEqual(DynamicMoeOptimizationState.optimizedSplit(slots: 64, ringSlots: 8)
@@ -3010,10 +2998,9 @@ extension LocalizationTests {
         suite: "LocalizationTests",
         instance: { LocalizationTests() },
         checks: [
-            .init(name: "testDocsHaveSameSectionsInBothLanguages") { $0.testDocsHaveSameSectionsInBothLanguages() },
             .init(name: "testDocsNeverMentionForbiddenNames") { $0.testDocsNeverMentionForbiddenNames() },
-            .init(name: "testLocalizerSwitchesLanguage") { $0.testLocalizerSwitchesLanguage() },
-            .init(name: "testDynamicMoeOptimizationStatesUseActiveLanguage") { $0.testDynamicMoeOptimizationStatesUseActiveLanguage() },
+            .init(name: "testLocalizerAlwaysResolvesEnglish") { $0.testLocalizerAlwaysResolvesEnglish() },
+            .init(name: "testDynamicMoeOptimizationStatesLocalizeInEnglish") { $0.testDynamicMoeOptimizationStatesLocalizeInEnglish() },
         ])
 }
 
@@ -3131,5 +3118,460 @@ extension ModelNameTests {
             .init(name: "testEngineCheckSeparatesKnownUpstreamFailure") { $0.testEngineCheckSeparatesKnownUpstreamFailure() },
             .init(name: "testEngineCheckCleanRunHasNoFailures") { $0.testEngineCheckCleanRunHasNoFailures() },
             .init(name: "testEngineCheckBinarySitsNextToTheEngine") { $0.testEngineCheckBinarySitsNextToTheEngine() },
+        ])
+}
+
+// MARK: - Enterprise hardening (0.89.10)
+
+/// Each check pins one 2026-10-14 production incident from the operator's
+/// own logs, so the class of failure can't silently return.
+final class EnterpriseHardeningTests: CheckCase {
+    private func makeSettings(port: Int = 8099,
+                              modelPath: String = "/tmp/m.gguf",
+                              cacheTypeK: String = "f16",
+                              cacheTypeV: String = "f16") -> ServerSettings {
+        ServerSettings(serverBinary: "/usr/bin/true", modelPath: modelPath, port: port,
+                       ngl: 99, ncmoe: 0, ctx: 16384, threads: 6, flashAttn: "auto",
+                       noMmap: true, jinja: true,
+                       vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                       cacheTypeK: cacheTypeK, cacheTypeV: cacheTypeV, mlock: false)
+    }
+
+    /// The all-night outage: --embeddings on the chat-serving server makes
+    /// every chat request fail ("does not support logits computation") and
+    /// can abort the engine at load. It must never ride the primary server.
+    func testPrimaryServerNeverLaunchesEmbeddingsOnly() throws {
+        let primaryPort = ServerSettings.fromDefaults().port
+        var primary = makeSettings(port: primaryPort)
+        primary.embeddings = true
+        XCTAssertFalse(primary.arguments.contains("--embeddings"),
+                       "primary chat server must never be embeddings-only")
+
+        var second = makeSettings(port: primaryPort == 8099 ? 8098 : 8099)
+        second.embeddings = true
+        XCTAssertTrue(second.arguments.contains("--embeddings"),
+                      "a dedicated second server keeps the RAG flag")
+    }
+
+    /// The HTTP 400 incident: an added decision-model card launched with
+    /// --embeddings --jinja --tools all --ui-mcp-proxy, and every chat/tool
+    /// request failed with "Failed to initialize samplers, failed to parse
+    /// grammar" — an embeddings-dedicated context has no sampler chain, so
+    /// the four chat flags are impossible on it by construction. A
+    /// non-embeddings card with tools on keeps every one of them.
+    func testEmbeddingsCardsCannotCarryChatToolFlags() throws {
+        let primaryPort = ServerSettings.fromDefaults().port
+        let cardPort = primaryPort == 8099 ? 8098 : 8099
+        var embeddingsCard = makeSettings(port: cardPort)
+        embeddingsCard.embeddings = true
+        embeddingsCard.agentToolsEnabled = true
+        embeddingsCard.uiMcpProxy = true
+        embeddingsCard.toolsRuntime = "docker:tools"
+        embeddingsCard.jinja = true
+        let blocked = embeddingsCard.arguments
+        XCTAssertTrue(blocked.contains("--embeddings"))
+        for flag in ["--tools", "--tools-runtime", "--jinja", "--ui-mcp-proxy"] {
+            XCTAssertFalse(blocked.contains(flag), "\(flag) must not ride an embeddings server")
+        }
+
+        var chatCard = makeSettings(port: cardPort)
+        chatCard.embeddings = false
+        chatCard.agentToolsEnabled = true
+        chatCard.uiMcpProxy = true
+        chatCard.toolsRuntime = "docker:tools"
+        chatCard.jinja = true
+        let allowed = chatCard.arguments
+        XCTAssertFalse(allowed.contains("--embeddings"))
+        for flag in ["--tools", "--tools-runtime", "--jinja", "--ui-mcp-proxy"] {
+            XCTAssertTrue(allowed.contains(flag), "a non-embeddings card with tools keeps \(flag)")
+        }
+        let toolsIndex = try XCTUnwrap(allowed.firstIndex(of: "--tools"))
+        XCTAssertEqual(allowed[toolsIndex + 1], "all")
+    }
+
+    /// The transcript's error row is the exact line that showed the operator
+    /// "HTTP 400: Failed to initialize samplers, failed to parse grammar".
+    /// Its text must be selectable/copyable like the rest of the chat. The
+    /// harness renders no SwiftUI, so the pin reads the view source.
+    func testChatErrorTextIsCopyable() throws {
+        let viewURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Chat/ChatNative.swift")
+        let view = try String(contentsOf: viewURL, encoding: .utf8)
+        guard let range = view.range(of: "if let err = chat.lastError") else {
+            return XCTFail("the transcript's error row (chat.lastError) must exist in ChatNative.swift")
+        }
+        let block = view[range.lowerBound...].prefix(500)
+        XCTAssertTrue(block.contains(".textSelection(.enabled)"),
+                      "the error row's text must be selectable so engine errors are copyable")
+    }
+
+
+
+    /// The double engine abort: gemma + mixed K/V hits the same-type-requiring
+    /// generic Metal kernel. Mixed pairs for gemma must be equalized on the
+    /// smaller type; tuned mixes for other models (q8_0/turbo4) stay as set.
+    func testGemmaEqualizesMixedKVTypes() throws {
+        var gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        gemma.embeddings = false
+        let gArgs = gemma.arguments
+        let gk = try XCTUnwrap(gArgs.firstIndex(of: "-ctk"))
+        let gv = try XCTUnwrap(gArgs.firstIndex(of: "-ctv"))
+        XCTAssertEqual(gArgs[gk + 1], "q4_0")
+        XCTAssertEqual(gArgs[gv + 1], "q4_0")
+
+        var qwen = makeSettings(modelPath: "/tmp/Qwen3.5-9B-distilled-IQ4_NL.gguf",
+                                cacheTypeK: "q8_0", cacheTypeV: "turbo4")
+        qwen.embeddings = false
+        let qArgs = qwen.arguments
+        let qk = try XCTUnwrap(qArgs.firstIndex(of: "-ctk"))
+        let qv = try XCTUnwrap(qArgs.firstIndex(of: "-ctv"))
+        XCTAssertEqual(qArgs[qk + 1], "q8_0")
+        XCTAssertEqual(qArgs[qv + 1], "turbo4")
+    }
+
+    /// English is the product language: the picker is gone and a stored
+    /// "es" must not bring Spanish back.
+    func testLocalizerIsEnglishOnly() throws {
+        UserDefaults.standard.set("es", forKey: "lang")
+        defer { UserDefaults.standard.removeObject(forKey: "lang") }
+        let loc = Localizer()
+        XCTAssertEqual(loc.language, "en")
+        XCTAssertEqual(loc.t("Idioma", "Language"), "Language")
+        XCTAssertFalse(loc.isSpanish)
+    }
+
+
+
+
+
+    /// Audit fix (77de404): every LocalSecretStore write (engine key,
+    /// provider route keys, archive token) must land 0600 inside a 0700
+    /// directory — atomically at creation.
+    func testLocalSecretStoreLandsOwnerOnly() throws {
+        let prior = LocalSecretStore.value("kestrel-check-perm-sentinel")
+        XCTAssertTrue(LocalSecretStore.store("kestrel-check-perm-sentinel", "perm-check"))
+        defer {
+            if let prior { LocalSecretStore.store("kestrel-check-perm-sentinel", prior) }
+            else { LocalSecretStore.delete("kestrel-check-perm-sentinel") }
+        }
+        let fm = FileManager.default
+        let fileURL = LocalSecretStore.url("kestrel-check-perm-sentinel")
+        let fileMode = try fm.attributesOfItem(atPath: fileURL.path)[.posixPermissions] as? Int
+        let dirMode = try fm.attributesOfItem(atPath: fileURL.deletingLastPathComponent().path)[.posixPermissions] as? Int
+        XCTAssertEqual(fileMode, 0o600, "secret files must be owner-only")
+        XCTAssertEqual(dirMode, 0o700, "the secrets directory must be owner-only")
+    }
+
+    /// Hardening round 2 — one sweep over EVERY secret-bearing path, not one
+    /// known filename: every file in the local secret store (engine key,
+    /// provider route keys, archive token) must be owner-only 0600 and the
+    /// store directory 0700. Walking the whole directory is what pins a
+    /// FUTURE writer that adds a new secret file.
+    func testEverySecretPathLandsOwnerOnly() throws {
+        // One write through the public API (restored in defer) so the sweep
+        // always inspects at least one fresh file.
+        let sentinel = "kestrel-check-perm-sentinel"
+        let prior = LocalSecretStore.value(sentinel)
+        XCTAssertTrue(LocalSecretStore.store(sentinel, "perm-sweep"))
+        defer {
+            if let prior { LocalSecretStore.store(sentinel, prior) }
+            else { LocalSecretStore.delete(sentinel) }
+        }
+        let fm = FileManager.default
+        let secretsDir = LocalSecretStore.url(sentinel).deletingLastPathComponent()
+        let dirMode = try fm.attributesOfItem(atPath: secretsDir.path)[.posixPermissions] as? Int
+        XCTAssertEqual(dirMode, 0o700, "the secrets directory must be owner-only")
+        for file in try fm.contentsOfDirectory(atPath: secretsDir.path) {
+            let path = secretsDir.appendingPathComponent(file).path
+            let mode = try fm.attributesOfItem(atPath: path)[.posixPermissions] as? Int
+            XCTAssertEqual(mode, 0o600, "secret file '\(file)' must be owner-only")
+        }
+    }
+
+    /// The overwrite path is where a write-then-chmod sequence leaves its
+    /// world-readable window: a legacy or foreign file that already exists
+    /// with looser permissions gets truncated and rewritten BEFORE the
+    /// chmod lands. The owner-only writer must end 0600 on that path too —
+    /// its write is a fresh 0600 temp renamed over the target, so the file
+    /// is never readable beyond the owner at any instant. Fresh creation
+    /// and no-window overwrite are both pinned here.
+    func testOwnerOnlyWriterCoversCreationAndLooseOverwrite() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory
+            .appendingPathComponent("kestrel-owner-only-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        // Fresh creation: 0600 from the very first instant.
+        let fresh = dir.appendingPathComponent("fresh")
+        XCTAssertTrue(OwnerOnlyFile.write(Data("x".utf8), to: fresh))
+        XCTAssertEqual(try fm.attributesOfItem(atPath: fresh.path)[.posixPermissions] as? Int,
+                       0o600, "a fresh owner-only file must be 0600")
+
+        // Overwrite of a deliberately loose 0644 file: ends 0600, content
+        // replaced, no truncate-rewrite of the loose inode.
+        let loose = dir.appendingPathComponent("loose")
+        XCTAssertTrue(fm.createFile(atPath: loose.path, contents: Data("old".utf8),
+                                    attributes: [.posixPermissions: 0o644]))
+        XCTAssertTrue(OwnerOnlyFile.write(Data("new-secret".utf8), to: loose))
+        XCTAssertEqual(try fm.attributesOfItem(atPath: loose.path)[.posixPermissions] as? Int,
+                       0o600, "an overwrite of a loose file must end owner-only")
+        XCTAssertEqual(try String(contentsOf: loose, encoding: .utf8), "new-secret")
+    }
+
+    /// Loopback-only engine endpoints (hardening round 2): user extraArgs
+    /// ride AFTER the app's own `--host` token and getopt lets the LAST
+    /// duplicate win, so a typed or imported `--host 0.0.0.0` would re-bind
+    /// the engine to the LAN behind the start() LAN refusal's back. The
+    /// non-loopback bind must be dropped unless the operator enabled LAN
+    /// AND the key; loopback values pass untouched.
+    func testLoopbackBindCannotBeOverriddenByExtraArguments() throws {
+        // Both spellings, plus a loopback value that must survive.
+        var offline = makeSettings()
+        offline.localNetworkDiscovery = false
+        offline.apiKeyEnabled = false
+        offline.extraArgs = "--host 0.0.0.0 --host=[::] --host 127.0.0.1"
+        let args = offline.arguments
+        XCTAssertFalse(args.contains("0.0.0.0"),
+                       "an extraArgs LAN bind must not reach the engine while LAN is off")
+        XCTAssertFalse(args.contains("--host=[::]"),
+                       "the = spelling must be guarded too")
+        XCTAssertTrue(args.contains("127.0.0.1"),
+                      "loopback binds are the policy, not a violation")
+        // The app's own bind is still there exactly once.
+        XCTAssertEqual(args.filter { $0 == "--host" }.count, 2,
+                       "app bind + the user's loopback token")
+        // LAN on WITH the key: the operator's explicit choice stands.
+        var lan = makeSettings()
+        lan.localNetworkDiscovery = true
+        lan.apiKeyEnabled = true
+        lan.extraArgs = "--host 0.0.0.0"
+        XCTAssertTrue(lan.arguments.contains("0.0.0.0"),
+                      "an authorized LAN bind is the operator's to make")
+        // The pure helper, form by form.
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "0.0.0.0"], lanAllowed: false), [])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host=192.168.1.5"], lanAllowed: false), [])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "localhost"], lanAllowed: false),
+                       ["--host", "localhost"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "::1"], lanAllowed: false),
+                       ["--host", "::1"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host"], lanAllowed: false), ["--host"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["-t", "8", "--host", "0.0.0.0", "--jinja"], lanAllowed: false),
+                       ["-t", "8", "--jinja"])
+        XCTAssertEqual(ServerSettings.loopbackGuardedCLI(["--host", "0.0.0.0"], lanAllowed: true),
+                       ["--host", "0.0.0.0"])
+    }
+
+
+    /// Audit fix (77de404, defect register #6): llama-bench hits the same
+    /// same-type-requiring Metal kernel as the server launch, so a mixed
+    /// gemma K/V pair must equalize in benchmarkArguments exactly as the
+    /// launch does — and effectiveCacheTypes is that shared pair.
+    func testBenchmarkArgumentsEqualizeGemmaMixedKV() throws {
+        var gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        gemma.embeddings = false
+        XCTAssertEqual(gemma.effectiveCacheTypes.k, "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.v, "q4_0")
+        let args = gemma.benchmarkArguments
+        let k = try XCTUnwrap(args.firstIndex(of: "-ctk"))
+        XCTAssertEqual(args[k + 1], "q4_0", "bench must measure the pair the launch uses")
+        let v = try XCTUnwrap(args.firstIndex(of: "-ctv"))
+        XCTAssertEqual(args[v + 1], "q4_0")
+    }
+
+    /// The router preset is the third place the gemma equalization must hold:
+    /// the instance `effectiveCacheTypes` keys on `modelPath`, which is empty
+    /// in router mode, so each INI section has to equalize against its own
+    /// path. A mixed pair written raw aborted that model's child engine at
+    /// load — the same GGML_ASSERT class the launch/bench pins cover.
+    func testRouterPresetEqualizesGemmaMixedKVPerModel() {
+        var s = makeSettings(cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        s.routerMode = true
+        let ini = s.routerPresetINI(
+            modelPaths: ["/models/gemma-4-12b-it-Q4_K_M.gguf", "/models/Qwen3.5-9B.gguf"],
+            ncmoeByPath: [:])
+        let sections = ini.components(separatedBy: "\n\n")
+        let gemma = sections.first { $0.contains("[gemma-4-12b-it-q4-k-m]") } ?? ""
+        XCTAssertTrue(gemma.contains("cache-type-k = q4_0"),
+                      "gemma section must carry the equalized K, got:\n\(gemma)")
+        XCTAssertTrue(gemma.contains("cache-type-v = q4_0"),
+                      "gemma section must carry the equalized V, got:\n\(gemma)")
+        let qwen = sections.first { $0.contains("[qwen3-5-9b]") } ?? ""
+        XCTAssertTrue(qwen.contains("cache-type-k = q8_0"),
+                      "a non-gemma section keeps its tuned K mix, got:\n\(qwen)")
+        XCTAssertTrue(qwen.contains("cache-type-v = q4_0"),
+                      "a non-gemma section keeps its tuned V mix, got:\n\(qwen)")
+    }
+
+    /// The per-path pair helper is the one shared source: the instance
+    /// property delegates to it, gemma equalizes on the smaller type and a
+    /// non-gemma mixed pair passes through untouched.
+    func testEffectiveCacheTypesDelegateToPerPathHelper() {
+        let gemma = makeSettings(modelPath: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                 cacheTypeK: "q8_0", cacheTypeV: "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.k, "q4_0")
+        XCTAssertEqual(gemma.effectiveCacheTypes.v, "q4_0")
+        XCTAssertEqual(
+            ServerSettings.effectiveCacheTypes(forModel: "/tmp/gemma-4-12b-it-Q4_K_M.gguf",
+                                               k: "q8_0", v: "q4_0").k, "q4_0")
+        // Equalized on the SMALLER type in both directions.
+        XCTAssertEqual(
+            ServerSettings.effectiveCacheTypes(forModel: "/tmp/gemma-4-12b.gguf",
+                                               k: "q4_0", v: "q8_0").v, "q4_0")
+        // Non-gemma keeps the tuned mix.
+        let tuned = ServerSettings.effectiveCacheTypes(forModel: "/tmp/Qwen3.5-9B.gguf",
+                                                       k: "q8_0", v: "q4_0")
+        XCTAssertEqual(tuned.k, "q8_0")
+        XCTAssertEqual(tuned.v, "q4_0")
+    }
+
+    /// `ModelSpec.kvBytesPerToken` counts K+V bytes combined, so a pair's
+    /// scale is the mean of both types — the formula Hardware.swift's
+    /// estimator and the DFlash planner already use. Scaling by K alone
+    /// mis-estimates every mixed pair, which is how the auto-context solver
+    /// could hand the engine a window that spills KV out of VRAM.
+    func testKVPairScaleIsTheMeanOfBothTypes() {
+        XCTAssertEqual(ServerSettings.kvScale(k: "f16", v: "f16"), 1.0)
+        XCTAssertEqual(ServerSettings.kvScale(k: "f16", v: "q8_0"),
+                       (Estimator.kvTypeScale("f16") + Estimator.kvTypeScale("q8_0")) / 2)
+        // K quantized, V f16: the mean is ~0.65 — K alone would claim 0.30
+        // and under-reserve half the cache's bytes.
+        XCTAssertEqual(ServerSettings.kvScale(k: "q8_0", v: "f16"), 0.765)
+        XCTAssertNotEqual(ServerSettings.kvScale(k: "q8_0", v: "f16"),
+                          Estimator.kvTypeScale("q8_0"),
+                          "the pair scale must not collapse to K's scale alone")
+    }
+
+    /// The engine check's launch failure must surface, not vanish: the old
+    /// catch only flipped `running` off, leaving no result and no verdict.
+    func testEngineCheckLaunchFailureIsStated() {
+        var r = EngineCheckResult()
+        r.launchError = "Operation not permitted (errno 1)"
+        XCTAssertFalse(r.ok, "a failed launch is not a clean run")
+        let verdict = EngineCheck.verdict(r) { $1 }
+        XCTAssertTrue(verdict.contains("failed to launch"),
+                      "the verdict must state the launch error, got: \(verdict)")
+        XCTAssertTrue(verdict.contains("Operation not permitted"))
+        let report = EngineCheck.report(r) { _, en in en }
+        XCTAssertTrue(report.contains("FAILED TO LAUNCH: Operation not permitted"),
+                      "the diagnostics report must carry the launch error")
+        // The clean-run shape is unchanged for results without a launch error.
+        XCTAssertFalse(EngineCheck.report(EngineCheckResult()) { _, en in en }.contains("FAILED TO LAUNCH"))
+    }
+
+    /// Audit fix (77de404, KES-08): the archive hook's Bearer token rides
+    /// every delivery, so a non-loopback receiver must be https. Loopback
+    /// http stays allowed (no credential leaves the machine).
+    func testMemoryArchiveHookRequiresHTTPSOffLoopback() {
+        let key = SettingsKeys.memoryArchiveHookURL
+        let prior = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let prior { UserDefaults.standard.set(prior, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.set("http://archive.example.com/hook", forKey: key)
+        XCTAssertNil(MemoryArchiveHook.url, "plain-http remote would send the token in cleartext")
+        UserDefaults.standard.set("https://archive.example.com/hook", forKey: key)
+        XCTAssertEqual(MemoryArchiveHook.url?.host, "archive.example.com")
+        UserDefaults.standard.set("http://127.0.0.1:9911/hook", forKey: key)
+        XCTAssertEqual(MemoryArchiveHook.url?.host, "127.0.0.1", "loopback http carries no network exposure")
+        UserDefaults.standard.set("http://192.168.1.9/hook", forKey: key)
+        XCTAssertNil(MemoryArchiveHook.url, "LAN hosts are not loopback-insecure; https required")
+    }
+
+    /// Audit fix (77de404): a "lang" stored by the removed Settings picker
+    /// must not linger — nothing reads it and launch clears it.
+    func testStaleStoredLanguageIsCleared() {
+        UserDefaults.standard.set("es", forKey: "lang")
+        SettingsKeys.clearStaleLanguage()
+        XCTAssertNil(UserDefaults.standard.string(forKey: "lang"))
+    }
+
+
+
+    /// A steering message queued while the
+    /// continuation card waited must survive the operator DECLINING
+    /// continuation — the run ends there, so the queued message starts its
+    /// own turn (the same delivery every other turn boundary performs)
+    /// instead of being silently cleared by the next manual send(). The
+    /// operator's conversations.json is backed up and restored byte-exact in
+    /// the defer; the delivered turn aims at a closed port so it fails fast
+    /// after the assertions.
+    @MainActor func testDeclinedContinuationDeliversQueuedSteeringMessage() async throws {
+        let conversationsURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Kestrel/conversations.json")
+        let priorBytes = try? Data(contentsOf: conversationsURL)
+        let hadFile = FileManager.default.fileExists(atPath: conversationsURL.path)
+        defer {
+            if let priorBytes {
+                try? priorBytes.write(to: conversationsURL)
+            } else if !hadFile {
+                try? FileManager.default.removeItem(at: conversationsURL)
+            }
+        }
+
+        let store = ChatStore()
+        guard let conv = store.current else {
+            return XCTFail("ChatStore must open with a conversation")
+        }
+        // The delivered turn aims at the closed test port, so it fails fast
+        // after the assertions.
+        // Arrange the decline boundary directly: a finished-budget agent run
+        // (continuation card up) with a steering message queued against it.
+        store.agentContext = AgentRunContext(
+            port: 8099, temperature: 0.7, maxTokens: 64, system: "", thinking: false,
+            sampling: ChatSamplingSettings(), modalities: nil,
+            remainingTurns: 0, tools: [], workingDirectory: nil)
+        store.pendingAgentContinuation = PendingAgentContinuation(
+            conversationID: conv.id, turnsUsed: 8, turnLimit: 10, toolsExecuted: 0)
+        store.queueMessage(text: "steering after decline", attachments: [], images: [])
+        XCTAssertNotNil(store.queuedMessage, "the steering message must queue while the card waits")
+
+        store.respondToAgentContinuation(false)
+        XCTAssertNil(store.queuedMessage,
+                     "declining continuation must deliver the queued steering message, not orphan it")
+        let messages = store.conversations.first(where: { $0.id == conv.id })?.messages ?? []
+        XCTAssertEqual(messages.filter { $0.role == "user" }.map(\.content),
+                       ["steering after decline"],
+                       "the delivered steering message must land as its own user turn")
+        XCTAssertTrue(store.generating,
+                      "the delivered message must start its own turn")
+        // Let the doomed request (closed port) fail and finish so no
+        // detached work outlives the check.
+        let deadline = Date().addingTimeInterval(30)
+        while store.generating && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertFalse(store.generating, "the failed turn must release generating")
+    }
+
+}
+
+extension EnterpriseHardeningTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "EnterpriseHardeningTests",
+        instance: { EnterpriseHardeningTests() },
+        checks: [
+            .init(name: "testPrimaryServerNeverLaunchesEmbeddingsOnly") { try await $0.testPrimaryServerNeverLaunchesEmbeddingsOnly() },
+            .init(name: "testEmbeddingsCardsCannotCarryChatToolFlags") { try $0.testEmbeddingsCardsCannotCarryChatToolFlags() },
+            .init(name: "testChatErrorTextIsCopyable") { try $0.testChatErrorTextIsCopyable() },
+            .init(name: "testGemmaEqualizesMixedKVTypes") { try await $0.testGemmaEqualizesMixedKVTypes() },
+            .init(name: "testLocalizerIsEnglishOnly") { try await $0.testLocalizerIsEnglishOnly() },
+            .init(name: "testLocalSecretStoreLandsOwnerOnly") { try await $0.testLocalSecretStoreLandsOwnerOnly() },
+            .init(name: "testEverySecretPathLandsOwnerOnly") { try await $0.testEverySecretPathLandsOwnerOnly() },
+            .init(name: "testOwnerOnlyWriterCoversCreationAndLooseOverwrite") { try await $0.testOwnerOnlyWriterCoversCreationAndLooseOverwrite() },
+            .init(name: "testLoopbackBindCannotBeOverriddenByExtraArguments") { try await $0.testLoopbackBindCannotBeOverriddenByExtraArguments() },
+            .init(name: "testBenchmarkArgumentsEqualizeGemmaMixedKV") { try await $0.testBenchmarkArgumentsEqualizeGemmaMixedKV() },
+            .init(name: "testRouterPresetEqualizesGemmaMixedKVPerModel") { $0.testRouterPresetEqualizesGemmaMixedKVPerModel() },
+            .init(name: "testEffectiveCacheTypesDelegateToPerPathHelper") { $0.testEffectiveCacheTypesDelegateToPerPathHelper() },
+            .init(name: "testKVPairScaleIsTheMeanOfBothTypes") { $0.testKVPairScaleIsTheMeanOfBothTypes() },
+            .init(name: "testEngineCheckLaunchFailureIsStated") { $0.testEngineCheckLaunchFailureIsStated() },
+            .init(name: "testMemoryArchiveHookRequiresHTTPSOffLoopback") { $0.testMemoryArchiveHookRequiresHTTPSOffLoopback() },
+            .init(name: "testStaleStoredLanguageIsCleared") { $0.testStaleStoredLanguageIsCleared() },
+            .init(name: "testDeclinedContinuationDeliversQueuedSteeringMessage") { try await $0.testDeclinedContinuationDeliversQueuedSteeringMessage() },
         ])
 }

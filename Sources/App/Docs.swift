@@ -4,13 +4,14 @@
 
 import SwiftUI
 
-/// Built-in app documentation, in Spanish and English.
+/// Built-in app documentation. English only (operator directive
+/// 2026-10-14): the Spanish half that used to live here was unreachable at
+/// runtime once the language picker was removed.
 struct DocsView: View {
-    @EnvironmentObject var loc: Localizer
     @State private var selected: Int = 0
 
     var body: some View {
-        let sections = DocsContent.sections(spanish: loc.isSpanish)
+        let sections = DocsContent.sections()
         HSplitView {
             List(0..<sections.count, id: \.self, selection: Binding(
                 get: { selected }, set: { selected = $0 ?? 0 })
@@ -40,249 +41,7 @@ struct DocSection {
 }
 
 enum DocsContent {
-    static func sections(spanish: Bool) -> [DocSection] { spanish ? es : en }
-
-    static let es: [DocSection] = [
-        DocSection(title: "Qué es Kestrel", icon: "sparkles", body: """
-Kestrel ejecuta modelos de lenguaje (LLM) **localmente** en Macs Intel con GPU AMD, usando aceleración Metal. Nada sale de tu equipo: sin nube, sin cuentas, sin costos por token.
-
-Por dentro usa **llama.cpp** con parches específicos para GPUs AMD discretas en macOS, empaquetado dentro de la propia app — no necesitas instalar nada más.
-
-**Requisitos:**
-- Mac con macOS 14 o superior
-- GPU AMD con soporte Metal (probado con RX 6700 XT 12 GB)
-- 16 GB de RAM mínimo (32 GB recomendado para modelos MoE grandes)
-"""),
-        DocSection(title: "Inicio rápido", icon: "play.circle", body: """
-1. Ve a **Modelos** y descarga uno del catálogo (la app te indica cuáles caben en tu equipo con etiquetas de color).
-2. Pulsa **Usar** en el modelo descargado — los parámetros se ajustan solos.
-3. Ve a **Inicio** y pulsa **Iniciar servidor**.
-4. Abre **Chat** y conversa.
-
-La etiqueta de cada modelo indica su compatibilidad:
-- **GPU completa**: cabe entero en VRAM, máxima velocidad
-- **Híbrido GPU+CPU**: modelos MoE repartidos entre VRAM y RAM, buen rendimiento
-- **Lento**: funciona pero con velocidad limitada
-- **No cabe**: excede la memoria de tu equipo
-"""),
-        DocSection(title: "Las pestañas", icon: "square.grid.2x2", body: """
-**Inicio** — Resumen del equipo detectado (CPU, RAM, GPU, VRAM), control del servidor, estadísticas en vivo y el modelo recomendado para tu hardware.
-
-**Chat** — Conversaciones con el modelo: historial persistente, múltiples conversaciones (⌘N), prompt de sistema, regenerar respuestas, copiar mensajes y bloques de código, velocidad por mensaje, adjuntar imágenes (modelos con visión) y archivos de texto/PDF (hasta 40 MB, con OCR automático para PDFs escaneados).
-
-**Modelos** — Modelos locales detectados en `~/models` (puedes cambiar la carpeta en Ajustes), catálogo curado con estimaciones de memoria para tu equipo, buscador de Hugging Face y descargas con progreso. Puedes eliminar modelos (van a la Papelera).
-
-**Benchmarks** — Mide la velocidad real del modelo activo (procesamiento de prompt y generación) con tu configuración actual. Guarda historial comparativo con gráfica.
-
-**Ajustes** — Todos los parámetros del motor, perfiles guardables, idioma y opciones de la app. Cada opción tiene una descripción al pasar el cursor.
-"""),
-        DocSection(title: "Modelos MoE y memoria", icon: "memorychip", body: """
-Los modelos **MoE (Mixture of Experts)** como Qwen3.6-35B-A3B tienen muchos parámetros totales (35B) pero solo activan unos pocos por token (3B). Esto permite calidad de modelo grande a velocidad de modelo pequeño.
-
-El truco para GPUs con poca VRAM es **repartir el modelo**:
-- La atención y los expertos que quepan van a la **VRAM** (rápida)
-- El resto de expertos queda en la **RAM** y los procesa el CPU
-
-El parámetro **Expertos MoE en CPU** (`--n-cpu-moe`) controla cuántas capas de expertos van al CPU. La app lo calcula automáticamente al elegir un modelo. Si la VRAM se satura (velocidad colapsa de golpe), súbelo; si te sobra VRAM, bájalo.
-
-**Importante**: en este modo la velocidad de generación está limitada por el **ancho de banda de tu RAM**, no por la GPU. Con DDR4 esperarás ~15-25 t/s en modelos 35B; equipos DDR5 alcanzan ~38 t/s con la misma configuración.
-"""),
-        DocSection(title: "Generación de imágenes", icon: "photo.on.rectangle.angled", body: """
-El interruptor **Chat / Imágenes** en la parte superior de la ventana cambia al estudio de imágenes (beta, motor `stable-diffusion.cpp` sobre la misma pila Metal).
-
-**Catálogo**: la app recomienda un modelo según tu VRAM (Z-Image Turbo, Flux.2 klein, Flux.2 dev, Qwen-Image, SDXL Turbo…). El badge de cada uno indica si cabe en tu GPU; hay un margen de tolerancia porque macOS reporta algo menos de VRAM utilizable que la física de la tarjeta.
-
-**Controles principales**: proporción/tamaño (ajustado a la cuadrícula del modelo y limitado por tu VRAM), pasos, CFG, semilla (fija una para reproducir el mismo resultado) y formato de salida. **Imagen a imagen**: sube una imagen inicial y ajusta la Intensidad (bajo conserva la composición, alto la reinventa). **Descargar a CPU**: mantiene los pesos en RAM y los transfiere a VRAM por etapas, para modelos grandes en GPUs con poca memoria (más lento, pero cabe).
-
-**Instancias paralelas**: en Macs con varias GPUs puedes añadir instancias adicionales, cada una con su propio modelo, GPU y configuración, y generar varias variaciones a la vez desde un solo botón Generar. Dos instancias en la misma GPU muestran una advertencia (puede colgar la tarjeta en GPUs AMD).
-"""),
-        DocSection(title: "Parámetros explicados", icon: "slider.horizontal.3", body: """
-**Capas en GPU (-ngl)** — Cuántas capas suben a la VRAM. 99 = todas (recomendado). Valores mayores al número de capas del modelo equivalen a "todas".
-
-**Expertos MoE en CPU** — Ver sección de modelos MoE.
-
-**Reserva de VRAM** — Memoria que se deja libre para el sistema. 1024 MB es seguro.
-
-**Copiar pesos a VRAM (--no-mmap)** — Esencial en GPU dedicada: sin esto los pesos se leen por PCIe en cada token y la velocidad cae ~6×.
-
-**Bloquear modelo en RAM (--mlock)** — Evita que macOS mueva el modelo a swap. Útil con MoE grandes si tienes RAM de sobra.
-
-**Contexto** — Tamaño máximo de la conversación en tokens. Más contexto = más memoria de KV cache.
-
-**KV cache claves/valores (-ctk / -ctv)** — Cuantización de la memoria de atención. La mejor combinación depende de si usas el kernel **Flash Attention AMD**:
-- **Con el kernel** (así viene por defecto): cualquier combinación estándar (`f16`/`q8_0`/`q4_0` en claves y valores) corre en GPU a velocidad plena. Máximo ahorro: `q8_0/q8_0` o `q4_0/q4_0`; comprimir solo las claves y mantener calidad en los valores: `q8_0/f16` o `q4_0/f16`.
-- **Sin el kernel** (si lo apagas): cuantiza solo las claves — `q8_0` (mitad de memoria, costo casi nulo) o `q4_0` (un cuarto), dejando los valores en `f16`. Cuantizar también los valores obligaría a Flash Attention en CPU (~3× más lento).
-
-**Flash Attention** — Atención eficiente en memoria. `auto` es lo correcto en GPU AMD.
-
-**Estabilidad AMD dGPU** — Desactiva la concurrencia de Metal. **Imprescindible**: sin esto la salida se corrompe en GPUs AMD discretas.
-
-**Hilos de CPU** — Para la parte que corre en CPU. Los núcleos físicos suelen ser el óptimo.
-"""),
-        DocSection(title: "Motores de inferencia", icon: "engine.combustion", body: """
-La app incluye **dos motores** y admite externos (Ajustes → Avanzado):
-
-**Integrado (oficial)** — llama.cpp oficial con parches AMD. Recomendado para todo uso. Soporta las arquitecturas más recientes (Qwen 3.6, MTP).
-
-
-
-El interruptor **Kernel Flash Attention AMD** ejecuta la atención —tanto el procesamiento del prompt como la generación— en la GPU AMD mediante un kernel Metal propio (cabezas de 64, 72, 128, 256 y 512 —cubre Gemma 4 y los encoders de visión—; tipos de KV f16, q8_0, q4_0 en cualquier combinación claves/valores). Es clave con KV cuantizado: como esos tipos **obligan** a Flash Attention, sin el kernel la atención cae a CPU y se desploma con la profundidad; con el kernel todo se queda en GPU y la generación aguanta la profundidad (ej. ~33 t/s a 4k de contexto en un 8B).
-
-**Externo** — Cualquier binario `llama-server` tuyo, para probar builds propias.
-
-**KestrelGEMM**, activo por defecto, es un kernel de multiplicación de matrices en mosaico (tiled) escrito a medida para el procesamiento de prompt en GPUs AMD, que en esta GPU llevó el prompt de un 8B de ~101 a ~470 t/s (~5×). No es un interruptor: corre siempre que el modelo procesa el prompt en GPU.
-
-Para modelos MoE con expertos en RAM (ncmoe > 0), el interruptor **Prefetch de expertos MoE** (Ajustes → Inferencia y contexto, activado por defecto) sube el procesamiento del prompt de 1.8× a 4.4× adicional sobre KestrelGEMM, sin costo en la generación, solapando la subida de pesos a la GPU con el cómputo.
-"""),
-        DocSection(title: "Perfiles", icon: "person.2", body: """
-Un perfil guarda **toda** la configuración: modelo, motor, parámetros de memoria y contexto. Se crean en Ajustes → Perfiles escribiendo un nombre y pulsando "Guardar actual".
-
-Perfiles típicos:
-- **Diario**: tu modelo de cabecera con su contexto y expertos ya afinados → máxima velocidad de chat
-
-Al aplicar un perfil, reinicia el servidor para que tome efecto.
-"""),
-        DocSection(title: "Router: varios modelos sin reiniciar", icon: "arrow.triangle.2.circlepath", body: """
-Activa **Router (multi-modelo)** en **Inicio → tarjeta del servidor → Opciones avanzadas** (no en Ajustes) para que un solo servidor sirva **todos** tus modelos descargados a la vez, sin necesidad de elegir uno fijo.
-
-Cómo funciona: el servidor carga el modelo la primera vez que se pide (por su nombre) y lo deja en memoria; si pides otro, descarga el anterior y carga el nuevo automáticamente. **Modelos simultáneos** controla cuántos mantiene cargados a la vez (1 es lo más seguro con una sola GPU).
-
-Dentro de la app, el chat muestra un selector de modelo (icono de caja) junto al campo de mensaje cuando el router está activo. Desde un cliente externo (VS Code, Continue…), simplemente indica el nombre del modelo en el campo `model` de la petición; la app deriva ese nombre del nombre del archivo .gguf (ej. `Qwen3.6-14B-A3B.gguf` → `qwen3-6-14b-a3b`), consultable en `GET /v1/models`.
-
-Cada modelo conserva su propia configuración de expertos MoE y visión. MTP se decide automáticamente.
-"""),
-        DocSection(title: "MTP: generación acelerada", icon: "hare", body: """
-**MTP (Multi-Token Prediction)** es una técnica donde el modelo predice varios tokens por pasada y luego los verifica — sin ninguna pérdida de calidad (solo acepta lo que habría generado de todas formas).
-
-Última medición en este equipo: **+34% de velocidad de generación** (19.3 → 25.7 t/s en Qwen3.6-35B) con 82% de aceptación. Esa cifra es previa al fix de staging persistente, que ya subió el "sin MTP" de ~19 a ~25 t/s por sí solo. Falta remedir la ganancia real de MTP sobre el motor actual.
-
-MTP se activa automáticamente cuando el GGUF trae el cabezal, tanto en modelos densos como MoE. Si el cabezal viene en un fichero aparte, junto al modelo o en su carpeta `MTP/`, Kestrel lo busca, comprueba que corresponda al modelo y lo carga solo. `llama-bench` no puede medirlo: compara siempre con generación real desde el chat o el servidor.
-"""),
-        DocSection(title: "API para desarrolladores", icon: "terminal", body: """
-Con el servidor activo, tienes una **API compatible con OpenAI** en `http://127.0.0.1:8080` (puerto configurable). Funciona con cualquier librería o app que hable ese protocolo.
-
-Por defecto solo responde en esta Mac. Para exponer la API local en la red, activa **Descubrible en red local** en Ajustes y reinicia el servidor. Kestrel escuchará en todas las interfaces y anunciará `Kestrel API` mediante Bonjour. Conecta usando `http://<IP-de-la-Mac>:8080/v1` y activa **Proteger la API con clave** antes de exponerla, especialmente fuera de una red confiable.
-
-Ejemplo con curl:
-
-```bash
-curl http://127.0.0.1:8080/v1/chat/completions \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "messages": [{"role": "user", "content": "Hola"}],
-    "stream": true,
-    "temperature": 0.7
-  }'
-```
-
-Ejemplo con Python (librería oficial `openai`, solo cambiando la URL base):
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="no-hace-falta")
-stream = client.chat.completions.create(
-    model="local",  # ignorado salvo en modo Router, ver esa sección
-    messages=[{"role": "user", "content": "Hola"}],
-    stream=True,
-)
-for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="")
-```
-
-**Streaming (SSE):** con `"stream": true`, cada línea llega como `data: {...}` con un delta incremental (`choices[0].delta.content`); el final se marca con `data: [DONE]`. Con modelos razonadores, el pensamiento llega en `delta.reasoning_content` (campo separado, no mezclado con `content`) salvo que actives "Razonamiento como texto" en Ajustes, que lo manda inline dentro de `content` entre etiquetas `<think>`.
-
-Endpoints útiles:
-- `POST /v1/chat/completions` — chat (streaming opcional)
-- `POST /v1/completions` — completado de texto plano (sin plantilla de chat)
-- `POST /v1/embeddings` — vectores de embedding, si activaste **Servidor de embeddings** (Inicio → tarjeta del servidor → Opciones avanzadas; usa un modelo dedicado a embeddings, no de chat)
-- `GET /v1/models` — modelo(s) cargado(s) y capacidades anunciadas
-- `POST /tokenize` / `POST /detokenize` — convierte texto ↔ ids de tokens del modelo activo
-- `GET /health` — estado del servidor
-- `GET /props` — metadatos del modelo (tamaño de contexto, plantilla de chat, etc.)
-
-**Imágenes / visión:** carga un modelo con su `mmproj` y envía contenido OpenAI `image_url` (URL remota o `data:image/...;base64,...`). Los clientes configurables, como Raycast, también deben anunciar que el modelo admite visión. Usa como nombre de modelo el `id` devuelto por `/v1/models`. Cuando hay un `mmproj`, Kestrel desactiva cache-reuse y la caché persistente de conversaciones porque `llama.cpp` no admite guardar/restaurar slots multimodales; la caché normal en memoria permanece activa.
-
-También hay un chat web minimalista en la raíz (`http://127.0.0.1:8080`) para usar desde el navegador.
-
-**Peticiones simultáneas:** el ajuste del mismo nombre (Ajustes → Inferencia y contexto) controla cuántas peticiones concurrentes acepta el servidor. En 1 (el valor por defecto), las peticiones se encolan una tras otra en vez de competir por la GPU, y una petición cortada por timeout retoma el procesamiento donde se quedó en el siguiente intento.
-
-#### Conectar clientes externos
-
-Cualquier cliente OpenAI-compatible (VS Code + Continue/Cline/Copilot con modelo propio, y en general casi todo lo demás):
-- URL base: `http://127.0.0.1:8080/v1` · nombre de modelo: el `id` de `/v1/models` · clave API: la de Ajustes solo si activaste la protección.
-- **Sube el Contexto a 32k o más**: estos clientes envían prompts enormes (instrucciones + archivos abiertos) y con 16k el servidor rechaza la petición. Compensa la memoria cuantizando las claves del KV cache a `q8_0`.
-- Los modelos razonadores "piensan" antes de responder y muchos clientes no muestran esa fase: parece que **se quedó colgado** cuando en realidad está generando. Activa "Razonamiento como texto" en Ajustes → Inferencia, o usa un modelo no razonador para código.
-- La **primera respuesta tarda**: en esta clase de GPU el prompt se procesa a ~80-120 t/s, así que 16k tokens son 2-4 minutos. **Limita los tokens de entrada del cliente** (p. ej. `maxInputTokens: 8000`) para que la primera petición baje a ~1-2 min; las siguientes reutilizan la caché y son incrementales.
-- Si el cliente corta por timeout, reintenta: con "Peticiones simultáneas" en 1 (el valor por defecto), el reintento **retoma el procesamiento donde se quedó** en vez de empezar de cero.
-- **¿Necesitas cambiar de modelo sin reiniciar el servidor?** Activa el modo Router (ver "Router: varios modelos sin reiniciar") y pon el nombre del modelo que quieras en cada petición.
-
-##### OpenCode (CLI)
-- Edita `~/.config/opencode/opencode.json` (o el `opencode.json` del proyecto) y agrega un proveedor con `"npm": "@ai-sdk/openai-compatible"` y `"options": {"baseURL": "http://127.0.0.1:8080/v1"}`.
-- También puedes correr `/connect` dentro de OpenCode y elegir "Other".
-- Reinicia OpenCode tras editar la config; los nombres de modelo deben coincidir exactamente con el `id` de `/v1/models`.
-
-##### Google Antigravity
-- Ajustes → Custom Models → añade uno con proveedor **OpenAI Compatible**.
-- Endpoint: `http://127.0.0.1:8080/v1` · modelo: el `id` de `/v1/models`.
-
-##### Cursor
-- Ajustes (⌘,) → pestaña Models → sección OpenAI → activa **Override Base URL** y pega `http://127.0.0.1:8080/v1`.
-- El campo de clave API no puede quedar vacío (pon cualquier texto si no protegiste la API).
-- **Limitación real de Cursor, no de Kestrel**: exige HTTPS para esa URL. Un endpoint local por HTTP simple no conecta directo, hace falta un proxy con TLS delante (p. ej. Caddy o un túnel tipo ngrok) apuntando a `127.0.0.1:8080`.
-
-##### Raycast
-- Ajustes → AI → Custom Providers.
-- URL base: `http://127.0.0.1:8080/v1` · modelo: el `id` de `/v1/models`.
-- Para imágenes, ver la nota de visión arriba.
-
-##### Clientes de la API de Anthropic
-Agentes de terminal y SDKs basados en el formato Anthropic, no solo OpenAI. El motor implementa también `/v1/messages` nativo, incluyendo streaming y llamadas a herramientas.
-- La mayoría se redirigen con dos variables de entorno estándar del SDK: `ANTHROPIC_BASE_URL=http://127.0.0.1:8080` y `ANTHROPIC_AUTH_TOKEN=cualquier-texto` (o la clave real si activaste la protección).
-- El servidor acepta tanto `Authorization: Bearer` como `x-api-key`, el header que usan estos clientes.
-- Revisa la documentación de tu cliente para el nombre exacto de su archivo de configuración; muchos leen esas variables solo al arrancar, así que reinícialo tras cambiarlas.
-"""),
-        DocSection(title: "Rendimiento de referencia", icon: "gauge.high", body: """
-Números medidos en el equipo de desarrollo (RX 6700 XT 12 GB, DDR4, macOS):
-
-**Qwen3-8B Q4** (todo en VRAM, con KestrelGEMM): ~476 t/s prompt, ~60 t/s generación
-
-**Qwen3.6-35B-A3B Q4** (MoE híbrido, ncmoe 24):
-- Normal: ~197 t/s prompt, ~25 t/s generación
-- Con Prefetch de expertos MoE: ~470 t/s prompt (2.4×), generación sin cambio
-- Con MTP: cifra sin remedir tras las mejoras de KestrelGEMM/staging; la última medición (+34%, 19.3→25.7 t/s) es de antes de esos cambios y ya no es comparable contra el "Normal" de arriba
-
-La generación de modelos MoE híbridos está limitada por el ancho de banda de la RAM: una GPU más potente no la mejora, pero RAM DDR5 sí (hasta ~2×).
-"""),
-        DocSection(title: "Solución de problemas", icon: "wrench.and.screwdriver", body: """
-**macOS bloquea la app al instalarla** — Desde la 0.86.5 las versiones van firmadas y notarizadas por Apple, así que se abren directamente. Si vienes de una anterior: Ajustes del Sistema → Privacidad y seguridad y pulsa "Abrir de todos modos".
-
-**La salida es texto sin sentido** — Verifica que "Estabilidad AMD dGPU" esté activada en Ajustes. Es la causa #1 en GPUs AMD discretas.
-
-**Va muy lento (2-8 t/s)** — Activa "Copiar pesos a VRAM (--no-mmap)". Si ya está activo, la VRAM puede estar saturada: sube "Expertos MoE en CPU" un par de capas.
-
-**La velocidad colapsa de repente** — VRAM desbordada. Sube el ncmoe o reduce el contexto.
-
-**El modelo no carga** — Puede ser una arquitectura demasiado nueva para el motor. Prueba el motor Integrado (es el más actualizado). Las variantes "MTP" requieren motores recientes.
-
-**Error con valores de KV cuantizados** — Cuantizar valores requiere Flash Attention en `on`. En GPU AMD eso reduce la velocidad; valora si lo necesitas.
-
-**El servidor no responde tras cambiar ajustes** — Los cambios aplican al reiniciar el servidor (Detener → Iniciar).
-
-**La velocidad se degrada con el uso / el motor llega a 25-30 GB de RAM** — Dos causas se suman: el contexto crece con la conversación (normal, la autocompactación lo mitiga) y el motor guarda una caché de prompts en RAM que crece con el uso. Limita "Caché de prompts en RAM" en Ajustes (2 GB por defecto) y, si tienes margen, activa --mlock para que el modelo no caiga a swap.
-
-**Desde VS Code u otro cliente se queda "pensando"** — El modelo está razonando o procesando un prompt enorme; el cliente no muestra esa fase. Ver la sección "API para desarrolladores".
-"""),
-        DocSection(title: "Créditos y licencias", icon: "heart", body: """
-Kestrel es desarrollado por **Northlatch Labs** ([@Northlatch-Labs-LLC](https://github.com/Northlatch-Labs-LLC)).
-
-Construido sobre el trabajo de:
-- **llama.cpp** (ggml-org) — el motor de inferencia
-- **iRon-Llama** (Basten7) — investigación de parches Metal para GPU AMD en Mac Intel
-
-Si la app te resulta útil, puedes apoyar el desarrollo desde **Acerca de → Donar**.
-"""),
-    ]
+    static func sections() -> [DocSection] { en }
 
     static let en: [DocSection] = [
         DocSection(title: "What is Kestrel", icon: "sparkles", body: """
@@ -316,7 +75,7 @@ Each model's badge shows compatibility:
 
 **Benchmarks** — Measures real speed of the active model (prompt processing and generation) with your current settings. Keeps comparative history with a chart.
 
-**Settings** — All engine parameters, savable profiles, language and app options. Every option has a tooltip on hover.
+**Settings** — All engine parameters, savable profiles and app options. Every option has a tooltip on hover.
 """),
         DocSection(title: "MoE models & memory", icon: "memorychip", body: """
 **MoE (Mixture of Experts)** models like Qwen3.6-35B-A3B have many total parameters (35B) but only activate a few per token (3B). This gives big-model quality at small-model speed.

@@ -34,7 +34,6 @@ XCTest ships only with Xcode, never with Command Line Tools.
 |---|---|
 | `Sources/` | SwiftUI app (one file per concern: Server, Models, Chat, Benchmark…) |
 | `Assets/` | App icon source, web chat UI, donation QR |
-| `Assets/lang/` | Community UI translations — one JSON per language ([README](Assets/lang/README.md)) |
 | `patches/` | AMD Metal patches applied on top of upstream llama.cpp |
 | `scripts/` | Reproducible engine build + DMG packaging |
 | `.github/workflows/` | CI: build on push, DMG release on tags |
@@ -43,10 +42,11 @@ XCTest ships only with Xcode, never with Command Line Tools.
 
 - **Target hardware is Intel Mac + AMD dGPU.** Test changes against a real
   Metal AMD setup when they touch the engine, server flags or memory logic.
-- **Bilingual UI**: every user-facing string goes through `loc.t("es", "en")`.
-  Both languages are required, and every new setting needs a tooltip
-  (`.help` / `.infoTip`). Other languages are community JSON overlays — see
-  [Translations](#translations).
+- **English is the product language** (operator directive 2026-10-14):
+  every user-facing string goes through `loc.t("es", "en")` and the English
+  half is what ships — the Spanish halves remain in the call sites for
+  bilingual engine diagnostics. Every new setting needs a tooltip
+  (`.help` / `.infoTip`).
 - **No new dependencies** without prior discussion — the app is intentionally
   dependency-free (SwiftPM with zero external packages).
 - Keep the memory **estimator honest**: if you change `Estimator`, include the
@@ -56,24 +56,12 @@ XCTest ships only with Xcode, never with Command Line Tools.
 
 ## Translations
 
-Spanish and English are built into the app via `loc.t("es", "en")`. Every other
-language is a single JSON overlay in [`Assets/lang/`](Assets/lang/) that maps each
-English string to its translation — adding one is drop-in and needs no Swift code.
-
-Full instructions (how to add or update a language, the status of each one, and
-how PRs are checked) are in **[`Assets/lang/README.md`](Assets/lang/README.md)**.
-
-The short version for translators: open the language file and fill in the blank
-values — every interface string is already listed and kept in sync for you.
-Enable the auto-sync hook once and the rest is automatic:
-
-```bash
-git config core.hooksPath scripts/hooks
-```
-
-For maintainers touching the UI: the English template and the language files are
-regenerated and synced automatically by that hook on each commit (new strings
-added, removed ones dropped); CI re-checks it and skips when nothing changed.
+English is the product language. The community overlay pipeline (JSON
+per-language overlays, the auto-sync pre-commit hook and the translations CI)
+was retired with the English-only directive — nothing in the shipped product
+loads overlay files anymore. Call sites keep the `loc.t("es", "en")` shape so
+a future picker can be wired back without touching every string; bring the
+pipeline back from git history if that ever happens.
 
 ## Reporting issues
 

@@ -56,7 +56,7 @@ final class AgentLoopTests: CheckCase {
     /// definition would be dropped at registration, silently disabling the
     /// tool; this pins the definitions themselves.
     func testAllShippedToolSchemasValidate() {
-        for info in [LatchDelegateService.tool, JavaScriptSandboxService.tool] + ChatMemoryService.tools {
+        for info in [JavaScriptSandboxService.tool] + ChatMemoryService.tools {
             XCTAssertEqual(ChatToolsService.schemaProblems(for: info), [],
                            "\(info.name): \(ChatToolsService.schemaProblems(for: info).joined(separator: "; "))")
         }
@@ -87,6 +87,83 @@ final class AgentLoopTests: CheckCase {
     func testUsageRollupNilWithoutTimings() {
         XCTAssertNil(ChatStore.usageRollup(messages: [ChatMessage(role: "user", content: "hi")]))
     }
+
+    /// English-only agent path (operator directive 2026-10-14): the raw
+    /// strings that reach the chat transcript — stream defaults, the context
+    /// guard, tool rejection — must never carry a second language. The
+    /// bilingual "es / en" pairs through loc.t() resolve to English at
+    /// runtime and are fine; these bypass the localizer, so they are pinned
+    /// directly.
+    func testAgentPathStringsAreEnglishOnly() {
+        let texts = [
+            ChatStore.streamedError(from: ["error": ""]) ?? "",
+            ChatStore.emptyResponseMessage(finishReason: "length"),
+            ChatStore.emptyResponseMessage(finishReason: nil),
+            ChatStore.contextOverflowNotice(estimated: 71_000, window: 65_536),
+            ChatStore.toolsRejectedMessage,
+        ]
+        for text in texts {
+            XCTAssertFalse(text.isEmpty)
+            XCTAssertFalse(text.contains(" / "), "bilingual pair marker in: \(text.prefix(60))")
+            for accent in "áéíóúñ¿¡" {
+                XCTAssertFalse(text.contains(accent), "Spanish text in: \(text.prefix(60))")
+            }
+        }
+        XCTAssertEqual(ChatStore.streamedError(from: ["error": "engine said no"]), "engine said no",
+                       "the engine's own message passes through verbatim")
+    }
+
+    /// The native tool surface after the sidecar removals: the statically
+    /// shipped app tools are exactly the JavaScript sandbox and the
+    /// conversation-memory tools (the engine's exec/file tools arrive from
+    /// the engine's own /tools list, MCP tools from discovery). A stray
+    /// re-registration would double-advertise a name and shadow the real
+    /// dispatch branch.
+    func testNativeToolSurfaceIsExactlySandboxAndMemory() {
+        let names = ([JavaScriptSandboxService.tool] + ChatMemoryService.tools).map(\.name)
+        XCTAssertEqual(Set(names).count, names.count, "no duplicated tool names")
+        XCTAssertEqual(names.first, JavaScriptSandboxService.toolName)
+        XCTAssertTrue(ChatMemoryService.toolNames.allSatisfy(names.contains))
+        XCTAssertEqual(names.filter { $0 == JavaScriptSandboxService.toolName }.count, 1)
+    }
+
+    /// Tool discovery is cached per MCP configuration: an agent turn and the
+    /// tools popover must not reopen every MCP server each time, and any
+    /// change to the saved server list must invalidate the cache. Pin: the
+    /// second identical call is a cache hit; after the stored list changes,
+    /// discovery runs again.
+    @MainActor func testMCPDiscoveryIsCachedUntilTheServerListChanges() async throws {
+        let prior = UserDefaults.standard.data(forKey: SettingsKeys.mcpServers)
+        defer {
+            if let prior { UserDefaults.standard.set(prior, forKey: SettingsKeys.mcpServers) }
+            else { UserDefaults.standard.removeObject(forKey: SettingsKeys.mcpServers) }
+        }
+
+        // A stable (empty) configuration: first call populates, second hits.
+        UserDefaults.standard.removeObject(forKey: SettingsKeys.mcpServers)
+        let service = KestrelMCPService.shared
+        let first = await service.discoverTools(force: true)
+        XCTAssertTrue(first.isEmpty)
+        let hitsAfterFirst = await service.discoveryCacheHits
+        let second = await service.discoverTools()
+        XCTAssertEqual(second.map(\.name), first.map(\.name))
+        let hitsAfterSecond = await service.discoveryCacheHits
+        XCTAssertEqual(hitsAfterSecond, hitsAfterFirst + 1,
+                       "an unchanged server list must be served from the cache")
+
+        // Changed configuration (a saved server list): the signature moves,
+        // so the next call rediscovers instead of replaying the empty cache.
+        if let data = try? JSONEncoder().encode([MCPServer]()) {
+            UserDefaults.standard.set(data, forKey: SettingsKeys.mcpServers)
+        } else {
+            UserDefaults.standard.set(Data("[{}]".utf8), forKey: SettingsKeys.mcpServers)
+        }
+        let third = await service.discoverTools()
+        let hitsAfterThird = await service.discoveryCacheHits
+        XCTAssertEqual(hitsAfterThird, hitsAfterSecond,
+                       "a changed server list must bypass the cache")
+        _ = third
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -103,5 +180,8 @@ extension AgentLoopTests {
             .init(name: "testAllShippedToolSchemasValidate") { $0.testAllShippedToolSchemasValidate() },
             .init(name: "testSchemaValidationCatchesBrokenDefinitions") { $0.testSchemaValidationCatchesBrokenDefinitions() },
             .init(name: "testUsageRollupNilWithoutTimings") { $0.testUsageRollupNilWithoutTimings() },
+            .init(name: "testNativeToolSurfaceIsExactlySandboxAndMemory") { $0.testNativeToolSurfaceIsExactlySandboxAndMemory() },
+            .init(name: "testAgentPathStringsAreEnglishOnly") { $0.testAgentPathStringsAreEnglishOnly() },
+            .init(name: "testMCPDiscoveryIsCachedUntilTheServerListChanges") { try await $0.testMCPDiscoveryIsCachedUntilTheServerListChanges() },
         ])
 }
