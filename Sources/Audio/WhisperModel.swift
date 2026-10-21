@@ -55,9 +55,30 @@ enum WhisperTranscript {
             .joined(separator: " ")
     }
 
-    nonisolated static func timestamped(jsonData: Data) -> String? {
-        guard let root = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            return nil
+    /// Typed failure of the timestamped parse (census W8 WhisperModel:59,
+    /// T2-3 chunk B): the payload is not JSON, not an object, or carries
+    /// neither "segments" nor "transcription" — no timestamped transcript
+    /// exists in it at all.
+    enum ParseError: Error, LocalizedError {
+        case unparseable
+
+        var errorDescription: String? {
+            "the Whisper output is not a readable transcript payload"
+        }
+    }
+
+    /// Throwing form (census W8 WhisperModel:59, T2-3 chunk B): distinguishes
+    /// "parsed" from "unparseable" so the transcription callers can surface a
+    /// failure instead of silently substituting an empty transcript.
+    nonisolated static func parsedTimestamped(jsonData: Data) throws -> String {
+        let root: [String: Any]?
+        do {
+            root = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        } catch {
+            root = nil
+        }
+        guard let root else {
+            throw ParseError.unparseable
         }
         if let segments = root["segments"] as? [[String: Any]] {
             return segments.compactMap { segment -> String? in
@@ -68,7 +89,9 @@ enum WhisperTranscript {
                 return "[\(timestamp(seconds: seconds))] \(cleaned)"
             }.joined(separator: "\n")
         }
-        guard let segments = root["transcription"] as? [[String: Any]] else { return nil }
+        guard let segments = root["transcription"] as? [[String: Any]] else {
+            throw ParseError.unparseable
+        }
         let lines = segments.compactMap { segment -> String? in
             guard let text = segment["text"] as? String else { return nil }
             let cleaned = normalized(text)
@@ -79,6 +102,13 @@ enum WhisperTranscript {
             return "[\(start)] \(cleaned)"
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Optional form: behavior byte-identical to its pre-conversion shape —
+    /// an unparseable payload maps to nil, which callers must surface rather
+    /// than substitute "" for (census W8 WhisperModel:59).
+    nonisolated static func timestamped(jsonData: Data) -> String? {
+        try? parsedTimestamped(jsonData: jsonData)
     }
 
     private nonisolated static func timestamp(seconds: Double) -> String {

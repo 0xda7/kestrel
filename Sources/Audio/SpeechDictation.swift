@@ -391,6 +391,36 @@ final class SpeechDictationController: ObservableObject {
         inferenceTask?.resume()
     }
 
+    /// Census W8 SpeechDictation:408 (T2-3 chunk B): parsing the persistent
+    /// server's response is typed — an unparseable payload is a failure the
+    /// caller surfaces on `fail(runID:message:)`, never a silent empty
+    /// transcript that would read as "no speech". Pure so checks can pin the
+    /// contract without a live transcription run.
+    nonisolated static func serverTranscript(data: Data, timestamped: Bool) -> Result<String, Error> {
+        Result {
+            if timestamped {
+                return try WhisperTranscript.parsedTimestamped(jsonData: data)
+            }
+            guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw WhisperTranscript.ParseError.unparseable
+            }
+            return root["text"] as? String ?? ""
+        }
+    }
+
+    /// Census W8 SpeechDictation:436/:439 + WhisperModel:59 (T2-3 chunk B):
+    /// reading whisper's output file is typed — an unreadable file or
+    /// unparseable JSON is a surfaced failure, never an empty transcript.
+    /// Pure so checks can pin the contract with planted files.
+    nonisolated static func transcriptOutput(url: URL, timestamped: Bool) -> Result<String, Error> {
+        Result {
+            if timestamped {
+                return try WhisperTranscript.parsedTimestamped(jsonData: Data(contentsOf: url))
+            }
+            return try String(contentsOf: url, encoding: .utf8)
+        }
+    }
+
     private func finishServer(runID: UUID, data: Data?, response: URLResponse?, error: Error?) {
         guard transcriptionID == runID else { return }
         inferenceTask = nil
@@ -403,12 +433,15 @@ final class SpeechDictationController: ObservableObject {
             return
         }
         let raw: String
-        if timestampedOutput {
-            raw = WhisperTranscript.timestamped(jsonData: data) ?? ""
-        } else if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            raw = root["text"] as? String ?? ""
-        } else {
-            raw = ""
+        switch Self.serverTranscript(data: data, timestamped: timestampedOutput) {
+        case .success(let text):
+            raw = text
+        case .failure(let parseError):
+            // Census W8 SpeechDictation:408 (T2-3 chunk B): an unparseable
+            // server response is a transcription failure, not silence.
+            fail(runID: runID,
+                 message: "The transcription response could not be parsed: \(parseError.localizedDescription)")
+            return
         }
         finishText(runID: runID, raw: raw)
     }
@@ -433,10 +466,24 @@ final class SpeechDictationController: ObservableObject {
         }
         let outputURL = transcriptBaseURL.appendingPathExtension(timestampedOutput ? "json" : "txt")
         let raw: String
-        if timestampedOutput, let data = try? Data(contentsOf: outputURL) {
-            raw = WhisperTranscript.timestamped(jsonData: data) ?? ""
-        } else {
-            raw = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
+        switch Self.transcriptOutput(url: outputURL, timestamped: timestampedOutput) {
+        case .success(let text):
+            raw = text
+        case .failure(let readError):
+            // Census W8 SpeechDictation:436/:439 + WhisperModel:59 (T2-3
+            // chunk B): an unreadable or unparseable output file used to read
+            // as an empty transcript ("no speech"); surface the real failure.
+            transcriptionID = nil
+            process = nil
+            isTranscribing = false
+            statusText = nil
+            let detail = readError.localizedDescription
+            self.error = "The transcription output could not be read: \(detail)"
+            AppLog.speech.error("transcript output unreadable: \(detail, privacy: .public)")
+            let failure = onFailure
+            cleanupFiles()
+            failure?()
+            return
         }
         finishText(runID: runID, raw: raw)
     }

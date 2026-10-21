@@ -12,6 +12,7 @@ enum CheckRegistry {
     static let generated: [(String, CheckSet)] = [
         ("AgentLoopTests", AgentLoopTests.__checkSet),
         ("AgentTurnBudgetTests", AgentTurnBudgetTests.__checkSet),
+        ("AudioSurfacingTests", AudioSurfacingTests.__checkSet),
         ("AudioVideoExportIntegrationTests", AudioVideoExportIntegrationTests.__checkSet),
         ("BenchmarkShareReviewTests", BenchmarkShareReviewTests.__checkSet),
         ("ChatStoreSurfacingTests", ChatStoreSurfacingTests.__checkSet),

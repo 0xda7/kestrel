@@ -13,7 +13,9 @@ final class AudioRecorderController: ObservableObject {
 
     private var recorder: AVAudioRecorder?
     private var ticker: Task<Void, Never>?
-    private var outputURL: URL?
+    /// Internal (not private) so the D3 check can plant an unreadable output
+    /// URL and drive stop() — census W8 AudioRecorder:67 surfacing pin.
+    var outputURL: URL?
 
     func toggle(onComplete: @escaping (ChatAttachment) -> Void) {
         if isRecording {
@@ -58,13 +60,23 @@ final class AudioRecorderController: ObservableObject {
         }
     }
 
-    private func stop() -> ChatAttachment? {
+    func stop() -> ChatAttachment? {
         recorder?.stop()
         ticker?.cancel()
         ticker = nil
         isRecording = false
         recorder = nil
-        guard let url = outputURL, let data = try? Data(contentsOf: url) else { return nil }
+        guard let url = outputURL else { return nil }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // Census W8 AudioRecorder:67 (T2-3 chunk B): a finished recording
+            // that cannot be read back must not vanish into a silent nil —
+            // surface the failure on the published error channel instead.
+            self.error = "The recording could not be read back and was not attached: \(error.localizedDescription)"
+            return nil
+        }
         try? FileManager.default.removeItem(at: url)
         outputURL = nil
         return ChatAttachment(name: "Recording \(Date.now.formatted(date: .omitted, time: .shortened)).wav",

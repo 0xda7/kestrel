@@ -5,6 +5,20 @@
 import AVFoundation
 import Combine
 import Foundation
+/// Typed failure of the audio-studio JSON export (census W8
+/// AudioStudioController:364, T2-3 chunk B): the transcript segments payload
+/// cannot be serialized, so the export is refused on the controller's error
+/// channel instead of silently writing an empty file or clipboard.
+enum AudioExportError: LocalizedError {
+    case unserializableJSON
+
+    var errorDescription: String? {
+        switch self {
+        case .unserializableJSON:
+            return "the transcript segments could not be serialized as JSON"
+        }
+    }
+}
 
 @MainActor
 final class AudioPlaybackState: ObservableObject {
@@ -352,18 +366,42 @@ final class AudioStudioController: ObservableObject {
 
     func content(for format: AudioExportFormat,
                  track: AudioExportTrack = .translated) -> String {
-        let selected = exportCues(track: track)
+        exportContent(for: format, cues: exportCues(track: track))
+    }
+
+    /// Renders export content for explicit cues. The JSON branch is typed
+    /// (census W8 AudioStudioController:364, T2-3 chunk B): a payload that
+    /// cannot be serialized surfaces on the controller's error channel —
+    /// never a silent empty export, which the previous `try?` produced.
+    /// Split from content(for:track:) so checks can pin the surfacing with
+    /// planted cues.
+    func exportContent(for format: AudioExportFormat, cues: [SubtitleCue]) -> String {
         switch format {
-        case .srt: return SubtitleCue.srt(selected)
-        case .vtt: return SubtitleCue.vtt(selected)
-        case .text: return SubtitleCue.plainText(selected)
+        case .srt: return SubtitleCue.srt(cues)
+        case .vtt: return SubtitleCue.vtt(cues)
+        case .text: return SubtitleCue.plainText(cues)
         case .json:
-            let rows: [[String: Any]] = selected.map {
-                ["id": $0.id, "start": $0.start, "end": $0.end, "text": $0.text]
+            do {
+                return String(decoding: try Self.jsonExportData(cues: cues), as: UTF8.self) + "\n"
+            } catch {
+                self.error = "The transcript could not be exported as JSON: \(error.localizedDescription)"
+                return ""
             }
-            guard let data = try? JSONSerialization.data(withJSONObject: ["segments": rows], options: [.prettyPrinted, .sortedKeys]) else { return "" }
-            return String(decoding: data, as: UTF8.self) + "\n"
         }
+    }
+
+    /// The JSON export payload. `isValidJSONObject` is checked first so an
+    /// unserializable value (NaN timing, foreign objects) becomes this typed
+    /// throw instead of an ObjC `JSON write` exception.
+    nonisolated private static func jsonExportData(cues: [SubtitleCue]) throws -> Data {
+        let rows: [[String: Any]] = cues.map {
+            ["id": $0.id, "start": $0.start, "end": $0.end, "text": $0.text]
+        }
+        let payload = ["segments": rows]
+        guard JSONSerialization.isValidJSONObject(payload) else {
+            throw AudioExportError.unserializableJSON
+        }
+        return try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     }
 
     func exportCues(for track: AudioExportTrack) -> [SubtitleCue] {
@@ -475,14 +513,29 @@ final class AudioStudioController: ObservableObject {
         progress = 0.08 + min(100, percent) / 100 * 0.67
     }
 
+    /// Census W8 AudioStudioController:482 (T2-3 chunk B): the failure
+    /// verdict for whisper's SRT output. A read failure is surfaced as
+    /// exactly that — it must never be reported as the upstream
+    /// "no speech was detected" verdict, which stays reserved for a
+    /// readable-but-empty transcript. Pure so checks can pin the split (D3).
+    nonisolated static func transcriptionFailure(read: Result<String, Error>,
+                                                 parsedCues: [SubtitleCue]) -> String? {
+        switch read {
+        case .failure(let error):
+            return "The transcription output could not be read: \(error.localizedDescription)"
+        case .success:
+            return parsedCues.isEmpty ? "No se detectó voz / no speech was detected." : nil
+        }
+    }
+
     private func loadWhisperResult(operation: AudioStudioOperation, targetLanguage: String,
                                    chatPort: Int, routerModel: String?, glossary: String) {
         guard let outputBase else { return }
         let srtURL = outputBase.appendingPathExtension("srt")
-        let raw = (try? String(contentsOf: srtURL, encoding: .utf8)) ?? ""
-        let parsed = SubtitleCue.parseSRT(raw)
-        guard !parsed.isEmpty else {
-            fail("No se detectó voz / no speech was detected.")
+        let read = Result<String, Error> { try String(contentsOf: srtURL, encoding: .utf8) }
+        let parsed = SubtitleCue.parseSRT((try? read.get()) ?? "")
+        if let message = Self.transcriptionFailure(read: read, parsedCues: parsed) {
+            fail(message)
             return
         }
         originalCues = parsed
@@ -694,6 +747,11 @@ final class AudioStudioController: ObservableObject {
         return request
     }
 
+    // Census W8 AudioStudioController:699/:709 (T2-3 chunk B, naming only):
+    // the `try?` parses below map an unparseable model payload to nil, and
+    // every nil feeds the typed `throw AudioTranslationError.invalidResponse`
+    // — the failure is already surfaced into the translation retry/error
+    // path; no silent swallow exists on this line to convert.
     nonisolated static func translations(from data: Data,
                                          expectedCues cues: [SubtitleCue]) throws -> [Int: String] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
