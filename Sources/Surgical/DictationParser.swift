@@ -13,6 +13,24 @@ import Foundation
 struct DictationParse: Sendable {
     let procedure: SurgicalProcedure?
     var fragments: OpNoteFragments
+    /// Regex compile failures met while extracting: those fields were NOT
+    /// parsed and read as "not dictated" in the note. Empty on a healthy
+    /// parse. The editor renders each issue instead of a silent gap.
+    var parseIssues: [DictationParseIssue] = []
+}
+
+/// One clinical field whose extraction regex failed to compile: the value
+/// was refused (never guessed) but must not vanish silently. `field` is the
+/// English clinical field name; `reason` carries the regex compile error.
+/// English-only strings, matching the product surface.
+struct DictationParseIssue: Sendable, Equatable {
+    let field: String
+    let reason: String
+
+    /// Editor-renderable notice naming the field and asking for review.
+    var editorNotice: String {
+        "Extraction failed for \(field) — the value was not parsed; review the note."
+    }
 }
 
 /// Turns free-flowing surgeon dictation (typed or ASR-transcribed) into
@@ -44,12 +62,21 @@ enum DictationParser {
     /// abbreviations: CTR, SAL, lipo…) match whole-words only so "sal" can
     /// never hit "saline"; longer keys may match a longer dictated word
     /// ("breast aug…" still finds the "breast aug" synonym).
+    /// A regex compile failure still yields nil in this per-field API;
+    /// `parse(_:)` records it as a typed `DictationParseIssue` instead of
+    /// leaving the silence.
     static func matchProcedure(_ text: String) -> SurgicalProcedure? {
+        var ignored: [DictationParseIssue] = []
+        return matchProcedure(text, recording: &ignored)
+    }
+
+    private static func matchProcedure(_ text: String,
+                                       recording issues: inout [DictationParseIssue]) -> SurgicalProcedure? {
         let lowered = text.lowercased()
         var best: (key: String, procedure: SurgicalProcedure)?
         for procedure in ProcedureLibrary.all {
             for name in [procedure.name] + procedure.synonyms {
-                guard let regex = boundaryRegex(for: name) else { continue }
+                guard let regex = boundaryRegex(for: name, recording: &issues) else { continue }
                 let range = NSRange(lowered.startIndex..., in: lowered)
                 guard regex.firstMatch(in: lowered, range: range) != nil else { continue }
                 if let current = best, name.count <= current.key.count { continue }
@@ -62,7 +89,8 @@ enum DictationParser {
     /// Word-boundary pattern for one library key: words are regex-escaped and
     /// joined with flexible separators (spaces, dashes, commas), because
     /// dictation renders "breast-aug", "breast, aug" and "breast aug" alike.
-    private static func boundaryRegex(for key: String) -> NSRegularExpression? {
+    private static func boundaryRegex(for key: String,
+                                      recording issues: inout [DictationParseIssue]) -> NSRegularExpression? {
         let words = key.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
@@ -70,24 +98,45 @@ enum DictationParser {
         let escaped = words.map { NSRegularExpression.escapedPattern(for: $0) }
         var pattern = "\\b" + escaped.joined(separator: "[\\s\\-,]+")
         if key.count <= 4 { pattern += "\\b" }
-        return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        return compiledRegex(pattern, field: "procedure",
+                             options: [.caseInsensitive], recording: &issues)
+    }
+
+    /// The one regex compile seam for every dictation extraction. A compile
+    /// failure records a typed `DictationParseIssue` naming the clinical
+    /// field and returns nil, so extraction keeps its "refuse rather than
+    /// guess" nil semantics — only the silence is removed. Internal (not
+    /// private) so the surfacing checks can inject an invalid pattern and
+    /// pin the recording.
+    static func compiledRegex(_ pattern: String, field: String,
+                              options: NSRegularExpression.Options = [],
+                              recording issues: inout [DictationParseIssue]) -> NSRegularExpression? {
+        do {
+            return try NSRegularExpression(pattern: pattern, options: options)
+        } catch {
+            issues.append(DictationParseIssue(field: field, reason: error.localizedDescription))
+            return nil
+        }
     }
 
     // MARK: - Entry point
 
     static func parse(_ text: String) -> DictationParse {
-        DictationParse(
-            procedure: matchProcedure(text),
-            fragments: OpNoteFragments(
-                preopDiagnosis: labeledSpan(text, labels: ["preoperative diagnosis", "pre-op diagnosis", "preop diagnosis", "pre op diagnosis"]),
-                postopDiagnosis: labeledSpan(text, labels: ["postoperative diagnosis", "post-op diagnosis", "postop diagnosis", "post op diagnosis"]),
-                laterality: laterality(text),
-                implants: implants(text),
-                ebmL: ebmL(text),
-                tourniquetMinutes: tourniquetMinutes(text),
-                complications: complications(text),
-                dressing: labeledSpan(text, labels: ["dressing", "dressings"]),
-                disposition: disposition(text)))
+        var issues: [DictationParseIssue] = []
+        let procedure = matchProcedure(text, recording: &issues)
+        let fragments = OpNoteFragments(
+            preopDiagnosis: labeledSpan(text, labels: ["preoperative diagnosis", "pre-op diagnosis", "preop diagnosis", "pre op diagnosis"],
+                                        field: "preoperative diagnosis", recording: &issues),
+            postopDiagnosis: labeledSpan(text, labels: ["postoperative diagnosis", "post-op diagnosis", "postop diagnosis", "post op diagnosis"],
+                                         field: "postoperative diagnosis", recording: &issues),
+            laterality: laterality(text, recording: &issues),
+            implants: implants(text, recording: &issues),
+            ebmL: ebmL(text, recording: &issues),
+            tourniquetMinutes: tourniquetMinutes(text, recording: &issues),
+            complications: complications(text, recording: &issues),
+            dressing: labeledSpan(text, labels: ["dressing", "dressings"], field: "dressing", recording: &issues),
+            disposition: disposition(text, recording: &issues))
+        return DictationParse(procedure: procedure, fragments: fragments, parseIssues: issues)
     }
 
     // MARK: - Laterality
@@ -97,21 +146,31 @@ enum DictationParser {
     /// mentioned (a revision narrative legitimately names both) is ambiguity
     /// and yields nil — the builder then refuses required-laterality
     /// procedures rather than templating a guessed side.
+    /// A regex compile failure still yields nil in this per-field API;
+    /// `parse(_:)` records it as a typed `DictationParseIssue`.
     static func laterality(_ text: String) -> String? {
+        var ignored: [DictationParseIssue] = []
+        return laterality(text, recording: &ignored)
+    }
+
+    private static func laterality(_ text: String,
+                                   recording issues: inout [DictationParseIssue]) -> String? {
         let lowered = text.lowercased()
-        if containsWord(lowered, "bilateral") || containsWord(lowered, "bilaterally") {
+        if containsWord(lowered, "bilateral", field: "laterality", recording: &issues)
+            || containsWord(lowered, "bilaterally", field: "laterality", recording: &issues) {
             return "bilateral"
         }
-        let left = containsWord(lowered, "left")
-        let right = containsWord(lowered, "right")
+        let left = containsWord(lowered, "left", field: "laterality", recording: &issues)
+        let right = containsWord(lowered, "right", field: "laterality", recording: &issues)
         if left && !right { return "left" }
         if right && !left { return "right" }
         return nil
     }
 
-    private static func containsWord(_ lowered: String, _ word: String) -> Bool {
+    private static func containsWord(_ lowered: String, _ word: String, field: String,
+                                     recording issues: inout [DictationParseIssue]) -> Bool {
         let pattern = "\\b" + NSRegularExpression.escapedPattern(for: word) + "\\b"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        guard let regex = compiledRegex(pattern, field: field, recording: &issues) else { return false }
         let range = NSRange(lowered.startIndex..., in: lowered)
         return regex.firstMatch(in: lowered, range: range) != nil
     }
@@ -122,26 +181,47 @@ enum DictationParser {
     /// label, with up to a short run of non-digits ("was approximately")
     /// before the number, and mL/cc/milliliters units. cc and mL are the
     /// same volume and render as one unit in the note.
+    /// A regex compile failure still yields nil in this per-field API;
+    /// `parse(_:)` records it as a typed `DictationParseIssue`.
     static func ebmL(_ text: String) -> Int? {
-        firstInt(text, pattern:
-            "(?:ebl|estimated blood loss|blood loss)[^\\d\\n]{0,40}?(\\d{1,5})\\s*(?:mls?|ccs?|milliliters?)\\b")
+        var ignored: [DictationParseIssue] = []
+        return ebmL(text, recording: &ignored)
+    }
+
+    private static func ebmL(_ text: String, recording issues: inout [DictationParseIssue]) -> Int? {
+        firstInt(text, field: "EBL", pattern:
+            "(?:ebl|estimated blood loss|blood loss)[^\\d\\n]{0,40}?(\\d{1,5})\\s*(?:mls?|ccs?|milliliters?)\\b",
+            recording: &issues)
     }
 
     /// Tourniquet minutes: "tourniquet time was 45 minutes",
     /// "tourniquet inflated for 45 min", "45 minutes of tourniquet time".
+    /// A regex compile failure still yields nil in this per-field API;
+    /// `parse(_:)` records it as a typed `DictationParseIssue`.
     static func tourniquetMinutes(_ text: String) -> Int? {
-        if let direct = firstInt(text, pattern:
-            "tourniquet(?:\\s+time)?(?:\\s+(?:was|of|at))?[^\\d\\n]{0,25}?(\\d{1,3})\\s*(?:min|minutes?)\\b") {
+        var ignored: [DictationParseIssue] = []
+        return tourniquetMinutes(text, recording: &ignored)
+    }
+
+    private static func tourniquetMinutes(_ text: String,
+                                          recording issues: inout [DictationParseIssue]) -> Int? {
+        if let direct = firstInt(text, field: "tourniquet time", pattern:
+            "tourniquet(?:\\s+time)?(?:\\s+(?:was|of|at))?[^\\d\\n]{0,25}?(\\d{1,3})\\s*(?:min|minutes?)\\b",
+            recording: &issues) {
             return direct
         }
-        return firstInt(text, pattern:
-            "(\\d{1,3})\\s*(?:min|minutes?)[\\s\\-]+of\\s+tourniquet\\s+time")
+        return firstInt(text, field: "tourniquet time", pattern:
+            "(\\d{1,3})\\s*(?:min|minutes?)[\\s\\-]+of\\s+tourniquet\\s+time",
+            recording: &issues)
     }
 
     /// First capture group of the pattern as an Int, or nil. Patterns are
     /// authored so the digits are the only thing that can land in the group.
-    private static func firstInt(_ text: String, pattern: String) -> Int? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+    /// A compile failure records a typed issue on `field` and yields nil.
+    private static func firstInt(_ text: String, field: String, pattern: String,
+                                 recording issues: inout [DictationParseIssue]) -> Int? {
+        guard let regex = compiledRegex(pattern, field: field,
+                                        options: [.caseInsensitive], recording: &issues),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               match.numberOfRanges > 1,
               let range = Range(match.range(at: 1), in: text),
@@ -158,15 +238,24 @@ enum DictationParser {
     /// attributes. Kind and size are mandatory in `ImplantRecord`; a clause
     /// with a size but no explicit kind yields "Unspecified" rather than a
     /// guessed material — the gap stays visible to the signing surgeon.
+    /// A regex compile failure still yields nil in this per-field API;
+    /// `parse(_:)` records it as a typed `DictationParseIssue`.
     static func implants(_ text: String) -> [ImplantRecord]? {
+        var ignored: [DictationParseIssue] = []
+        return implants(text, recording: &ignored)
+    }
+
+    private static func implants(_ text: String,
+                                 recording issues: inout [DictationParseIssue]) -> [ImplantRecord]? {
         let sentences = text
             .components(separatedBy: CharacterSet(charactersIn: ".\n"))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard let sizeRegex = try? NSRegularExpression(
-            pattern: "(\\d{2,4}(?:\\.\\d)?)\\s*(?:cc|ml|milliliters?)\\b", options: [.caseInsensitive]),
-              let contextRegex = try? NSRegularExpression(
-                pattern: "\\b(implants?|prostheses?|prosthesis|expanders?|devices?)\\b",
-                options: [.caseInsensitive]) else { return nil }
+        guard let sizeRegex = compiledRegex(
+                  "(\\d{2,4}(?:\\.\\d)?)\\s*(?:cc|ml|milliliters?)\\b",
+                  field: "implants", options: [.caseInsensitive], recording: &issues),
+              let contextRegex = compiledRegex(
+                "\\b(implants?|prostheses?|prosthesis|expanders?|devices?)\\b",
+                field: "implants", options: [.caseInsensitive], recording: &issues) else { return nil }
         var records: [ImplantRecord] = []
         for sentence in sentences {
             // A size only counts as an implant size in a sentence that names
@@ -178,13 +267,18 @@ enum DictationParser {
             guard let match = sizeRegex.firstMatch(in: sentence, range: sentenceRange),
                   let sizeRange = Range(match.range(at: 1), in: sentence) else { continue }
             let size = String(sentence[sizeRange])
-            let kind = firstMatch(sentence, pattern: "\\b(saline|silicone\\s+gel|silicone|gummy\\s+bear)\\b") ?? "Unspecified"
-            let profile = firstMatch(sentence, pattern:
-                "\\b(extra(?:\\s|-)?high|ultra(?:\\s|-)?high|high|moderate|low)\\s+profile\\b")
-            let manufacturer = firstMatch(sentence, pattern:
-                "\\b(mentor|allergan|sientra|ideal\\s+implant|gc\\s+aesthetics)\\b")
-            let lot = firstMatch(sentence, pattern:
-                "lot(?:\\s+number)?[:\\s]+([A-Za-z0-9][A-Za-z0-9\\-]{3,})\\b")
+            let kind = firstMatch(sentence, field: "implant kind",
+                                  pattern: "\\b(saline|silicone\\s+gel|silicone|gummy\\s+bear)\\b",
+                                  recording: &issues) ?? "Unspecified"
+            let profile = firstMatch(sentence, field: "implant profile", pattern:
+                "\\b(extra(?:\\s|-)?high|ultra(?:\\s|-)?high|high|moderate|low)\\s+profile\\b",
+                recording: &issues)
+            let manufacturer = firstMatch(sentence, field: "implant manufacturer", pattern:
+                "\\b(mentor|allergan|sientra|ideal\\s+implant|gc\\s+aesthetics)\\b",
+                recording: &issues)
+            let lot = firstMatch(sentence, field: "implant lot", pattern:
+                "lot(?:\\s+number)?[:\\s]+([A-Za-z0-9][A-Za-z0-9\\-]{3,})\\b",
+                recording: &issues)
             records.append(ImplantRecord(
                 kind: kind, size: size, profile: profile,
                 manufacturer: manufacturer, lot: lot))
@@ -207,10 +301,12 @@ enum DictationParser {
     /// First label wins: a second mention of the same label later in the
     /// dictation is a correction the surgeon makes in review, not something
     /// the parser silently reconciles.
-    private static func labeledSpan(_ text: String, labels: [String]) -> String? {
+    private static func labeledSpan(_ text: String, labels: [String], field: String,
+                                    recording issues: inout [DictationParseIssue]) -> String? {
         for label in labels {
             let pattern = label + "(?![A-Za-z])[ \\t,\\-:]*([^.\\n]+)"
-            if let value = firstMatch(text, pattern: pattern, caseInsensitive: true) {
+            if let value = firstMatch(text, field: field, pattern: pattern,
+                                      caseInsensitive: true, recording: &issues) {
                 let cleaned = value.trimmingCharacters(in: .whitespaces)
                     .trimmingCharacters(in: CharacterSet(charactersIn: ",;:-"))
                     .trimmingCharacters(in: .whitespaces)
@@ -220,8 +316,10 @@ enum DictationParser {
         return nil
     }
 
-    private static func complications(_ text: String) -> String? {
-        if let labeled = labeledSpan(text, labels: ["complications", "complication"]) {
+    private static func complications(_ text: String,
+                                      recording issues: inout [DictationParseIssue]) -> String? {
+        if let labeled = labeledSpan(text, labels: ["complications", "complication"],
+                                     field: "complications", recording: &issues) {
             return labeled
         }
         // The unpunctuated spoken form ("there were no complications") is the
@@ -234,21 +332,26 @@ enum DictationParser {
         return nil
     }
 
-    private static func disposition(_ text: String) -> String? {
-        if let labeled = labeledSpan(text, labels: ["disposition"]) {
+    private static func disposition(_ text: String,
+                                    recording issues: inout [DictationParseIssue]) -> String? {
+        if let labeled = labeledSpan(text, labels: ["disposition"],
+                                     field: "disposition", recording: &issues) {
             return labeled
         }
         // "Discharged home" is the standard endpoint; the phrase without the
         // label is still unambiguous and worth capturing.
-        return firstMatch(text, pattern: "(discharged\\s+(?:to\\s+)?home|discharged\\s+home)\\b")
+        return firstMatch(text, field: "disposition", pattern:
+            "(discharged\\s+(?:to\\s+)?home|discharged\\s+home)\\b", recording: &issues)
     }
 
-    /// First capture group of a pattern as trimmed text, or nil.
-    private static func firstMatch(_ text: String, pattern: String,
-                                   caseInsensitive: Bool = true) -> String? {
+    /// First capture group of a pattern as trimmed text, or nil. A compile
+    /// failure records a typed issue on `field` and yields nil.
+    private static func firstMatch(_ text: String, field: String, pattern: String,
+                                   caseInsensitive: Bool = true,
+                                   recording issues: inout [DictationParseIssue]) -> String? {
         var options: NSRegularExpression.Options = []
         if caseInsensitive { options.insert(.caseInsensitive) }
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options),
+        guard let regex = compiledRegex(pattern, field: field, options: options, recording: &issues),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               match.numberOfRanges > 1,
               let range = Range(match.range(at: 1), in: text) else { return nil }
