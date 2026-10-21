@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import os
 
 /// How burned-in subtitles look. Sizes are fractions of the frame height so one
 /// setting reads the same on a 720p clip and a 4K one.
@@ -51,17 +52,40 @@ struct SubtitleStyle: Codable, Equatable {
 
     // MARK: persistence
 
+    /// Census W8 SubtitleStyle:56 (T2-3 chunk C): an undecodable saved style
+    /// used to reset to the default silently. The fallback stays — the style
+    /// sheet needs a usable style either way — but the reset is surfaced: the
+    /// returned notice is non-nil exactly when a payload existed and could
+    /// not be decoded, and load() logs it. Absent data (first launch, nothing
+    /// saved yet) is not a failure and stays quiet. Pure so checks can pin
+    /// the distinction (D3).
+    static func style(from data: Data?) -> (style: SubtitleStyle, unreadable: String?) {
+        guard let data else { return (.default, nil) }
+        do {
+            return (try JSONDecoder().decode(SubtitleStyle.self, from: data), nil)
+        } catch {
+            return (.default, "Saved subtitle style unreadable; using the default style: \(error.localizedDescription)")
+        }
+    }
+
     static func load() -> SubtitleStyle {
-        guard let data = UserDefaults.standard.data(forKey: SettingsKeys.subtitleStyle),
-              let style = try? JSONDecoder().decode(SubtitleStyle.self, from: data) else {
-            return .default
+        let (style, unreadable) = style(from: UserDefaults.standard.data(forKey: SettingsKeys.subtitleStyle))
+        if let unreadable {
+            AppLog.app.warning("\(unreadable, privacy: .public)")
         }
         return style
     }
 
     func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        UserDefaults.standard.set(data, forKey: SettingsKeys.subtitleStyle)
+        do {
+            let data = try JSONEncoder().encode(self)
+            UserDefaults.standard.set(data, forKey: SettingsKeys.subtitleStyle)
+        } catch {
+            // Census W8 SubtitleStyle:63 (T2-3 chunk C): a failed encode used
+            // to skip the save silently. Encoding this plain Codable structure
+            // effectively cannot fail, but if it ever does, the skip is loud.
+            AppLog.app.error("could not encode the subtitle style: \(error.localizedDescription) — the change will not persist")
+        }
     }
 
     /// Faces that ship with macOS and read well over moving pictures.

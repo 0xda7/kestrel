@@ -202,6 +202,11 @@ struct SubtitleStyleSheet: View {
         // A small still would make the caption look different from the export.
         generator.maximumSize = CGSize(width: 1920, height: 1920)
         // The middle of the clip beats the first frame, which is often black.
+        // Census W8 SubtitleStyleSheet:205/:206 (T2-3 chunk C, display-only):
+        // these `try?`s feed only this style sheet's preview thumbnail — a
+        // failed duration read or frame grab falls through to render()'s
+        // placeholder image, a cosmetic degradation confined to the preview,
+        // so the silent fall-through is kept deliberately.
         let at = (try? await asset.load(.duration)).map { CMTime(seconds: $0.seconds / 2, preferredTimescale: 600) }
         guard let at, let cg = try? await generator.image(at: at).image else { render(); return }
         frame = NSImage(cgImage: cg, size: .zero)

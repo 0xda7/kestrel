@@ -4,6 +4,7 @@
 
 import AVFoundation
 import Combine
+import os
 import QuartzCore
 
 @MainActor
@@ -76,13 +77,31 @@ final class SubtitleVideoExporter: ObservableObject {
             postProcessingAsVideoLayer: videoLayer, in: parentLayer
         )
 
-        let formats = (try? await sourceVideo.load(.formatDescriptions)) ?? []
+        let formats: [CMFormatDescription]
+        do {
+            formats = try await sourceVideo.load(.formatDescriptions)
+        } catch {
+            // Census W8 SubtitleVideoExporter:79 (T2-3 chunk C): a failed read
+            // used to hand the export an empty formats list silently. The
+            // empty list stays (the export proceeds exactly as before), but
+            // the colour-space drop is now loud.
+            let drop = Self.colourSpaceDrop(error)
+            AppLog.app.warning("\(drop, privacy: .public)")
+            formats = []
+        }
         Self.preserveColour(from: formats, on: videoComposition)
 
         let preset = Self.preset(for: composition, formats: formats)
         guard let export = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw CocoaError(.fileWriteUnknown)
         }
+        // Census W8 SubtitleVideoExporter:86 (T2-3 chunk C, minimal debt kept):
+        // a stale output that cannot be removed still fails the export typed
+        // one step later — AVAssetWriter init or exportAsynchronously throws,
+        // and the status check at the end of performExport rethrows
+        // export.error — so the old file can never pass silently as the fresh
+        // export; only the failure message is less precise, which is why the
+        // census scores this minimal.
         try? FileManager.default.removeItem(at: outputURL)
         export.outputURL = outputURL
         export.outputFileType = .mov
@@ -92,6 +111,11 @@ final class SubtitleVideoExporter: ObservableObject {
         progressTask = Task { [weak self, weak export] in
             while !Task.isCancelled, let export {
                 self?.progress = Double(export.progress)
+                // Census W8 SubtitleVideoExporter:95 (T2-3 chunk C,
+                // display-only): the progress-poll tick; a failed sleep only
+                // ends this cosmetic UI update loop (cancel() ends it too),
+                // the export itself is unaffected, so the silent skip is kept
+                // deliberately.
                 try? await Task.sleep(for: .milliseconds(250))
             }
         }
@@ -129,6 +153,14 @@ final class SubtitleVideoExporter: ObservableObject {
         composition.colorPrimaries = primaries
         composition.colorTransferFunction = transfer
         composition.colorYCbCrMatrix = matrix
+    }
+
+    /// Census W8 SubtitleVideoExporter:79 (T2-3 chunk C): the English notice
+    /// for a failed format-description read, which performExport logs before
+    /// continuing with an empty formats list exactly as before. Pure so checks
+    /// can pin the surfacing (D3).
+    nonisolated static func colourSpaceDrop(_ error: Error) -> String {
+        "Could not read the source video's format descriptions; the burn-in export may drop the original color space: \(error.localizedDescription)"
     }
 
     nonisolated private static func subtitleLayer(for cue: SubtitleCue, size: CGSize,

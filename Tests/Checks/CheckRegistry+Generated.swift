@@ -75,6 +75,7 @@ enum CheckRegistry {
         ("MaskEditorTests", MaskEditorTests.__checkSet),
         ("FamilyGroupTests", FamilyGroupTests.__checkSet),
         ("SubtitleLayoutTests", SubtitleLayoutTests.__checkSet),
+        ("SubtitleVideoSurfacingTests", SubtitleVideoSurfacingTests.__checkSet),
         ("ToolSupportTests", ToolSupportTests.__checkSet),
         ("ToolCallRescueTests", ToolCallRescueTests.__checkSet),
         ("ToolArgumentsRepairTests", ToolArgumentsRepairTests.__checkSet),
