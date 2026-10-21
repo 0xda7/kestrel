@@ -27,6 +27,7 @@ enum CheckRegistry {
         ("ServerSettingsTests", ServerSettingsTests.__checkSet),
         ("VRAMWindowTests", VRAMWindowTests.__checkSet),
         ("SettingsNumericCoercionTests", SettingsNumericCoercionTests.__checkSet),
+        ("TypedSettingsDriftTests", TypedSettingsDriftTests.__checkSet),
         ("EnterpriseHardeningTests", EnterpriseHardeningTests.__checkSet),
         ("ChatMessageTests", ChatMessageTests.__checkSet),
         ("LiveStreamTests", LiveStreamTests.__checkSet),
