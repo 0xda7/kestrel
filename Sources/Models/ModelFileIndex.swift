@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 
 /// One recursive inventory shared by LLM, image and video model detection.
 struct ModelFileIndex: Sendable {
@@ -34,13 +35,33 @@ struct ModelFileIndex: Sendable {
 
         var files: [URL] = []
         for case let url as URL in enumerator {
-            guard let values = try? url.resourceValues(forKeys: keys),
-                  values.isRegularFile == true,
+            let values: URLResourceValues
+            do {
+                values = try url.resourceValues(forKeys: keys)
+            } catch {
+                // Census W8 ModelFileIndex:37 (T2-3 chunk E): an entry whose
+                // resource values cannot be read used to vanish from the
+                // inventory silently — a model could go undiscovered with no
+                // trace. The skip stays (a half-read entry must not pose as a
+                // model), but the skipped path is named.
+                let notice = Self.scanSkipNotice(
+                    path: url.path, reason: error.localizedDescription)
+                AppLog.app.error("\(notice, privacy: .public)")
+                continue
+            }
+            guard values.isRegularFile == true,
                   (values.fileSize ?? 0) > 0,
                   modelExtensions.contains(url.pathExtension.lowercased()) else { continue }
             files.append(url.standardizedFileURL)
         }
         return ModelFileIndex(root: root, files: files)
+    }
+
+    /// Census W8 ModelFileIndex:37 (T2-3 chunk E): the English line for an
+    /// inventory entry that could not be read and was therefore skipped and
+    /// may stay undiscovered. Pure so checks can pin the surfacing (D3).
+    static func scanSkipNotice(path: String, reason: String) -> String {
+        "Could not read \(path) while scanning the model folders; the entry is skipped and may stay undiscovered: \(reason)"
     }
 
     /// Basename match anywhere below the models root. The managed media folder

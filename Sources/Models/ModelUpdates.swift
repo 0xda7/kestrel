@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 
 struct HFFileMetadata {
     let sha256: String?
@@ -11,6 +12,11 @@ struct HFFileMetadata {
 
 enum HuggingFaceAPI {
     /// repo + file path -> sha256/size from the Hugging Face tree API (LFS oid).
+    /// Census W8 ModelUpdates:24/:25 (T2-3 chunk E): a failed fetch or parse
+    /// still returns nil — indistinguishable from "no update found" — so a
+    /// stalled update check used to be invisible. The nil stays (the checker's
+    /// contract), but the skip is named; a successful lookup whose tree simply
+    /// does not contain the file stays quiet (a real no-update).
     static func fileMetadata(for url: URL) async -> HFFileMetadata? {
         guard url.host?.contains("huggingface.co") == true else { return nil }
         let parts = url.path.split(separator: "/").map(String.init)
@@ -20,13 +26,50 @@ enum HuggingFaceAPI {
         let filePath = parts[(resolve + 2)...].joined(separator: "/")
         let dir = filePath.contains("/") ? "/" + filePath.split(separator: "/").dropLast().joined(separator: "/") : ""
 
-        guard let api = URL(string: "https://huggingface.co/api/models/\(repo)/tree/\(rev)\(dir)"),
-              let (data, _) = try? await URLSession.shared.data(from: api),
-              let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        guard let api = URL(string: "https://huggingface.co/api/models/\(repo)/tree/\(rev)\(dir)") else { return nil }
+        let data: Data
+        do {
+            let (fetched, _) = try await URLSession.shared.data(from: api)
+            data = fetched
+        } catch {
+            let notice = Self.updateFetchFailureNotice(
+                repo: repo, reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return nil
+        }
+        let entries: [[String: Any]]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                let notice = Self.updateParseFailureNotice(
+                    repo: repo, reason: "the response was not a file list")
+                AppLog.app.error("\(notice, privacy: .public)")
+                return nil
+            }
+            entries = parsed
+        } catch {
+            let notice = Self.updateParseFailureNotice(
+                repo: repo, reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return nil
+        }
 
         guard let entry = entries.first(where: { ($0["path"] as? String) == filePath }) else { return nil }
         return HFFileMetadata(sha256: (entry["lfs"] as? [String: Any])?["oid"] as? String,
                               sizeBytes: (entry["size"] as? NSNumber)?.int64Value)
+    }
+
+    /// Census W8 ModelUpdates:24 (T2-3 chunk E): the English line naming an
+    /// update check skipped because the Hugging Face tree could not be
+    /// fetched. Pure so checks can pin it (D3).
+    static func updateFetchFailureNotice(repo: String, reason: String) -> String {
+        "Could not fetch the Hugging Face tree of \(repo); the update check for its files is skipped: \(reason)"
+    }
+
+    /// Census W8 ModelUpdates:25 (T2-3 chunk E): the English line for an
+    /// unreadable Hugging Face tree response — distinct from a fetch failure
+    /// and from a real no-update. Pure so checks can pin it (D3).
+    static func updateParseFailureNotice(repo: String, reason: String) -> String {
+        "Could not parse the Hugging Face tree response of \(repo); the update check for its files is skipped: \(reason)"
     }
 }
 

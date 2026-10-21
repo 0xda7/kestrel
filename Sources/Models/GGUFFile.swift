@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 
 struct GGUFFileEntry: Sendable {
     let path: String
@@ -62,6 +63,12 @@ enum GGUFFile {
 
     /// Total bytes of a model, including every sibling shard when `path` is the
     /// first `-00001-of-N` file. Falls back to the single file for normal GGUFs.
+    /// Census W8 GGUFFile:72/:78 (T2-3 chunk E): a shard directory that cannot
+    /// be scanned, or a sibling whose size cannot be read, used to make the
+    /// sharded model silently vanish (nil) with no trace. The callers' existing
+    /// contract is kept — nil means "size unknown" and the ctx solver treats it
+    /// as such, never as a trusted 0 — while both failures now surface through
+    /// AppLog. A healthy layout produces byte-identical sizes as before.
     static func totalSize(at path: String) -> UInt64? {
         let url = URL(fileURLWithPath: path).standardizedFileURL
         if shardInfo(url.path) == nil {
@@ -69,15 +76,38 @@ enum GGUFFile {
                   let size = (attributes[.size] as? NSNumber)?.uint64Value else { return nil }
             return size
         }
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: url.deletingLastPathComponent(),
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]) else { return nil }
-        let entries = files.compactMap { file -> GGUFFileEntry? in
-            guard file.pathExtension.lowercased() == "gguf",
-                  let values = try? file.resourceValues(forKeys: [.fileSizeKey]),
-                  let size = values.fileSize else { return nil }
-            return GGUFFileEntry(path: file.standardizedFileURL.path, sizeBytes: Int64(size))
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(
+                at: url.deletingLastPathComponent(),
+                includingPropertiesForKeys: [.fileSizeKey],
+                options: [.skipsHiddenFiles])
+        } catch {
+            let notice = Self.shardScanFailureNotice(
+                directory: url.deletingLastPathComponent().path,
+                reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return nil
+        }
+        var entries: [GGUFFileEntry] = []
+        for file in files {
+            guard file.pathExtension.lowercased() == "gguf" else { continue }
+            let size: Int?
+            do {
+                size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            } catch {
+                let notice = Self.shardSizeFailureNotice(
+                    shard: file.lastPathComponent, reason: error.localizedDescription)
+                AppLog.app.error("\(notice, privacy: .public)")
+                continue
+            }
+            guard let size else {
+                let notice = Self.shardSizeFailureNotice(
+                    shard: file.lastPathComponent, reason: "the file reported no size")
+                AppLog.app.error("\(notice, privacy: .public)")
+                continue
+            }
+            entries.append(GGUFFileEntry(path: file.standardizedFileURL.path, sizeBytes: Int64(size)))
         }
         if let model = models(from: entries).first(where: {
             $0.primaryPath == url.path || $0.paths.contains(url.path)
@@ -85,6 +115,23 @@ enum GGUFFile {
             return UInt64(max(0, model.sizeBytes))
         }
         return nil
+    }
+
+    /// Census W8 GGUFFile:72 (T2-3 chunk E): the English line for a shard
+    /// directory that could not be scanned — the model size becomes unknown
+    /// (nil, which callers already treat as unknown), never a trusted 0. Pure
+    /// so checks can pin how a failed scan is distinguished from a healthy
+    /// "no shards" layout (D3).
+    static func shardScanFailureNotice(directory: String, reason: String) -> String {
+        "Could not scan \(directory) for the model's shards; its total size is unknown: \(reason)"
+    }
+
+    /// Census W8 GGUFFile:78 (T2-3 chunk E): the English line for a shard whose
+    /// size could not be read. The shard stays excluded — an incomplete shard
+    /// set must not sum to a quietly wrong total the VRAM math trusts — but the
+    /// exclusion is named. Pure so checks can pin it (D3).
+    static func shardSizeFailureNotice(shard: String, reason: String) -> String {
+        "Could not read the size of shard \(shard); it is excluded, so the model's total size stays unknown: \(reason)"
     }
 
     static func isProjector(_ path: String) -> Bool {

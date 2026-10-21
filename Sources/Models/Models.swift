@@ -30,14 +30,39 @@ struct LocalModel: Identifiable, Hashable, Sendable {
     /// Shared by `ModelStore.refresh()` and the router preset generator.
     nonisolated static func scan(in directory: URL) -> [LocalModel] {
         let fm = FileManager.default
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            // Census W8 Models:33 (T2-3 chunk E): the scan used to run even
+            // when the models folder could not be created, with the failure
+            // silent. Scanning proceeds as before (the enumerator then finds
+            // nothing); the miss is named. T2-2 chunk B pattern.
+            let notice = ModelStore.directoryCreationFailureNotice(
+                directory: directory.path, purpose: "the models folder",
+                reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+        }
         return models(from: ModelFileIndex.scan(in: directory).llmFiles)
     }
 
     nonisolated static func models(from files: [URL]) -> [LocalModel] {
-        let entries = files.map { url in
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-            return GGUFFileEntry(path: url.path, sizeBytes: size)
+        let entries = files.map { url -> GGUFFileEntry in
+            let resourceSize: Int?
+            do {
+                resourceSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            } catch {
+                // Census W8 Models:39 (T2-3 chunk E): an unreadable size used
+                // to count the entry as 0 bytes with no trace — for a shard
+                // set that quietly under-reports the total the VRAM math then
+                // trusts. The 0 stays (entries byte-identical), but the gap
+                // is named; a size that is genuinely absent without any error
+                // keeps the silent 0.
+                let notice = Self.modelSizeFailureNotice(
+                    file: url.lastPathComponent, reason: error.localizedDescription)
+                AppLog.app.error("\(notice, privacy: .public)")
+                resourceSize = nil
+            }
+            return GGUFFileEntry(path: url.path, sizeBytes: resourceSize.map(Int64.init) ?? 0)
         }
         return GGUFFile.models(from: entries)
             .map { group in
@@ -50,6 +75,14 @@ struct LocalModel: Identifiable, Hashable, Sendable {
                 )
             }
             .sorted { $0.sizeBytes < $1.sizeBytes }
+    }
+
+    /// Census W8 Models:39 (T2-3 chunk E): the English line for a model file
+    /// whose size could not be read; it still counts as 0 bytes (the
+    /// long-standing entry shape), so a suspicious 0 now has a trace. Pure so
+    /// checks can pin the line (D3).
+    nonisolated static func modelSizeFailureNotice(file: String, reason: String) -> String {
+        "Could not read the size of \(file); it counts as 0 bytes until a scan reads it: \(reason)"
     }
 }
 
@@ -99,12 +132,29 @@ private final class DownloadSink: @unchecked Sendable {
 
     func size() -> Int64 {
         lock.lock(); defer { lock.unlock() }
-        return ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?.int64Value ?? 0
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            return (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        } catch {
+            // Census W8 Models:102 (T2-3 chunk E): an unreadable partial used
+            // to resume from 0 (a full re-download) with no trace. The 0 stays
+            // — restarting from scratch is the safe direction — but the gap
+            // is named.
+            AppLog.downloads.error("Could not read the size of the partial download \(self.url.lastPathComponent, privacy: .public); resuming from the start: \(error.localizedDescription, privacy: .public)")
+            return 0
+        }
     }
 
     func open(append: Bool) throws -> Int64 {
         lock.lock(); defer { lock.unlock() }
-        try? handle?.close()
+        do {
+            try handle?.close()
+        } catch {
+            // Census W8 Models:107 (T2-3 chunk E): the stale handle's close
+            // failing must not abort the fresh open — the new handle governs
+            // the transfer from here — so the failure is named, not surfaced.
+            AppLog.downloads.error("Could not close the previous handle of \(self.url.lastPathComponent, privacy: .public) before reopening: \(error.localizedDescription, privacy: .public)")
+        }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: url.path) {
             FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -126,10 +176,21 @@ private final class DownloadSink: @unchecked Sendable {
         return Int64(try handle.offset())
     }
 
-    func close() {
+    /// Closes the handle and returns the close failure, if any. The caller
+    /// decides whether it can surface (a finished transfer, where the close is
+    /// the results channel) or must stay secondary (pause/cancel already carry
+    /// their own outcome). Nil when nothing was open or the close succeeded.
+    /// Census W8 Models:131 (T2-3 chunk E).
+    func close() -> Error? {
         lock.lock(); defer { lock.unlock() }
-        try? handle?.close()
-        handle = nil
+        guard let handle else { return nil }
+        self.handle = nil
+        do {
+            try handle.close()
+            return nil
+        } catch {
+            return error
+        }
     }
 }
 
@@ -190,14 +251,23 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
             // volumeAvailableCapacityForImportantUsage is APFS only and reads zero on exFAT or
             // any other foreign volume, which stalls the download claiming no space is left.
             let dir = destination.deletingLastPathComponent()
-            let values = try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
-                                                           .volumeAvailableCapacityKey])
-            let important = values?.volumeAvailableCapacityForImportantUsage ?? 0
-            let plain = Int64(values?.volumeAvailableCapacity ?? 0)
-            let capacity = important > 0 ? important : plain
+            let capacity: Int64
+            do {
+                let values = try dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
+                                                               .volumeAvailableCapacityKey])
+                let important = values.volumeAvailableCapacityForImportantUsage ?? 0
+                capacity = important > 0 ? important : Int64(values.volumeAvailableCapacity ?? 0)
+            } catch {
+                // Census W8 Models:193 (T2-3 chunk E): a failed free-space read
+                // is "capacity unknown". The gate already proceeds on 0/unknown
+                // (foreign volumes report zero), so the download starts — but
+                // the skipped pre-check is named instead of reading as "plenty
+                // of space".
+                AppLog.downloads.warning("Could not read the free space on \(dir.path, privacy: .public); starting \(self.fileName, privacy: .public) without the disk-space pre-check: \(error.localizedDescription, privacy: .public)")
+                capacity = 0
+            }
             let remaining = max(0, needed - sink.size())
-            if capacity > 0, capacity < remaining + 1_000_000_000 {
-                let free = capacity
+            if let free = Self.capacityShortfall(available: capacity, remaining: remaining) {
                 let neededGB = Double(remaining) / 1_073_741_824
                 let freeGB = Double(free) / 1_073_741_824
                 phase = .failed(String(format: "Espacio insuficiente: %.1f GB libres, %.1f GB necesarios / not enough disk space", freeGB, neededGB))
@@ -225,7 +295,13 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
         guard phase == .downloading else { return }
         phase = .paused
         task?.cancel()
-        sink.close()
+        if let closeError = sink.close() {
+            // Census W8 Models:131 (T2-3 chunk E): pausing keeps the partial
+            // for resume, so a failed close stays secondary (logged, never a
+            // second failure over the pause); the resumed transfer's final
+            // checksum still guards the result.
+            AppLog.downloads.error("Could not close \(self.fileName, privacy: .public) cleanly while pausing; the partial file stays as is: \(closeError.localizedDescription, privacy: .public)")
+        }
     }
 
     func resume() {
@@ -236,7 +312,12 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
     func cancel() {
         phase = .failed("Cancelada / cancelled")
         task?.cancel()
-        sink.close()
+        if let closeError = sink.close() {
+            // Census W8 Models:131 (T2-3 chunk E): the cancellation above is
+            // the user-visible outcome; a failing close is logged, not raised
+            // as a second error over it.
+            AppLog.downloads.error("Could not close \(self.fileName, privacy: .public) cleanly while cancelling: \(closeError.localizedDescription, privacy: .public)")
+        }
         session.invalidateAndCancel()
     }
 
@@ -315,7 +396,14 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
     }
 
     private func finishTransfer() {
-        sink.close()
+        if let closeError = sink.close() {
+            // Census W8 Models:131 (T2-3 chunk E): the close is the download's
+            // results channel — a failing close can leave the staged file
+            // truncated, so it surfaces here instead of a later checksum
+            // mismatch masking it (the chunk D close-before-read doctrine).
+            phase = .failed(Self.closeFailureMessage(closeError, fileName: fileName))
+            return
+        }
         phase = .verifying
         let expected = expectedSHA256
         let staging = sink.url
@@ -326,7 +414,25 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
             }.value
 
             if ok {
-                try? FileManager.default.removeItem(at: destination)
+                var removalError: Error?
+                do {
+                    try FileManager.default.removeItem(at: destination)
+                } catch {
+                    removalError = error
+                }
+                if let removalError,
+                   Self.finalizeBlocked(by: removalError,
+                                        destinationExists: FileManager.default.fileExists(atPath: destination.path)) {
+                    // Census W8 Models:329 (T2-3 chunk E): a destination that
+                    // cannot be removed used to fall through to a move failure
+                    // that named nothing. A genuinely blocked destination
+                    // surfaces here and the finalize stops; an absent one (the
+                    // normal first download) stays benign.
+                    self.phase = .failed(Self.finalizeBlockerMessage(
+                        destination: destination.lastPathComponent,
+                        reason: removalError.localizedDescription))
+                    return
+                }
                 do {
                     try FileManager.default.moveItem(at: staging, to: destination)
                     if let expected { ModelStore.recordDigest(expected, forFile: destination.lastPathComponent) }
@@ -337,15 +443,69 @@ final class DownloadItem: NSObject, ObservableObject, Identifiable, URLSessionDa
                     self.phase = .failed(error.localizedDescription)
                 }
             } else {
-                try? FileManager.default.removeItem(at: staging)
+                do {
+                    try FileManager.default.removeItem(at: staging)
+                } catch {
+                    // Census W8 Models:340 (T2-3 chunk E): failing to discard
+                    // the corrupt staging file leaves it on disk. The checksum
+                    // failure below is the primary surface, so the leftover is
+                    // named here rather than replacing that message.
+                    AppLog.downloads.error("Could not discard the corrupt download \(staging.lastPathComponent, privacy: .public); remove it manually: \(error.localizedDescription, privacy: .public)")
+                }
                 AppLog.downloads.error("checksum mismatch for \(self.fileName)")
                 self.phase = .failed("Checksum SHA-256 no coincide: descarga corrupta, reintenta / checksum mismatch: corrupt download, retry")
             }
         }
     }
 
+    // MARK: - Surfacing seams (census W8, T2-3 chunk E)
+
+    /// Census W8 Models:193 (T2-3 chunk E): the disk-space gate. Returns the
+    /// free space when the download would leave too little (under the transfer
+    /// plus a 1 GB margin), nil otherwise. Unknown capacity (0 — including a
+    /// failed free-space read) is nil: an unreadable volume must not read as
+    /// "no space" and stall the download, the gate's documented exFAT
+    /// behavior. Pure so checks can pin the safe direction (D3).
+    nonisolated static func capacityShortfall(available: Int64, remaining: Int64) -> Int64? {
+        guard available > 0, available < remaining + 1_000_000_000 else { return nil }
+        return available
+    }
+
+    /// Census W8 Models:131 (T2-3 chunk E): the English failure for a staged
+    /// download whose file could not be closed after the transfer — the file
+    /// may be incomplete, so this surfaces instead of any verification. Pure
+    /// so checks can pin the wording (D3).
+    nonisolated static func closeFailureMessage(_ error: Error, fileName: String) -> String {
+        "Could not close the downloaded file \(fileName) after the transfer; it may be incomplete: \(error.localizedDescription)"
+    }
+
+    /// Census W8 Models:329 (T2-3 chunk E): whether a failed removal of the
+    /// old destination blocks the checksum-verified finalize. It blocks only
+    /// when a destination is actually present (the removal genuinely failed);
+    /// an absent destination is the normal first-download case and stays
+    /// benign. Pure so checks can pin the safe direction (D3).
+    nonisolated static func finalizeBlocked(by removalError: Error?, destinationExists: Bool) -> Bool {
+        removalError != nil && destinationExists
+    }
+
+    /// Census W8 Models:329 (T2-3 chunk E): the English failure when an
+    /// existing destination file cannot be replaced to finish the download.
+    /// Pure so checks can pin the wording (D3).
+    nonisolated static func finalizeBlockerMessage(destination: String, reason: String) -> String {
+        "Could not replace the existing file \(destination) to finish the download: \(reason)"
+    }
+
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        sink.close()
+        if error != nil {
+            if let closeError = sink.close() {
+                // Census W8 Models:131 (T2-3 chunk E): this path already
+                // carries its own outcome (paused after a network error, or a
+                // cancellation), so a failing close is logged — never a second
+                // error over them. The success path leaves the close to
+                // finishTransfer, which surfaces it.
+                AppLog.downloads.error("Could not close \(self.fileName, privacy: .public) after the transfer error: \(closeError.localizedDescription, privacy: .public)")
+            }
+        }
         Task { @MainActor in
             if let error {
                 if (error as NSError).code == NSURLErrorCancelled || self.phase == .paused || self.error != nil {
@@ -386,6 +546,16 @@ final class ModelStore: ObservableObject {
     /// The fixed default location, used when the user hasn't picked a custom folder.
     nonisolated static let defaultDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("models")
 
+    /// Census W8 Models:33/:411/:449/:494 (T2-3 chunk E): the English line for
+    /// a models folder (or a whisper/imagen subfolder) that could not be
+    /// created before a scan or download. The caller proceeds as before — the
+    /// scan then finds nothing, and a download's own open surfaces the same
+    /// disk trouble — but the miss is named. Pure so checks can pin it (D3).
+    nonisolated static func directoryCreationFailureNotice(directory: String, purpose: String,
+                                                           reason: String) -> String {
+        "Could not create \(purpose) at \(directory); continuing without it: \(reason)"
+    }
+
     /// Where models are scanned, downloaded and deleted. Defaults to `~/models`,
     /// overridable from Settings (persisted in `SettingsKeys.modelsDir`).
     var directory: URL {
@@ -404,11 +574,29 @@ final class ModelStore: ObservableObject {
         return WhisperModel.model(id: id)
     }
 
+    /// Census W8 Models:622/:623 (T2-3 chunk E): the English line for a failed
+    /// projector lookup — no projector gets auto-paired, and why vision is
+    /// unavailable is named. A repo that simply has no projector stays quiet.
+    /// Pure so checks can pin it (D3).
+    nonisolated static func projectorLookupFailureNotice(repo: String, reason: String) -> String {
+        "Could not look up a vision projector in the \(repo) repo; no projector will be auto-paired: \(reason)"
+    }
+
     func downloadWhisperModel(_ model: WhisperModel? = nil) {
         let model = model ?? selectedWhisperModel
         guard let remote = URL(string: model.downloadURL) else { return }
         let dir = whisperDirectory
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            // Census W8 Models:411 (T2-3 chunk E): the download still starts
+            // (its sink open surfaces the same disk trouble moments later);
+            // the missing folder is named here. T2-2 chunk B pattern.
+            let notice = Self.directoryCreationFailureNotice(
+                directory: dir.path, purpose: "the whisper models folder",
+                reason: error.localizedDescription)
+            AppLog.downloads.error("\(notice, privacy: .public)")
+        }
         let destination = model.url(in: dir)
         guard !FileManager.default.fileExists(atPath: destination.path),
               !downloads.contains(where: { $0.destination == destination && $0.error == nil }) else { return }
@@ -446,7 +634,16 @@ final class ModelStore: ObservableObject {
 
     func downloadWhisperVAD() {
         guard let remote = URL(string: WhisperVADModel.downloadURL) else { return }
-        try? FileManager.default.createDirectory(at: whisperDirectory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: whisperDirectory, withIntermediateDirectories: true)
+        } catch {
+            // Census W8 Models:449 (T2-3 chunk E): same pattern as :411 — the
+            // download still starts and the missing folder is named here.
+            let notice = Self.directoryCreationFailureNotice(
+                directory: whisperDirectory.path, purpose: "the whisper models folder",
+                reason: error.localizedDescription)
+            AppLog.downloads.error("\(notice, privacy: .public)")
+        }
         guard !whisperVADInstalled,
               !downloads.contains(where: { $0.destination == whisperVADURL && $0.error == nil }) else { return }
         let item = DownloadItem(remote: remote, destination: whisperVADURL)
@@ -491,7 +688,17 @@ final class ModelStore: ObservableObject {
                 refresh()
                 return
             }
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            } catch {
+                // Census W8 Models:494 (T2-3 chunk E): same pattern as :411 —
+                // the component download still starts; the missing folder is
+                // named here.
+                let notice = Self.directoryCreationFailureNotice(
+                    directory: dir.path, purpose: "the imagen components folder",
+                    reason: error.localizedDescription)
+                AppLog.downloads.error("\(notice, privacy: .public)")
+            }
             guard !downloads.contains(where: { $0.destination == dest && $0.error == nil }) else { return }
             let item = DownloadItem(remote: remote, destination: dest)
             item.onFinish = { [weak self] in self?.refresh() }
@@ -618,9 +825,35 @@ final class ModelStore: ObservableObject {
         guard let r = comps.firstIndex(of: "resolve"), r >= 2, comps.count > r + 1 else { return }
         let repo = comps[r - 2] + "/" + comps[r - 1]
         let branch = comps[r + 1]
-        guard let api = URL(string: "https://huggingface.co/api/models/\(repo)/tree/\(branch)"),
-              let (data, _) = try? await URLSession.shared.data(from: api),
-              let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+        guard let api = URL(string: "https://huggingface.co/api/models/\(repo)/tree/\(branch)") else { return }
+        let data: Data
+        do {
+            let (fetched, _) = try await URLSession.shared.data(from: api)
+            data = fetched
+        } catch {
+            // Census W8 Models:622 (T2-3 chunk E): a failed lookup used to be
+            // indistinguishable from a repo with no projector — vision was
+            // silently unavailable. No-pairing stays; the failed lookup is named.
+            let notice = Self.projectorLookupFailureNotice(
+                repo: repo, reason: error.localizedDescription)
+            AppLog.downloads.error("\(notice, privacy: .public)")
+            return
+        }
+        let entries: [[String: Any]]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                let notice = Self.projectorLookupFailureNotice(
+                    repo: repo, reason: "the repo tree response was not a file list")
+                AppLog.downloads.error("\(notice, privacy: .public)")
+                return
+            }
+            entries = parsed
+        } catch {
+            let notice = Self.projectorLookupFailureNotice(
+                repo: repo, reason: error.localizedDescription)
+            AppLog.downloads.error("\(notice, privacy: .public)")
+            return
+        }
         let projectors = entries.compactMap { $0["path"] as? String }
             .filter { $0.lowercased().contains("mmproj") && $0.lowercased().hasSuffix(".gguf") }
         // Pick the best projector for Metal-on-AMD. The vision encoder runs partly

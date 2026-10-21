@@ -182,10 +182,35 @@ enum GGUFMetadataCache {
 
     private static func fileKey(for path: String) -> FileKey? {
         let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: standardized),
-              let size = (attributes[.size] as? NSNumber)?.uint64Value else { return nil }
-        let date = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        return FileKey(path: standardized, size: size, modificationDate: date)
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: standardized)
+            guard let size = (attributes[.size] as? NSNumber)?.uint64Value else {
+                Self.noteUnreadableKeyFile(standardized, reason: "the file reported no size")
+                return nil
+            }
+            let date = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            return FileKey(path: standardized, size: size, modificationDate: date)
+        } catch {
+            Self.noteUnreadableKeyFile(standardized, reason: error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// Census W8 GGUFMetadata:185 (T2-3 chunk E): without a cache key a file's
+    /// GGUF metadata is treated as absent, which used to happen in total
+    /// silence (every probe reparsed or reported "no"). Such a file fails on
+    /// every access, so only the first failure is logged — a tree containing
+    /// one must not spam the log.
+    private static let didLogUnreadableKeyFile = OSAllocatedUnfairLock<Bool>(initialState: false)
+
+    private static func noteUnreadableKeyFile(_ path: String, reason: String) {
+        let alreadyLogged = didLogUnreadableKeyFile.withLock { logged -> Bool in
+            if logged { return true }
+            logged = true
+            return false
+        }
+        guard !alreadyLogged else { return }
+        AppLog.app.error("Could not read the file attributes of \(path, privacy: .public) needed for the metadata cache key; its GGUF metadata is treated as unavailable (only the first such failure is logged): \(reason, privacy: .public)")
     }
 
     private static func readPrefix(at path: String, limit: Int) -> Data? {
