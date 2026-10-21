@@ -3796,3 +3796,72 @@ extension SecretHashSurfacingTests {
             .init(name: "testFileHashOfANonFileInputFailsClosed") { try $0.testFileHashOfANonFileInputFailsClosed() },
         ])
 }
+
+/// Census W8 App-group reap-state conversions (T2-2 chunk B): PID-lockfile
+/// I/O failures and orphan-sweep failures land in a capped ring that the
+/// exported diagnostics report renders; with no failures the report is
+/// byte-identical to the pre-T2-2 format.
+final class ReapDiagnosticsTests: CheckCase {
+    private func makeReport() -> String {
+        DiagnosticsExport.report(
+            settings: ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf",
+                                     port: 8080, ngl: 99, ncmoe: 24, ctx: 16384, threads: 6,
+                                     flashAttn: "auto", noMmap: true, jinja: true,
+                                     vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                                     cacheTypeK: "f16", cacheTypeV: "f16", mlock: false),
+            hardware: HardwareInfo(cpuBrand: "Test CPU", physicalCores: 8, logicalCores: 16,
+                                   ramGB: 32, arch: "x86_64", model: "Test Mac",
+                                   osVersion: "macOS 26", gpus: []),
+            logText: "sample log", extra: nil)
+    }
+
+    func testReapSectionIsEmptyWhenThereAreNoFailures() {
+        XCTAssertEqual(DiagnosticsExport.reapSection([]), "",
+                       "a healthy reap state must add no section to the report")
+    }
+
+    func testReapSectionRendersEachFailureOnItsOwnLine() {
+        XCTAssertEqual(DiagnosticsExport.reapSection(["first failure", "second failure"]),
+                       "\n## Engine reap\nfirst failure\nsecond failure\n")
+    }
+
+    func testRecordedReapFailureAppearsInTheExportedReport() {
+        let marker = "reap-diagnostic-marker-\(UUID().uuidString)"
+        EngineLock.recordReapFailure(marker)
+        let report = makeReport()
+        XCTAssertTrue(report.contains("## Engine reap"),
+                      "a recorded reap failure must surface in the exported diagnostics")
+        XCTAssertTrue(report.contains(marker), "the report carries the failure reason")
+    }
+
+    func testReapFailureRingCapsAtEightEntries() {
+        for i in 0..<10 { EngineLock.recordReapFailure("cap-probe-\(i)-\(UUID().uuidString)") }
+        let snapshot = EngineLock.reapFailureReport()
+        XCTAssertLessThanOrEqual(snapshot.count, 8, "the reap ring is capped")
+        XCTAssertFalse(snapshot.contains { $0.contains("cap-probe-0-") },
+                       "the oldest entries fall out of the capped ring")
+        XCTAssertTrue(snapshot.contains { $0.contains("cap-probe-9-") },
+                      "the newest entries survive the cap")
+    }
+
+    func testRecordedReapFailureLinesAreStampedAndASCII() {
+        EngineLock.recordReapFailure("ascii-probe-\(UUID().uuidString)")
+        let line = EngineLock.reapFailureReport().last ?? ""
+        XCTAssertFalse(line.isEmpty, "a recorded failure lands in the ring")
+        XCTAssertTrue(line.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+    }
+}
+
+extension ReapDiagnosticsTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ReapDiagnosticsTests",
+        instance: { ReapDiagnosticsTests() },
+        checks: [
+            .init(name: "testReapSectionIsEmptyWhenThereAreNoFailures") { $0.testReapSectionIsEmptyWhenThereAreNoFailures() },
+            .init(name: "testReapSectionRendersEachFailureOnItsOwnLine") { $0.testReapSectionRendersEachFailureOnItsOwnLine() },
+            .init(name: "testRecordedReapFailureAppearsInTheExportedReport") { $0.testRecordedReapFailureAppearsInTheExportedReport() },
+            .init(name: "testReapFailureRingCapsAtEightEntries") { $0.testReapFailureRingCapsAtEightEntries() },
+            .init(name: "testRecordedReapFailureLinesAreStampedAndASCII") { $0.testRecordedReapFailureLinesAreStampedAndASCII() },
+        ])
+}

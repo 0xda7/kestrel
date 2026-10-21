@@ -483,10 +483,18 @@ enum DiagnosticsExport {
         model: \(URL(fileURLWithPath: settings.modelPath).lastPathComponent)
         engine: \(settings.serverBinary)
         args: \(SecretRedactor.arguments(settings.arguments).joined(separator: " "))
-        \(extra.map { "\n\($0)\n" } ?? "")
+        \(extra.map { "\n\($0)\n" } ?? "")\(Self.reapSection(EngineLock.reapFailureReport()))
         ## Recent log
         \(logText)
         """
+    }
+
+    /// Census W8 (T2-2 chunk B): reap-state failures (PID-lockfile I/O,
+    /// skipped orphan sweeps) ride the exported report. Empty input renders
+    /// exactly nothing, so a healthy system's report is byte-identical to
+    /// the pre-T2-2 format.
+    static func reapSection(_ failures: [String]) -> String {
+        failures.isEmpty ? "" : "\n## Engine reap\n" + failures.joined(separator: "\n") + "\n"
     }
 }
 

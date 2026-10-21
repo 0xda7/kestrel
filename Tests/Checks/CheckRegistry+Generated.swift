@@ -25,6 +25,7 @@ enum CheckRegistry {
         ("EngineHTTPTests", EngineHTTPTests.__checkSet),
         ("EngineToolTemplateTests", EngineToolTemplateTests.__checkSet),
         ("EstimatorTests", EstimatorTests.__checkSet),
+        ("ReapDiagnosticsTests", ReapDiagnosticsTests.__checkSet),
         ("ResumableDownloadTests", ResumableDownloadTests.__checkSet),
         ("DflashPolicyTests", DflashPolicyTests.__checkSet),
         ("ImageGenTests", ImageGenTests.__checkSet),

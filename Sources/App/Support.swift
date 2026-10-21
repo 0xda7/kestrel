@@ -312,7 +312,14 @@ enum AppSupport {
     static var directory: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            // Census W8 (T2-2 chunk B): every downstream persistence path
+            // silently degraded when this bootstrap failed. The URL is still
+            // returned (callers degrade exactly as before), but loudly now.
+            AppLog.app.error("could not create the app support directory at \(dir.path): \(error.localizedDescription) — persistence paths degrade until it exists")
+        }
         return dir
     }
 }
@@ -506,10 +513,47 @@ enum ShellWords {
 enum EngineLock {
     private static var url: URL { AppSupport.directory.appendingPathComponent("engine.pid") }
 
+    /// Reap-state failures (PID-lockfile I/O, orphan sweep), oldest first,
+    /// capped at 8: the census-era swallows silently disabled precise
+    /// reaping and left port conflicts on relaunch (T2-2 chunk B). Rendered
+    /// into the exported diagnostics report; empty means healthy.
+    private static let reapFailures = OSAllocatedUnfairLock<[String]>(initialState: [])
+    private static let reapStamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    nonisolated static func recordReapFailure(_ reason: String) {
+        let entry = reapFailures.withLock { list -> String in
+            let stamped = "\(reapStamp.string(from: Date())): \(reason)"
+            list.append(stamped)
+            if list.count > 8 { list.removeFirst(list.count - 8) }
+            return stamped
+        }
+        AppLog.app.warning("engine reap: \(entry)")
+    }
+
+    /// Snapshot for the diagnostics report; ordering oldest to newest.
+    nonisolated static func reapFailureReport() -> [String] {
+        reapFailures.withLock { $0 }
+    }
+
     private static func read() -> [Int32] {
-        (try? String(contentsOf: url, encoding: .utf8))?
-            .split(whereSeparator: \.isNewline)
-            .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) } ?? []
+        do {
+            return try String(contentsOf: url, encoding: .utf8)
+                .split(whereSeparator: \.isNewline)
+                .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+        } catch let error as NSError
+                  where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            return []   // absent lockfile: no engines recorded — benign
+        } catch {
+            // Census W8 (T2-2 chunk B): a failing PID-lockfile read silently
+            // disabled precise reaping; surface it for the diagnostics report.
+            recordReapFailure("pid lockfile unreadable (\(error.localizedDescription)); orphan reaping cannot see prior engines")
+            return []
+        }
     }
 
     /// How many engines this app currently owns. Injectable seam: launch-
@@ -520,10 +564,19 @@ enum EngineLock {
 
     private static func save(_ pids: [Int32]) {
         if pids.isEmpty {
-            try? FileManager.default.removeItem(at: url)
+            guard FileManager.default.fileExists(atPath: url.path) else { return }
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                recordReapFailure("pid lockfile remove failed (\(error.localizedDescription)); a stale lockfile can misdirect reaping")
+            }
         } else {
-            try? pids.map(String.init).joined(separator: "\n")
-                .write(to: url, atomically: true, encoding: .utf8)
+            do {
+                try pids.map(String.init).joined(separator: "\n")
+                    .write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                recordReapFailure("pid lockfile write failed (\(error.localizedDescription)); orphan reaping stays blind until a write succeeds")
+            }
         }
     }
 
