@@ -165,20 +165,46 @@ final class UpdateChecker: ObservableObject {
 
         if fm.fileExists(atPath: target.path) {
             let aside = target.deletingPathExtension().appendingPathExtension("old.app")
-            try? fm.removeItem(at: aside)
-            try fm.moveItem(at: target, to: aside)
-            do {
-                try copyApp(source: source, target: target)
-            } catch {
-                try? fm.removeItem(at: target)
-                try? fm.moveItem(at: aside, to: target)
-                throw error
-            }
+            try? fm.removeItem(at: aside)   // pre-clean only; a stale aside must not block
+            try Self.performAppSwap(
+                setAside: { try fm.moveItem(at: target, to: aside) },
+                copy: { try copyApp(source: source, target: target) },
+                restore: {
+                    try? fm.removeItem(at: target)
+                    try fm.moveItem(at: aside, to: target)
+                },
+                asidePath: aside.path)
             try? fm.removeItem(at: aside)
         } else {
             try copyApp(source: source, target: target)
         }
         return target
+    }
+
+    /// The DMG swap as a decision core the checks can inject failures into,
+    /// with the never-leave-no-app contract: a failed set-aside stops before
+    /// touching anything; a failed copy ALWAYS attempts restore, and a failed
+    /// restore escalates naming the aside's exact location instead of dying
+    /// silently with no app in /Applications.
+    nonisolated static func performAppSwap(setAside: () throws -> Void,
+                                           copy: () throws -> Void,
+                                           restore: () throws -> Void,
+                                           asidePath: String) throws {
+        do {
+            try setAside()
+        } catch {
+            throw UpdateError(message: "No se pudo apartar la app actual; la instalación se detuvo sin tocar nada / could not set the current app aside; the install stopped without touching anything")
+        }
+        do {
+            try copy()
+        } catch {
+            do {
+                try restore()
+            } catch {
+                throw UpdateError(message: "La instalación falló y la restauración también: la app anterior quedó en \(asidePath); arrástrala de vuelta a /Applications / the install failed and so did the restore: the previous app is at \(asidePath); drag it back to /Applications")
+            }
+            throw error
+        }
     }
 
     nonisolated private static func copyApp(source: String, target: URL) throws {
@@ -240,9 +266,20 @@ final class UpdateChecker: ObservableObject {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
             p.arguments = [url.path]
-            try? p.run()
+            do {
+                try p.run()
+            } catch {
+                // Terminating with the relaunch dead would leave no app
+                // running at all: surface it and stay alive instead.
+                Task { @MainActor in
+                    self.installError = "La nueva versión está instalada pero no arrancó: ábrela desde /Applications (\(error.localizedDescription)) / the new version is installed but did not launch: open it from /Applications"
+                }
+                return
+            }
+            Task { @MainActor in
+                NSApp.terminate(nil)
+            }
         }
-        NSApp.terminate(nil)
     }
 
     // MARK: release notes

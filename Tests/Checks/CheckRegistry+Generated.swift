@@ -38,6 +38,7 @@ enum CheckRegistry {
         ("LocalizationTests", LocalizationTests.__checkSet),
         ("ShellWordsTests", ShellWordsTests.__checkSet),
         ("UpdateCheckerTests", UpdateCheckerTests.__checkSet),
+        ("UpdateSwapSafetyTests", UpdateSwapSafetyTests.__checkSet),
         ("CatalogTests", CatalogTests.__checkSet),
         ("RouterModeTests", RouterModeTests.__checkSet),
         ("ConversationDecodingTests", ConversationDecodingTests.__checkSet),
