@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import AppKit
 @testable import KestrelCore
 
 /// Mission T2-3 chunk C: the census §2.8.3 Subtitles- and Video-group silent
@@ -70,6 +71,109 @@ final class SubtitleVideoSurfacingTests: CheckCase {
         XCTAssertTrue(drop.contains("color space"),
                       "the notice must name the consequence: \(drop)")
     }
+    // MARK: - VideoGen:350 — failed run directory aborts the run
+
+    /// A run directory that cannot be created is a typed abort (the standard
+    /// .failed channel) naming the directory error — never a launched run
+    /// with nowhere to write frames.
+    func testRunDirectoryFailureAbortsAndNamesTheDirectory() throws {
+        let message = try XCTUnwrapCase(VideoGenerator.runDirectoryFailure(.failure(Boom())),
+                                        "a directory failure must produce the abort message")
+        XCTAssertTrue(message.contains("run directory could not be created"),
+                      "the abort must name the directory error: \(message)")
+        XCTAssertNil(VideoGenerator.runDirectoryFailure(.success(())),
+                     "a created directory must proceed, not abort")
+    }
+
+    // MARK: - VideoGen:477 — failed frame scan vs no-frames verdict
+
+    /// A failed finished-run scan is its own verdict naming the scan error;
+    /// it must never read as the exit-status/no-frames verdicts, and a
+    /// successful-but-empty scan still keeps the existing exit-status path.
+    func testScanFailureIsItsOwnVerdictDistinctFromExitStatus() throws {
+        let verdict = try XCTUnwrapCase(VideoGenerator.scanFailureVerdict(.failure(Boom())),
+                                        "a scan failure must produce its own verdict")
+        XCTAssertTrue(verdict.contains("could not be read back"),
+                      "the verdict must name the scan failure: \(verdict)")
+        XCTAssertFalse(verdict.contains("exit"),
+                       "a scan failure must never read as an exit-status verdict: \(verdict)")
+        XCTAssertNotEqual(verdict, "OOM")
+        XCTAssertNotEqual(verdict, "TIMEOUT")
+        XCTAssertNil(VideoGenerator.scanFailureVerdict(.success([])),
+                     "a successful empty scan keeps the existing no-frames handling")
+    }
+
+    // MARK: - VideoGen:653 — stale-output removal typed, benign absence kept
+
+    /// The benign first-export case classification: a missing file is not a
+    /// failure; a permission failure is.
+    func testNoSuchFileClassificationCoversTheBenignCodes() {
+        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
+                                                     code: NSFileNoSuchFileError)),
+                      "CocoaError.fileNoSuchFile is the benign first export")
+        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
+                                                     code: NSFileReadNoSuchFileError)),
+                      "fileReadNoSuchFile is benign")
+        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSPOSIXErrorDomain,
+                                                     code: Int(ENOENT))),
+                      "POSIX ENOENT is benign")
+        XCTAssertFalse(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
+                                                      code: NSFileWriteNoPermissionError)),
+                       "a permission failure is a real stale-output failure")
+    }
+
+    /// writeMP4 over a path with no stale output completes and leaves the mp4.
+    @MainActor func testWriteMP4OverAnAbsentOutputSucceeds() throws {
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kestrel-check-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try VideoExporter.writeMP4(frames: [Self.tinyFrame()], fps: 12, to: output)
+        let size = try output.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        XCTAssertGreaterThan(size, 0, "the export must produce the mp4")
+    }
+
+    /// A stale output that cannot be removed is the typed staleOutput error —
+    /// never a silent swallow. The stale file here sits in a read-only
+    /// directory, so the unlink itself fails.
+    @MainActor func testWriteMP4OverAnUnremovableStaleOutputThrowsTyped() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kestrel-check-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let stale = dir.appendingPathComponent("stale.mp4")
+        try Data("stale".utf8).write(to: stale)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+            try? FileManager.default.removeItem(at: stale)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        XCTAssertThrowsError(try VideoExporter.writeMP4(frames: [Self.tinyFrame()], fps: 12, to: stale)) { error in
+            guard case VideoExporter.ExportError.staleOutput(let message) = error else {
+                return XCTFail("an unremovable stale output must throw the typed staleOutput error, got \(error)")
+            }
+            XCTAssertFalse(message.isEmpty, "the typed error carries the removal failure")
+        }
+    }
+
+    /// A 4×4 opaque frame (even dimensions, real pixels for the encoder).
+    @MainActor private static func tinyFrame() -> NSImage {
+        let image = NSImage(size: NSSize(width: 4, height: 4))
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: 4, height: 4).fill()
+        image.unlockFocus()
+        return image
+    }
+
+    /// Unwraps an optional failure verdict with a recorded failure instead of
+    /// a force-unwrap.
+    private func XCTUnwrapCase(_ value: String?, _ message: String) throws -> String {
+        guard let value else {
+            XCTFail(message)
+            throw CheckAbort()
+        }
+        return value
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -82,5 +186,10 @@ extension SubtitleVideoSurfacingTests {
             .init(name: "testAbsentSavedStyleIsAQuietFirstLaunch") { $0.testAbsentSavedStyleIsAQuietFirstLaunch() },
             .init(name: "testValidSavedStyleStillRoundTripsIdentically") { try $0.testValidSavedStyleStillRoundTripsIdentically() },
             .init(name: "testFormatLoadFailureRecordsTheColourSpaceDrop") { $0.testFormatLoadFailureRecordsTheColourSpaceDrop() },
+            .init(name: "testNoSuchFileClassificationCoversTheBenignCodes") { $0.testNoSuchFileClassificationCoversTheBenignCodes() },
+            .init(name: "testRunDirectoryFailureAbortsAndNamesTheDirectory") { try $0.testRunDirectoryFailureAbortsAndNamesTheDirectory() },
+            .init(name: "testScanFailureIsItsOwnVerdictDistinctFromExitStatus") { try $0.testScanFailureIsItsOwnVerdictDistinctFromExitStatus() },
+            .init(name: "testWriteMP4OverAnAbsentOutputSucceeds") { try $0.testWriteMP4OverAnAbsentOutputSucceeds() },
+            .init(name: "testWriteMP4OverAnUnremovableStaleOutputThrowsTyped") { try $0.testWriteMP4OverAnUnremovableStaleOutputThrowsTyped() },
         ])
 }

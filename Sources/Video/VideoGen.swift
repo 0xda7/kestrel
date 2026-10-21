@@ -305,11 +305,17 @@ final class VideoGenerator: ObservableObject {
     /// another window, so the file is the shared handoff).
     static var latestLogURL: URL? {
         let dir = AppSupport.directory.appendingPathComponent("logs", isDirectory: true)
+        // Census W8 VideoGen:308 (T2-3 chunk C, display-only): the log
+        // listing for the Logs tab; a failed scan degrades to an absent log
+        // entry in the Logs tab, so the silent empty list is kept deliberately.
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         return files.filter { $0.lastPathComponent.hasPrefix("videogen") }
             .max { a, b in (mtime(a) ?? .distantPast) < (mtime(b) ?? .distantPast) }
     }
     private static func mtime(_ u: URL) -> Date? {
+        // Census W8 VideoGen:313 (T2-3 chunk C, display-only): the mtime that
+        // sorts the Logs-tab entries; a failed read sorts that log oldest —
+        // an unchanged entry — so the silent nil is kept deliberately.
         try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
@@ -347,7 +353,17 @@ final class VideoGenerator: ObservableObject {
         let token = String(UUID().uuidString.prefix(4)).lowercased()
         let runDir = dir.appendingPathComponent("video/kestrel_\(fmt.string(from: Date()))_\(token)",
                                                 isDirectory: true)
-        try? FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+        if let message = Self.runDirectoryFailure(Result {
+            try FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+        }) {
+            // Census W8 VideoGen:350 (T2-3 chunk C): a failed run directory
+            // used to launch a run with nowhere to write — every frame
+            // silently lost. Abort through the standard failure channel
+            // before the engine process exists.
+            state = .failed(message)
+            onFinish?()
+            return
+        }
 
         var args: [String] = ["-M", "vid_gen"]
         for comp in model.components {
@@ -472,10 +488,47 @@ final class VideoGenerator: ObservableObject {
         }
     }
 
+    /// Census W8 VideoGen:350 (T2-3 chunk C): the verdict for the run-directory
+    /// creation. A failure aborts the run through the standard failure channel
+    /// (state .failed + onFinish) before the engine process starts — never a
+    /// half-started run with nowhere to write frames. Nil = proceed. Pure so
+    /// checks can pin the abort and its English message (D3).
+    nonisolated static func runDirectoryFailure(_ created: Result<Void, Error>) -> String? {
+        if case .failure(let error) = created {
+            return "The video run directory could not be created: \(error.localizedDescription)"
+        }
+        return nil
+    }
+
+    /// Census W8 VideoGen:477 (T2-3 chunk C): the verdict for the
+    /// finished-run frame scan. A failed scan is its own verdict naming the
+    /// scan error — the old `try?` conflated it with "no frames generated"
+    /// (reading as exit 0 or the generic failure, hiding a short or empty
+    /// video). A successful-but-empty scan returns nil and keeps the
+    /// existing exit-status verdicts exactly. Pure so checks can pin the
+    /// distinction (D3).
+    nonisolated static func scanFailureVerdict(_ scanned: Result<[URL], Error>) -> String? {
+        if case .failure(let error) = scanned {
+            return "The generated frames could not be read back from the run directory: \(error.localizedDescription)"
+        }
+        return nil
+    }
+
     private func finish(status: Int32, runDir: URL) {
         process = nil
-        let urls = ((try? FileManager.default.contentsOfDirectory(at: runDir,
-                                                                  includingPropertiesForKeys: nil)) ?? [])
+        let scanned = Result { try FileManager.default.contentsOfDirectory(at: runDir,
+                                                                           includingPropertiesForKeys: nil) }
+        if let message = Self.scanFailureVerdict(scanned) {
+            // Census W8 VideoGen:477 (T2-3 chunk C): a failed directory scan
+            // is its own verdict, never the exit-status/no-frames reading —
+            // the old `try?` made a failed scan look like a short or empty
+            // video.
+            state = .failed(message)
+            onFinish?()
+            return
+        }
+        guard case .success(let listed) = scanned else { return }
+        let urls = listed
             .filter { $0.pathExtension.lowercased() == "png" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         guard status == 0, !urls.isEmpty else {
@@ -641,7 +694,24 @@ final class VideoGenPool: ObservableObject {
 /// Writes the frame sequence as an H.264 mp4. AVFoundation can encode it natively,
 /// which is the whole reason the engine's own .webm is not what we hand the user.
 enum VideoExporter {
-    enum ExportError: Error { case noFrames, writerFailed(String) }
+    enum ExportError: Error { case noFrames, writerFailed(String), staleOutput(String) }
+
+    /// Census W8 VideoGen:653 (T2-3 chunk C): whether a failed stale-output
+    /// removal is the benign first-export case (nothing to clear yet) or a
+    /// real failure. Covers the Cocoa no-such-file codes (CocoaError
+    /// .fileNoSuchFile = 4 and .fileReadNoSuchFile = 260) and the POSIX
+    /// ENOENT equivalent. Pure so checks can pin the benign
+    /// classification (D3).
+    static func isNoSuchFile(_ error: NSError) -> Bool {
+        switch (error.domain, error.code) {
+        case (NSCocoaErrorDomain, NSFileNoSuchFileError),
+             (NSCocoaErrorDomain, NSFileReadNoSuchFileError),
+             (NSPOSIXErrorDomain, Int(ENOENT)):
+            return true
+        default:
+            return false
+        }
+    }
 
     static func writeMP4(frames: [NSImage], fps: Int, to url: URL) throws {
         guard let first = frames.first else { throw ExportError.noFrames }
@@ -650,7 +720,18 @@ enum VideoExporter {
         let h = Int(first.size.height) & ~1
         guard w > 0, h > 0 else { throw ExportError.noFrames }
 
-        try? FileManager.default.removeItem(at: url)
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            // Census W8 VideoGen:653 (T2-3 chunk C): a stale output that could
+            // not be removed was swallowed — the writer below would then fail
+            // with an unrelated error, or the stale file would survive as if
+            // it were fresh. A missing file is the normal first export, not a
+            // failure.
+            guard isNoSuchFile(error as NSError) else {
+                throw ExportError.staleOutput(error.localizedDescription)
+            }
+        }
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
