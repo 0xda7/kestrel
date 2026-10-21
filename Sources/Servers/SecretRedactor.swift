@@ -78,11 +78,15 @@ enum SecretRedactor {
     /// credentials passes through unchanged. Applied to anything bound for
     /// a log or an export — error descriptions can embed the full request
     /// URL, token included.
-    static func url(_ text: String) -> String {
-        let userInfo = #"(?<=//)[^/\s:@]+:[^/\s@]+@"#
-        let querySecret = #"(?i)([?&][A-Za-z0-9_-]*(?:key|token|secret|password|passwd|credential|auth)[A-Za-z0-9_-]*=)[^&#\s]*"#
-        guard let userInfoRegex = try? NSRegularExpression(pattern: userInfo),
-              let querySecretRegex = try? NSRegularExpression(pattern: querySecret) else { return text }
+    static func url(_ text: String,
+                    userInfoPattern: String = #"(?<=//)[^/\s:@]+:[^/\s@]+@"#,
+                    querySecretPattern: String = #"(?i)([?&][A-Za-z0-9_-]*(?:key|token|secret|password|passwd|credential|auth)[A-Za-z0-9_-]*=)[^&#\s]*"#) -> String {
+        guard let userInfoRegex = try? NSRegularExpression(pattern: userInfoPattern),
+              let querySecretRegex = try? NSRegularExpression(pattern: querySecretPattern) else {
+            // Fail closed (KES-03): a broken masker never passes secrets
+            // through — the mask alone leaves instead of the original text.
+            return mask
+        }
         let full = NSRange(text.startIndex..., in: text)
         let maskedUserInfo = userInfoRegex.stringByReplacingMatches(
             in: text, options: [], range: full, withTemplate: "***@")

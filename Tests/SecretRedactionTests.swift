@@ -117,6 +117,14 @@ final class SecretRedactionTests: CheckCase {
         XCTAssertTrue(ServerController.lanWithoutKeyRefusalMessage()
             .localizedCaseInsensitiveContains("key"))
     }
+
+    func testBrokenMaskerFailsClosedInsteadOfPassingSecretsThrough() {
+        // KES-03 fail-closed: un-compilable pattern machinery must never
+        // return the original text — the mask alone leaves.
+        let secret = "https://alice:hunter2@example.com/x?token=sk-123"
+        XCTAssertEqual(SecretRedactor.url(secret, userInfoPattern: "("), SecretRedactor.mask)
+        XCTAssertEqual(SecretRedactor.url(secret, querySecretPattern: "*[invalid"), SecretRedactor.mask)
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -135,5 +143,6 @@ extension SecretRedactionTests {
             .init(name: "testStartupBannerOmitsTheKey") { $0.testStartupBannerOmitsTheKey() },
             .init(name: "testStartupBannerMasksEnvTokensFromExtraArguments") { $0.testStartupBannerMasksEnvTokensFromExtraArguments() },
             .init(name: "testLANRefusalNamesTheKeyRequirement") { $0.testLANRefusalNamesTheKeyRequirement() },
+            .init(name: "testBrokenMaskerFailsClosedInsteadOfPassingSecretsThrough") { $0.testBrokenMaskerFailsClosedInsteadOfPassingSecretsThrough() },
         ])
 }
