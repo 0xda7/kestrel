@@ -20,10 +20,12 @@ struct DiscoveredSkill: Equatable {
 
 /// Skills discovery (llm-space convention, mirrored into Kestrel): scan the
 /// well-known agent-skills folders one level deep and read each subfolder's
-/// `SKILL.md` frontmatter. Everything here is tolerant by design — a missing
-/// folder, a missing or unreadable `SKILL.md`, or malformed frontmatter just
-/// means that subfolder is skipped, never a failed scan. Foundation only; the
-/// Prompt Space sheet renders the list.
+/// `SKILL.md` frontmatter. Scans stay tolerant — a missing folder or a
+/// malformed frontmatter just means that subfolder is skipped, never a
+/// failed scan — but a folder that exists and cannot be listed, and a
+/// `SKILL.md` that exists and cannot be read, are surfaced (census W8
+/// SkillsDiscovery:56/:64): a skill the agent never sees must not disappear
+/// silently. Foundation only; the Prompt Space sheet renders the list.
 enum SkillsDiscovery {
     /// Folders scanned for `<subfolder>/SKILL.md`, in priority order, with
     /// `~` expanded to absolute paths. An operator-curated tree wins over
@@ -49,30 +51,57 @@ enum SkillsDiscovery {
     /// Deterministic: paths in `discoveryPaths` order, subfolders sorted by
     /// name within each path. Same-named skills dedupe, first found wins.
     static func scan() -> [DiscoveredSkill] {
-        let fileManager = FileManager.default
         var seenNames = Set<String>()
         var skills: [DiscoveredSkill] = []
         for folderRoot in discoveryPaths {
-            let entries = ((try? fileManager.contentsOfDirectory(atPath: folderRoot)) ?? [])
-                .sorted()
-            for entry in entries {
-                let folder = (folderRoot as NSString).appendingPathComponent(entry)
-                var isDirectory: ObjCBool = false
-                guard fileManager.fileExists(atPath: folder, isDirectory: &isDirectory),
-                      isDirectory.boolValue else { continue }
-                let skillFile = (folder as NSString).appendingPathComponent("SKILL.md")
-                guard let markdown = try? String(contentsOfFile: skillFile, encoding: .utf8),
-                      let frontmatter = parseFrontmatter(markdown) else { continue }
-                // No (or empty) `name:` falls back to the folder name, which
-                // is how Claude-format skills are addressed anyway.
-                let name = frontmatter.name.flatMap { $0.isEmpty ? nil : $0 } ?? entry
-                guard seenNames.insert(name).inserted else { continue }
-                skills.append(DiscoveredSkill(name: name,
-                                              description: frontmatter.description ?? "",
-                                              path: skillFile))
-            }
+            skills += scan(root: folderRoot, seenNames: &seenNames)
         }
         return skills
+    }
+
+    /// Scans one discovery root. Internal so the check suite can pin the
+    /// distinctions the census demands: a missing folder is a normal empty
+    /// scan (silent), a folder that exists but cannot be listed is surfaced,
+    /// a subfolder without `SKILL.md` is simply not a skill, and a
+    /// `SKILL.md` that exists but cannot be read is surfaced and skipped.
+    /// Census W8 SkillsDiscovery:56/:64.
+    static func scan(root folderRoot: String, seenNames: inout Set<String>) -> [DiscoveredSkill] {
+        let fileManager = FileManager.default
+        var found: [DiscoveredSkill] = []
+        var rootIsDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: folderRoot, isDirectory: &rootIsDirectory),
+              rootIsDirectory.boolValue else { return found }   // no skills folder: normal
+        let entries: [String]
+        do {
+            entries = try fileManager.contentsOfDirectory(atPath: folderRoot).sorted()
+        } catch {
+            AppLog.chat.warning("skills folder \(folderRoot) could not be scanned: \(error.localizedDescription) — its skills are unavailable")
+            return found
+        }
+        for entry in entries {
+            let folder = (folderRoot as NSString).appendingPathComponent(entry)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: folder, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { continue }
+            let skillFile = (folder as NSString).appendingPathComponent("SKILL.md")
+            guard fileManager.fileExists(atPath: skillFile) else { continue }  // not a skill folder: benign
+            let markdown: String
+            do {
+                markdown = try String(contentsOfFile: skillFile, encoding: .utf8)
+            } catch {
+                AppLog.chat.warning("skill \(entry) could not be read (\(skillFile)): \(error.localizedDescription) — it is unavailable to the agent")
+                continue
+            }
+            guard let frontmatter = parseFrontmatter(markdown) else { continue }
+            // No (or empty) `name:` falls back to the folder name, which
+            // is how Claude-format skills are addressed anyway.
+            let name = frontmatter.name.flatMap { $0.isEmpty ? nil : $0 } ?? entry
+            guard seenNames.insert(name).inserted else { continue }
+            found.append(DiscoveredSkill(name: name,
+                                         description: frontmatter.description ?? "",
+                                         path: skillFile))
+        }
+        return found
     }
 
     /// One `- **name** — description` line per skill, capped at `maxSkills`

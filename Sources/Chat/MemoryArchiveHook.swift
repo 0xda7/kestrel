@@ -41,8 +41,21 @@ actor MemoryArchiveHook {
 
     private var queueDirectory: URL {
         let dir = AppSupport.directory.appendingPathComponent("memory-archive-hook", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        _ = Self.ensureQueueDirectory(dir)
         return dir
+    }
+
+    /// Census W8 MemoryArchiveHook:44 — the queue exists *for* durability, so a
+    /// bootstrap that silently fails would doom every later write to fail just
+    /// as silently. Internal so the check suite can pin it against temp paths.
+    nonisolated static func ensureQueueDirectory(_ dir: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            return true
+        } catch {
+            AppLog.chat.error("memory archive hook queue directory \(dir.path) could not be created: \(error.localizedDescription) — deliveries cannot be queued until it can be")
+            return false
+        }
     }
 
     nonisolated static var url: URL? {
@@ -101,17 +114,41 @@ actor MemoryArchiveHook {
     }
 
     private func enqueue(_ payload: Payload) async {
-        guard let data = try? JSONEncoder().encode(payload) else { return }
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(payload)
+        } catch {
+            // Census W8 :104 — an event that cannot even be encoded must leave
+            // a trace naming it; the drop may never be silent.
+            AppLog.chat.error("memory archive event \(payload.delivery_id) could not be encoded for the durable queue: \(error.localizedDescription) — the event is dropped")
+            return
+        }
         // The name carries the timestamp so the directory listing sorts into delivery order.
         let name = String(format: "%013.0f-%@.json", Date().timeIntervalSince1970 * 1000, payload.delivery_id)
-        try? data.write(to: queueDirectory.appendingPathComponent(name), options: .atomic)
+        do {
+            try data.write(to: queueDirectory.appendingPathComponent(name), options: .atomic)
+        } catch {
+            // Census W8 :107 — the durable write failed: the event never reaches
+            // the drain loop, so this surfaced error is its only trace.
+            AppLog.chat.error("memory archive event \(payload.delivery_id) could not be written to the durable queue: \(error.localizedDescription) — the event is dropped")
+        }
         trim()
         await drain()
     }
 
-    private func pending() -> [URL] {
-        let files = (try? FileManager.default.contentsOfDirectory(
-            at: queueDirectory, includingPropertiesForKeys: nil)) ?? []
+    private func pending() -> [URL] { Self.pending(in: queueDirectory) }
+
+    /// Lists queued deliveries oldest-first. Internal so the check suite can
+    /// pin it against temp directories. Census W8 :113 — a listing failure
+    /// makes the whole queue invisible and the drain loop starves silently.
+    nonisolated static func pending(in dir: URL) -> [URL] {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        } catch {
+            AppLog.chat.error("memory archive hook queue could not be listed: \(error.localizedDescription) — queued deliveries are invisible until it can be read again")
+            return []
+        }
         return files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
@@ -119,9 +156,44 @@ actor MemoryArchiveHook {
         let files = pending()
         guard files.count > Self.queueLimit else { return }
         for f in files.prefix(files.count - Self.queueLimit) {
-            try? FileManager.default.removeItem(at: f)
+            do {
+                try FileManager.default.removeItem(at: f)
+            } catch {
+                // Census W8 :122 — a trim delete that fails leaves the queue
+                // over its disk bound; surface it instead of keeping the file
+                // silently.
+                AppLog.chat.warning("memory archive hook could not drop \(f.lastPathComponent) while trimming the queue: \(error.localizedDescription)")
+            }
         }
         AppLog.chat.warning("memory archive hook queue over \(Self.queueLimit), dropped the oldest")
+    }
+
+    /// Census W8 :135/:136 — an unreadable queue file used to be DELETED,
+    /// destroying the durable event precisely when durability failed. It is
+    /// now moved aside to `<name>.dead` (kept for inspection; pending() only
+    /// lists `.json`, so a dead letter is never re-drunk) and only a failure
+    /// to move it leaves it in place — surfaced, never deleted. Internal so
+    /// the check suite can pin it.
+    nonisolated static func quarantineUnreadable(_ file: URL) -> Bool {
+        let dead = file.appendingPathExtension("dead")
+        do {
+            if FileManager.default.fileExists(atPath: dead.path) {
+                try FileManager.default.removeItem(at: dead)
+            }
+            try FileManager.default.moveItem(at: file, to: dead)
+            AppLog.chat.error("memory archive event \(file.lastPathComponent) could not be read — moved to \(dead.lastPathComponent) for inspection instead of deleting it")
+            return true
+        } catch {
+            AppLog.chat.error("memory archive event \(file.lastPathComponent) could not be read and could not be moved aside: \(error.localizedDescription) — it is skipped this pass, never deleted")
+            return false
+        }
+    }
+
+    /// The next delivery to attempt, oldest-first, skipping files this drain
+    /// pass already failed to quarantine — so an immovable file cannot spin
+    /// the loop forever. Internal for pinning.
+    nonisolated static func nextPending(in dir: URL, skipping: Set<URL>) -> URL? {
+        pending(in: dir).first { !skipping.contains($0) }
     }
 
     private func drain() async {
@@ -130,14 +202,25 @@ actor MemoryArchiveHook {
         defer { draining = false }
 
         var backoff: UInt64 = 1
-        while let file = pending().first {
+        var skipped: Set<URL> = []
+        while let file = Self.nextPending(in: queueDirectory, skipping: skipped) {
             guard let url = Self.url else { return }   // hook turned off: leave the queue for later
             guard let data = try? Data(contentsOf: file) else {
-                try? FileManager.default.removeItem(at: file); continue
+                if Self.quarantineUnreadable(file) { continue }
+                skipped.insert(file)
+                continue
             }
             switch await post(data, to: url) {
             case .delivered:
-                try? FileManager.default.removeItem(at: file)
+                do {
+                    try FileManager.default.removeItem(at: file)
+                } catch {
+                    // Census W8 :140 — a delivered file that cannot be removed
+                    // is delivered AGAIN on the next pass. The receiver can
+                    // drop the duplicate by delivery id, but the risk must be
+                    // visible, not silent.
+                    AppLog.chat.warning("memory archive event \(file.lastPathComponent) was delivered but could not be removed from the queue: \(error.localizedDescription) — the receiver may see it again (it can drop the duplicate by delivery id)")
+                }
                 backoff = 1
             case .rejected:
                 // The receiver understood and refused it; another attempt would be refused too.

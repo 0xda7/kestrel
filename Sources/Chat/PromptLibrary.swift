@@ -84,34 +84,79 @@ enum PromptLibrary {
 
     /// Loads the library, seeding first-run defaults so the space is never
     /// empty. A missing file is the normal first-launch case and seeds; a
-    /// file that EXISTS but fails to decode is treated as corrupt and
-    /// reseeded; a READ failure (EIO, disk hiccup) returns the seeds in
-    /// memory but does NOT overwrite the file — one bad read must never
-    /// destroy every saved template.
-    static func load() -> [PromptTemplate] {
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            if let data = try? Data(contentsOf: fileURL) {
-                if let templates = try? JSONDecoder().decode([PromptTemplate].self, from: data),
-                   !templates.isEmpty {
-                    return templates
-                }
-                // Exists, readable, undecodable: corrupt beyond repair.
-            } else {
-                // Exists but unreadable: keep the file, serve the seeds, and
-                // let a later launch retry the read.
+    /// file that EXISTS but fails to decode is corrupt: it is moved aside to
+    /// `<name>.unreadable` (the recovery path) before reseeding, so the
+    /// reseed can never destroy the user's only copy; a READ failure (EIO,
+    /// disk hiccup) serves the seeds in memory and does NOT overwrite the
+    /// file — one bad read must never destroy every saved template.
+    static func load() -> [PromptTemplate] { load(from: fileURL) }
+
+    /// The load logic against an explicit store path — internal so
+    /// SidecarStoreSurfacingTests can pin the corrupt-file recovery.
+    static func load(from url: URL) -> [PromptTemplate] {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else {
+            let seeded = seedTemplates
+            save(seeded, to: url)
+            return seeded
+        }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // Census W8 :93 — exists but unreadable: keep the file, serve the
+            // seeds, and let a later launch retry the read. Surfaced, no
+            // longer silent.
+            AppLog.app.error("prompt library \(url.lastPathComponent) could not be read: \(error.localizedDescription) — serving the default templates in memory; the file is untouched so a later launch can retry the read")
+            return seedTemplates
+        }
+        do {
+            let templates = try JSONDecoder().decode([PromptTemplate].self, from: data)
+            if !templates.isEmpty { return templates }
+            // Decodes to an empty library: fall through to the reseed.
+        } catch {
+            // Census W8 :94 — corrupt beyond repair: preserve the user's
+            // bytes aside BEFORE the reseed can overwrite them.
+            let aside = url.appendingPathExtension("unreadable")
+            do {
+                if fm.fileExists(atPath: aside.path) { try fm.removeItem(at: aside) }
+                try fm.moveItem(at: url, to: aside)
+                AppLog.app.error("prompt library \(url.lastPathComponent) was corrupt: \(error.localizedDescription) — moved to \(aside.lastPathComponent) and reseeded; the original templates are recoverable there")
+            } catch {
+                AppLog.app.error("prompt library \(url.lastPathComponent) was corrupt and could not be moved aside: \(error.localizedDescription) — serving the default templates in memory; the file is left untouched so nothing is destroyed")
                 return seedTemplates
             }
         }
         let seeded = seedTemplates
-        save(seeded)
+        save(seeded, to: url)
         return seeded
     }
 
-    static func save(_ templates: [PromptTemplate]) {
-        try? FileManager.default.createDirectory(atPath: fileURL.deletingLastPathComponent().path,
-                                                 withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(templates) {
-            try? data.write(to: fileURL, options: .atomic)
+    static func save(_ templates: [PromptTemplate]) { save(templates, to: fileURL) }
+
+    /// The save logic against an explicit store path — internal so the check
+    /// suite can drive it with temp files. Census W8 :111/:113/:114 — every
+    /// persistence failure is surfaced; the user's edits may never silently
+    /// fail to stick.
+    static func save(_ templates: [PromptTemplate], to url: URL) {
+        do {
+            try FileManager.default.createDirectory(
+                atPath: url.deletingLastPathComponent().path,
+                withIntermediateDirectories: true)
+        } catch {
+            AppLog.app.error("prompt library folder could not be created: \(error.localizedDescription) — templates will not persist")
+        }
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(templates)
+        } catch {
+            AppLog.app.error("prompt library could not be encoded: \(error.localizedDescription) — templates will not persist")
+            return
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            AppLog.app.error("prompt library \(url.lastPathComponent) could not be written: \(error.localizedDescription) — templates will not persist")
         }
     }
 

@@ -56,22 +56,48 @@ enum InferenceRoutes {
     /// upgrade never silently drops a working provider key.
     static let legacyKeychainAccount = "remote-api-key"
 
-    static func load() -> [InferenceRoute] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let routes = try? JSONDecoder().decode([InferenceRoute].self, from: data) else { return [] }
-        return routes
+    /// Sibling key that preserves an undecodable routes payload for recovery:
+    /// census W8 InferenceRoutes:61 — routing config silently lost is a typed
+    /// settings-IO failure whose bytes must survive.
+    static let unreadableKey = storageKey + ".unreadable"
+
+    static func load() -> [InferenceRoute] { load(from: .standard) }
+
+    /// Typed settings IO (the 6f7478b pattern) against explicit defaults —
+    /// internal so the check suite can pin the decode-failure preservation.
+    /// Missing data is a normal first run (silent); data present but
+    /// undecodable is surfaced AND preserved under `unreadableKey` before an
+    /// empty read, so the next save cannot silently destroy the user's
+    /// configuration.
+    static func load(from defaults: UserDefaults) -> [InferenceRoute] {
+        guard let data = defaults.data(forKey: storageKey) else { return [] }
+        do {
+            return try JSONDecoder().decode([InferenceRoute].self, from: data)
+        } catch {
+            defaults.set(data, forKey: unreadableKey)
+            AppLog.app.error("inference routes under \(storageKey, privacy: .public) could not be decoded: \(error.localizedDescription, privacy: .public) — the stored bytes are preserved under \(unreadableKey, privacy: .public); routes read empty until it is recovered")
+            return []
+        }
     }
 
-    static func save(_ routes: [InferenceRoute]) {
-        if let data = try? JSONEncoder().encode(routes) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+    static func save(_ routes: [InferenceRoute]) { save(routes, defaults: .standard) }
+
+    /// Typed settings IO against explicit defaults. Census W8 :66 — an encode
+    /// failure used to silently skip the write while the user believed their
+    /// routes persisted; surface it.
+    static func save(_ routes: [InferenceRoute], defaults: UserDefaults) {
+        do {
+            let data = try JSONEncoder().encode(routes)
+            defaults.set(data, forKey: storageKey)
+        } catch {
+            AppLog.app.error("inference routes could not be encoded for storage: \(error.localizedDescription, privacy: .public) — route changes are not persisted")
         }
         // A route re-created in the editor keeps its name but gets a new id.
         // Re-bind the active selection by name before giving up on it: an
         // edit must never silently strand the chat on the local engine while
         // Settings still lists the provider as configured.
         if let active = activeID, !routes.contains(where: { $0.id.uuidString == active }) {
-            let previous = load().first(where: { $0.id.uuidString == active })
+            let previous = load(from: defaults).first(where: { $0.id.uuidString == active })
             let rebound = previous?.name.isEmpty == false
                 ? routes.first(where: { $0.name == previous?.name })
                 : nil
@@ -296,8 +322,7 @@ struct RouteWire {
                         guard let fn = call["function"] as? [String: Any],
                               let name = fn["name"] as? String else { continue }
                         let rawArgs = (fn["arguments"] as? String) ?? "{}"
-                        let input = (try? JSONSerialization.jsonObject(
-                            with: Data(rawArgs.utf8))) as? [String: Any] ?? [:]
+                        let input = Self.parsedAnthropicInput(rawArgs, tool: name)
                         blocks.append(["type": "tool_use",
                                        "id": (call["id"] as? String) ?? "",
                                        "name": name,
@@ -339,6 +364,24 @@ struct RouteWire {
         let path = base.path.hasSuffix("/v1") ? "/messages" : "/v1/messages"
         let url = URL(string: base.absoluteString + path) ?? base
         return RouteWire(url: url, headers: headers, body: wire)
+    }
+
+    /// Census W8 InferenceRoutes:299 — the model's tool_use arguments reach
+    /// this translation as a JSON string; an unparseable or non-object payload
+    /// silently became an empty input and the call went out crippled. The
+    /// empty-input fallback stays (the turn must not die at the wire seam),
+    /// but a non-empty payload that fails to parse into a JSON object is
+    /// surfaced with a fragment. "" and "{}" (the benign defaults) stay silent.
+    static func parsedAnthropicInput(_ rawArgs: String, tool: String) -> [String: Any] {
+        let trimmed = rawArgs.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "{}" else { return [:] }
+        let object = try? JSONSerialization.jsonObject(with: Data(rawArgs.utf8))
+        guard let input = object as? [String: Any] else {
+            let fragment = String(rawArgs.prefix(120))
+            AppLog.chat.warning("tool \(tool, privacy: .public) carried arguments that do not parse to a JSON object for the Anthropic wire: \(fragment, privacy: .public) — sending an empty input")
+            return [:]
+        }
+        return input
     }
 
     private static func textContent(of content: Any) -> String {
