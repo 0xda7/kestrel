@@ -2693,20 +2693,29 @@ final class ServerController: ObservableObject {
             .split(whereSeparator: \.isNewline).compactMap { pid_t($0.trimmingCharacters(in: .whitespaces)) }
         guard !kids.isEmpty else { return }
         for kid in kids { kill(kid, SIGTERM) }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
-            for kid in kids where kill(kid, 0) == 0 { kill(kid, SIGKILL) }
+        // Bounded, observed escalation per child (census W2-3, T4-3 H5):
+        // the same 5 s total cap the fixed-grace asyncAfter used to wait,
+        // polled so a cooperative child is reaped the moment it dies and
+        // only a cap-survivor meets the SIGKILL.
+        for kid in kids {
+            Task.detached(priority: .utility) {
+                EngineLock.terminateBounded(pid: kid, pollMs: 100, capAttempts: 50)
+            }
         }
     }
 
     /// SIGKILL escalation shared by the engine-kill paths: `terminate()` was
     /// already sent; if the child ignores it past the grace period, take the
     /// process down and sweep the router's orphaned model children. Detached
-    /// with a structured sleep so the caller's own verdict never waits on
-    /// the grace period.
+    /// so the caller's own verdict never waits on the grace period, and the
+    /// wait itself is a bounded, observed poll (census W2-3, T4-3 H5): the
+    /// SIGKILL fires the moment the grace cap is reached with the child
+    /// still alive, and a child that dies early releases the stray sweep
+    /// immediately instead of after the full blind sleep.
     nonisolated static func escalateKill(pid: pid_t, after grace: TimeInterval) {
         Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(grace))
-            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            EngineLock.terminateBounded(pid: pid, pollMs: 100,
+                                        capAttempts: max(1, Int(grace * 10)))
             EngineLock.reapStrayEngines()
         }
     }

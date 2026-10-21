@@ -260,6 +260,19 @@ enum SettingsKeys {
     /// Onboarding state: deliberately excluded from resettableOptionKeys
     /// (see the list's doc comment) so a reset never re-runs onboarding.
     static let onboardingDone = "onboardingDone"
+    /// One-shot sweep record (census W6-2, T4-3 H4): the pre-KES-05
+    /// "always" tool grants were swept once and this flag persists that
+    /// fact, so every later launch skips the dictionaryRepresentation()
+    /// enumeration entirely. Excluded from resettableOptionKeys like
+    /// onboardingDone: a migration record, not a tunable — resetting it
+    /// would only re-run a finished sweep.
+    static let toolPermissionsLegacySwept = "toolPermissionsLegacySwept"
+    /// One-shot record for the legacy launch heals (census W6-3, T4-3 H4):
+    /// --spec-type strip, mistyped-numeric rewrite, stale-language clear
+    /// and legacy engine-path heal each ran once; later launches skip
+    /// them all. Excluded from resettableOptionKeys like onboardingDone:
+    /// a migration record, not a tunable.
+    static let legacyLaunchHealsSwept = "legacyLaunchHealsSwept"
 
     // Benchmark workload sizes (llama-bench -p / -n)
     static let benchPP = "benchPP"
@@ -310,9 +323,10 @@ enum SettingsKeys {
 
     /// A stale "lang" value from pre-English-only builds lingers in upgraded
     /// defaults; Server.swift no longer reads it (English is hardcoded), so a
-    /// stored "es" is ignored rather than honored.
-    static func clearStaleLanguage() {
-        UserDefaults.standard.removeObject(forKey: "lang")
+    /// stored "es" is ignored rather than honored. Injectable (T4-3 H4) so
+    /// the one-shot launch-heal record can be checked against a suite.
+    static func clearStaleLanguage(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: "lang")
     }
 
     /// Tunable option keys (engine / GPU / inference / chat). Resetting clears these
@@ -706,6 +720,23 @@ enum EngineLock {
     static func remove(pid: Int32) {
         save(read().filter { $0 != pid })
     }
+    /// Bounded SIGTERM → poll → SIGKILL ladder for a raw pid whose SIGTERM
+    /// was already sent by the caller (census W2-3, T4-3 H5; the Process-
+    /// based twin is ServerController.terminateAndReap): poll liveness every
+    /// `pollMs` up to `capAttempts` times, SIGKILL at the cap if still
+    /// alive, and return the moment death is observed — never a blind
+    /// fixed-grace sleep with a single late observation point. Synchronous
+    /// by design (the C6 quit-path shape): async callers wrap it in
+    /// Task.detached, exactly like terminateAndReap's callers.
+    static func terminateBounded(pid: pid_t, pollMs: Int, capAttempts: Int) {
+        var waited = 0
+        while waited < capAttempts {
+            if kill(pid, 0) != 0 { return }   // death observed
+            usleep(useconds_t(pollMs) * 1000)
+            waited += 1
+        }
+        if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+    }
 
     /// Kills any recorded PID still alive whose executable lives inside one of our app
     /// bundles, then clears the file. Returns whether at least one orphan was reaped.
@@ -727,8 +758,11 @@ enum EngineLock {
 
             AppLog.app.warning("Reaping orphaned engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
-            usleep(500_000)
-            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            // Bounded, observed escalation (census W2-3, T4-3 H5): the same
+            // 500 ms total the fixed grace used to sleep blind, polled in
+            // 50 ms steps so a cooperative orphan is noticed as soon as it
+            // dies and only a cap-survivor meets the SIGKILL.
+            Self.terminateBounded(pid: pid, pollMs: 50, capAttempts: 10)
             reaped = true
         }
         save([])
@@ -766,8 +800,12 @@ enum EngineLock {
             guard Self.isKestrelEnginePath(path), path.hasSuffix("/llama-server") else { continue }
             AppLog.app.warning("Reaping stray engine pid \(pid) at \(path)")
             kill(pid, SIGTERM)
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
-                if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            // Bounded, observed escalation (census W2-3, T4-3 H5): the same
+            // 5 s total cap the fixed-grace asyncAfter used to wait, polled
+            // on a detached utility task so the enumeration stays
+            // non-blocking and each stray is reaped the moment it dies.
+            Task.detached(priority: .utility) {
+                EngineLock.terminateBounded(pid: pid, pollMs: 100, capAttempts: 50)
             }
         }
     }

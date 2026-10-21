@@ -694,7 +694,21 @@ final class VideoGenPool: ObservableObject {
 /// Writes the frame sequence as an H.264 mp4. AVFoundation can encode it natively,
 /// which is the whole reason the engine's own .webm is not what we hand the user.
 enum VideoExporter {
-    enum ExportError: Error { case noFrames, writerFailed(String), staleOutput(String) }
+    enum ExportError: Error {
+        case noFrames
+        case writerFailed(String)
+        case staleOutput(String)
+        /// The writer input never became ready again (census W2-5, T4-3
+        /// H5): the wait is capped, and a stall past the cap fails the
+        /// export with this typed timeout instead of spinning forever.
+        case writerInputStalled(timeoutSeconds: Double)
+    }
+
+    /// Cap on waiting for AVAssetWriterInput readiness between frames
+    /// (census W2-5, T4-3 H5): normal drains are milliseconds, so the cap
+    /// only bounds the pathological case — a stalled writer used to spin
+    /// the thread forever with no way out.
+    static let writerInputStallCapSeconds: Double = 30
 
     /// Census W8 VideoGen:653 (T2-3 chunk C): whether a failed stale-output
     /// removal is the benign first-export case (nothing to clear yet) or a
@@ -752,8 +766,18 @@ enum VideoExporter {
 
         for (i, image) in frames.enumerated() {
             guard let buffer = pixelBuffer(from: image, width: w, height: h) else { continue }
-            // the input drains asynchronously; spin instead of dropping frames
-            while !input.isReadyForMoreMediaData { usleep(2000) }
+            // the input drains asynchronously; wait instead of dropping
+            // frames — but bounded (census W2-5, T4-3 H5): a stalled input
+            // used to spin this thread forever; past the cap the export
+            // fails with a typed timeout instead.
+            let stallDeadline = Date().addingTimeInterval(writerInputStallCapSeconds)
+            while !input.isReadyForMoreMediaData {
+                if Date() > stallDeadline {
+                    input.markAsFinished()
+                    throw ExportError.writerInputStalled(timeoutSeconds: writerInputStallCapSeconds)
+                }
+                usleep(2000)
+            }
             adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(i),
                                                                 timescale: CMTimeScale(max(1, fps))))
         }

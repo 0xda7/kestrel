@@ -38,8 +38,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-private func defaultsMigrationExtraArgs() -> String? {
-    UserDefaults.standard.string(forKey: SettingsKeys.extraArgs)
+/// The legacy launch heals (census W6-3, T4-3 H4): one-shot per install,
+/// recorded like the KES-05 tool-permission sweep, so a second launch
+/// performs none of them — the record short-circuits before any heal
+/// reads a key. Injectable so the record is checked against a suite, not
+/// the operator's real defaults. The whole heal is the one-shot
+/// migration, including the missing-binary arm: a custom engine deleted
+/// after the sweep is no longer silently rewritten to the bundled binary
+/// at launch — Server.start's fileExists guard surfaces it as an
+/// actionable failure instead.
+enum LegacyLaunchHeals {
+    static func run(in defaults: UserDefaults) {
+        if defaults.bool(forKey: SettingsKeys.legacyLaunchHealsSwept) { return }
+        defaults.set(true, forKey: SettingsKeys.legacyLaunchHealsSwept)
+
+        // Remove the legacy raw flag; MTP is selected automatically per model.
+        if var extra = defaults.string(forKey: SettingsKeys.extraArgs),
+           extra.contains("--spec-type draft-mtp") {
+            extra = extra.replacingOccurrences(of: "--spec-type draft-mtp", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            defaults.set(extra, forKey: SettingsKeys.extraArgs)
+        }
+
+        // A legacy writer stored the chat sampling numbers as strings, which
+        // @AppStorage(Double/Int) silently replaces with the declared default:
+        // rewrite them typed so tuned values actually apply.
+        SettingsNumericCoercion.migrateMistypedNumerics(in: defaults)
+
+        // A "lang" stored by the removed Settings picker must not leak Spanish
+        // into an English-only product; nothing reads it anymore, so clear it.
+        SettingsKeys.clearStaleLanguage(in: defaults)
+
+        // Heal the stored engine path: legacy builds or paths from another machine
+        // fall back to the bundled engine.
+        let legacyDefaults = ["llama.cpp-b7833", "llama.cpp/build/bin/llama-server"]
+        if let bin = defaults.string(forKey: "serverBinary"),
+           legacyDefaults.contains(where: bin.contains) || !FileManager.default.fileExists(atPath: bin) {
+            defaults.set(ServerSettings.defaultBinary, forKey: "serverBinary")
+        }
+    }
 }
 
 // Not @main: the executable target is a two-line launcher (Sources/Main)
@@ -55,34 +92,18 @@ public struct KestrelApp: App {
         // Release VRAM held by an engine orphaned by a previous force-quit.
         EngineLock.reapOrphans()
 
-        // Remove the legacy raw flag; MTP is selected automatically per model.
-        if var extra = defaultsMigrationExtraArgs(), extra.contains("--spec-type draft-mtp") {
-            extra = extra.replacingOccurrences(of: "--spec-type draft-mtp", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            UserDefaults.standard.set(extra, forKey: SettingsKeys.extraArgs)
-        }
+        // Census W6-3 legacy launch heals (T4-3 H4): --spec-type strip,
+        // mistyped-numeric rewrite, stale-language clear and engine-path
+        // heal — once per install, so later launches perform none of them.
+        LegacyLaunchHeals.run(in: UserDefaults.standard)
 
-        // A legacy writer stored the chat sampling numbers as strings, which
-        // @AppStorage(Double/Int) silently replaces with the declared default:
-        // rewrite them typed so tuned values actually apply.
-        SettingsNumericCoercion.migrateMistypedNumerics()
         // Census W6-6/W7-3 (T4-2): the legacy per-model DFlash "disabled"
         // list becomes "off" entries in the live dflashModes map, then the
-        // key retires. Runs after the numeric coercion so a string-typed
-        // legacy list is already clean when the migration reads it.
+        // key retires. Runs after the numeric coercion inside the heals so
+        // a string-typed legacy list is already clean when the migration
+        // reads it. Deliberately outside the one-shot record: this
+        // migration is self-retiring (it deletes its own key) and cheap.
         DflashLegacyMigration.run(in: UserDefaults.standard)
-        // A "lang" stored by the removed Settings picker must not leak Spanish
-        // into an English-only product; nothing reads it anymore, so clear it.
-        SettingsKeys.clearStaleLanguage()
-
-        // Heal the stored engine path: legacy builds or paths from another machine
-        // fall back to the bundled engine.
-        let defaults = UserDefaults.standard
-        let legacyDefaults = ["llama.cpp-b7833", "llama.cpp/build/bin/llama-server"]
-        if let bin = defaults.string(forKey: "serverBinary"),
-           legacyDefaults.contains(where: bin.contains) || !FileManager.default.fileExists(atPath: bin) {
-            defaults.set(ServerSettings.defaultBinary, forKey: "serverBinary")
-        }
     }
 
     @AppStorage(SettingsKeys.appAccent) private var appAccentRaw = AppTheme.defaultKey

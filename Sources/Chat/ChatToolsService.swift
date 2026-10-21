@@ -114,7 +114,6 @@ enum ChatToolsService {
     /// them; grants persisted by pre-KES-05 versions are swept away.
     static let execShellToolName = "exec_shell_command"
     private static let sessionAllowed = OSAllocatedUnfairLock<Set<String>>(initialState: [])
-    private static let legacySwept = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     static func isAlwaysAllowed(_ name: String) -> Bool {
         sweepLegacyPermissionsIfNeeded()
@@ -134,14 +133,19 @@ enum ChatToolsService {
     }
 
     /// Versions before KES-05 persisted "always" grants in UserDefaults;
-    /// sweep them (once lazily, always on explicit revoke) so permanent
-    /// grants from old installs die with this version instead of surviving
-    /// as invisible standing consent.
-    private static func sweepLegacyPermissionsIfNeeded(force: Bool = false) {
-        let shouldRun = force || !legacySwept.withLock({ $0 })
-        legacySwept.withLock { $0 = true }
-        guard shouldRun else { return }
-        let defaults = UserDefaults.standard
+    /// sweep them once per install — not per launch (census W6-2, T4-3 H4)
+    /// — so permanent grants from old installs die with this version
+    /// instead of surviving as invisible standing consent, and later
+    /// launches never pay the dictionaryRepresentation() enumeration
+    /// again. The persisted record replaces the old in-process flag; a
+    /// concurrent first sweep is two idempotent removals of the same keys,
+    /// so no lock is needed. `force` (the explicit revoke path) always
+    /// sweeps, record or not: standing consent must die on the operator's
+    /// command. Injectable so the one-shot record is checked against a
+    /// suite, not the operator's real defaults.
+    static func sweepLegacyPermissionsIfNeeded(force: Bool = false, in defaults: UserDefaults = .standard) {
+        if !force, defaults.bool(forKey: SettingsKeys.toolPermissionsLegacySwept) { return }
+        defaults.set(true, forKey: SettingsKeys.toolPermissionsLegacySwept)
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("toolPermission.always.") {
             defaults.removeObject(forKey: key)
         }
