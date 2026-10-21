@@ -271,9 +271,6 @@ enum SettingsKeys {
     static let benchPP = "benchPP"
     static let benchTG = "benchTG"
     static let benchDepth = "benchDepth"
-    /// Declared, never read (census W7-1); Tier 4 H1 deletes it. Excluded
-    /// from resettableOptionKeys until then: there is nothing to reset.
-    static let benchAdvanced = "benchAdvanced"
 
     // Signed benchmark sharing (public identity from the server; the private key
     // lives in the Keychain, never here). Deliberately outside resettableOptionKeys.

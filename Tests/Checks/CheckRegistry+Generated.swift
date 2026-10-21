@@ -36,6 +36,7 @@ enum CheckRegistry {
         ("SettingsArchiveConsentTests", SettingsArchiveConsentTests.__checkSet),
         ("SettingsCompletenessTests", SettingsCompletenessTests.__checkSet),
         ("SettingsNumericCoercionTests", SettingsNumericCoercionTests.__checkSet),
+        ("SettingsUsageLintTests", SettingsUsageLintTests.__checkSet),
         ("TypedSettingsDriftTests", TypedSettingsDriftTests.__checkSet),
         ("TypedSettingsRegistryTests", TypedSettingsRegistryTests.__checkSet),
         ("SuperadminVisibilityTests", SuperadminVisibilityTests.__checkSet),
