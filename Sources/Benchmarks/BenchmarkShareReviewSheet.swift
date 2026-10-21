@@ -242,6 +242,9 @@ struct BenchmarkShareReviewSheet: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(review.exactJSON, forType: .string)
         copiedJSON = true
+            // Census W8 BenchmarkShareReviewSheet:246 (T2-3 chunk D,
+            // display-only): the 1.5 s timer that clears the copied flag; a
+            // cancelled sleep only leaves the flag set — pure UI state.
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             copiedJSON = false

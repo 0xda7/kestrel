@@ -136,6 +136,10 @@ final class BenchmarkController: ObservableObject {
     @Published var dynamicMoeOptimizationSamples: [DynamicMoeOptimizationSample] = []
 
     private var process: Process?
+    /// The English timeout detail from the last exhausted health poll (census
+    /// W8 Benchmark:341, T2-3 chunk D); nil when the failure carries no probe
+    /// evidence (e.g. the server process exited before the model loaded).
+    private var healthTimeoutDetail: String?
     private let storeKey = "benchHistory"
     /// Persists every run (full header + llama-bench output) to one `benchmarks.txt`,
     /// pruned to the last 3 days, so a shareable history survives restarts and a
@@ -278,6 +282,9 @@ final class BenchmarkController: ObservableObject {
             emit("… cargando modelo / loading model\n")
             guard await waitForHealth(port: s.port, process: p) else {
                 emit("→ el servidor no arrancó / server did not start\n")
+                if let detail = healthTimeoutDetail {
+                    emit("   \(detail)\n")
+                }
                 return
             }
 
@@ -333,18 +340,61 @@ final class BenchmarkController: ObservableObject {
         return sorted[sorted.count / 2]
     }
 
+    /// A failed /health probe observation, kept so the timeout failure can
+    /// name what actually happened instead of a bare "did not start" (census
+    /// W8 Benchmark:341, T2-3 chunk D).
+    enum HealthProbeFailure {
+        /// The probe could not reach the server (the URLSession error message).
+        case transport(String)
+        /// The probe answered, but the body was not the healthy "ok".
+        case unhealthyBody(String)
+    }
+
     /// Polls /health until the model is loaded (large MoE loads take minutes).
+    /// A poll that cannot reach the server is swallowed deliberately — the loop
+    /// retries every 2 s and the model may legitimately be minutes away — but
+    /// the last probe outcome is kept and surfaced when the loop exhausts, so
+    /// the timeout failure is never evidence-free.
     private func waitForHealth(port: Int, process: Process) async -> Bool {
+        healthTimeoutDetail = nil
+        var lastFailure: HealthProbeFailure?
         for _ in 0..<240 {
             guard running, process.isRunning else { return false }
-            if let url = URL(string: "http://127.0.0.1:\(port)/health"),
-               let (data, _) = try? await URLSession.shared.data(from: url),
-               String(data: data, encoding: .utf8)?.contains("ok") == true {
-                return true
+            if let url = URL(string: "http://127.0.0.1:\(port)/health") {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if String(data: data, encoding: .utf8)?.contains("ok") == true {
+                        return true
+                    }
+                    lastFailure = .unhealthyBody(String(data: data.prefix(200), encoding: .utf8)
+                                                 ?? "(non-UTF-8 response)")
+                } catch {
+                    // Census W8 Benchmark:341 (T2-3 chunk D): the per-poll
+                    // transport swallow is kept — polling must continue — but
+                    // the last observed error now feeds the surfaced timeout.
+                    lastFailure = .transport(error.localizedDescription)
+                }
             }
             try? await Task.sleep(for: .seconds(2))
         }
+        healthTimeoutDetail = Self.healthTimeoutDetail(lastFailure)
         return false
+    }
+
+    /// Census W8 Benchmark:341 (T2-3 chunk D): the English timeout detail for
+    /// the exhausted health poll, naming the last observed probe outcome. Nil
+    /// when no probe failed (e.g. the process exited first) — the caller then
+    /// emits the existing failure line unchanged. Pure so checks can pin the
+    /// message assembly (D3).
+    nonisolated static func healthTimeoutDetail(_ lastFailure: HealthProbeFailure?) -> String? {
+        switch lastFailure {
+        case .transport(let message):
+            return "The server never became healthy; last probe error: \(message)"
+        case .unhealthyBody(let body):
+            return "The server never became healthy; the last probe answered but was not healthy: \(body)"
+        case nil:
+            return nil
+        }
     }
 
     /// One /completion request; greedy and seeded so reps within a run only

@@ -88,6 +88,10 @@ struct BenchmarkShareReview {
         var readableEvidence = evidence
         readableEvidence["rawOutput"] = "[Shown separately in Benchmark log: \(rawOutput.utf8.count) UTF-8 bytes]"
         readableRoot["evidence"] = readableEvidence
+        // Census W8 BenchmarkShareReview:91 (T2-3 chunk D, display-only): this
+        // is the pretty rendering for the review sheet's readable copy; on
+        // failure it falls back to the canonical exactJSON below, so nothing
+        // is lost — kept deliberately.
         let readableData = try? JSONSerialization.data(
             withJSONObject: readableRoot,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

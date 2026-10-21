@@ -4,6 +4,7 @@
 
 import Foundation
 import CryptoKit
+import os
 
 // MARK: - Signed benchmark sharing (v2 protocol)
 //
@@ -390,7 +391,15 @@ final class BenchmarkSharing: ObservableObject {
         let engineURL = run.engineURL
         let digests = await Task.detached(priority: .utility) {
             artifactURLs.map { url -> (URL, String?, Int64) in
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+                // Census W8 BenchmarkSharing:393 (T2-3 chunk D): an unreadable
+                // size still embeds 0 — the published share artifact must not
+                // be blocked on this metadata field — but the gap is named in
+                // the log instead of vanishing.
+                let resourceSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                let size = resourceSize.map(Int64.init) ?? 0
+                if resourceSize == nil {
+                    AppLog.app.error("could not read the file size of benchmark artifact \(url.lastPathComponent, privacy: .public); embedding 0 in the share metadata")
+                }
                 return (url, FileHash.sha256(of: url), size)
             }
         }.value
@@ -496,8 +505,14 @@ final class BenchmarkSharing: ObservableObject {
         req.timeoutInterval = 60
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        // Census W8 BenchmarkSharing:499 (T2-3 chunk D, compliant): the try?
+        // feeds the immediate typed ShareError.network below, so no failure is
+        // silent — naming only, behavior unchanged.
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse else { throw ShareError.network }
+        // Census W8 BenchmarkSharing:501 (T2-3 chunk D, mild): the [:] fallback
+        // degrades only the server-error detail extracted below; the status
+        // code is still checked and surfaced on the next line.
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         guard (200..<300).contains(http.statusCode) else {
             let code = (obj["error"] as? [String: Any])?["code"] as? String ?? obj["code"] as? String
@@ -538,8 +553,21 @@ final class BenchmarkSharing: ObservableObject {
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
             throw ShareError.workloadFailed("could not create temporary benchmark log")
         }
+        // Census W8 BenchmarkSharing:541 (T2-3 chunk D, display-only): the
+        // scratch workload log's cleanup. When this defer runs, the payload
+        // below has already been read, so a failed removal only leaves the
+        // scratch file behind — kept deliberately.
         defer { try? FileManager.default.removeItem(at: outputURL) }
         let outputHandle = try FileHandle(forWritingTo: outputURL)
+        // Census W8 BenchmarkSharing:543 (T2-3 chunk D): the workload log is
+        // the share pipeline's results channel — a failed close can truncate
+        // it (census Benchmark:449 family). The close that matters therefore
+        // runs typed BEFORE the log is read below, through
+        // workloadLogCloseFailure → ShareError.workloadFailed, instead of a
+        // swallowed `try?` after the payload was read. This defer only
+        // backstops the engine-spawn failure path, where nothing has been
+        // read yet; close() is idempotent, so after the typed close succeeds
+        // it is a no-op.
         defer { try? outputHandle.close() }
 
         let status: Int32 = try await withCheckedThrowingContinuation { cont in
@@ -560,12 +588,30 @@ final class BenchmarkSharing: ObservableObject {
             }
         }
         try outputHandle.synchronize()
+        if let failure = Self.workloadLogCloseFailure(Result { try outputHandle.close() }) {
+            // Census W8 BenchmarkSharing:543 (T2-3 chunk D): the log could not
+            // be closed cleanly — its bytes on disk may be short, so the share
+            // aborts instead of publishing a truncated workload.
+            throw failure
+        }
         let data = try Data(contentsOf: outputURL)
         let output = String(data: data, encoding: .utf8) ?? ""
         guard status == 0 else {
             throw ShareError.workloadFailed("llama-bench exited with status \(status): \(output.suffix(500))")
         }
         return output
+    }
+    /// Census W8 BenchmarkSharing:543 (T2-3 chunk D): the typed failure for a
+    /// workload-log close that did not succeed. The log is the results
+    /// channel of the share pipeline, so a failing close aborts the share
+    /// through the existing ShareError.workloadFailed path before the
+    /// possibly-truncated payload is read. Nil = the close succeeded. Pure so
+    /// checks can pin the conversion (D3).
+    nonisolated static func workloadLogCloseFailure(_ closed: Result<Void, Error>) -> ShareError? {
+        if case .failure(let error) = closed {
+            return .workloadFailed("could not close the temporary benchmark log: \(error.localizedDescription)")
+        }
+        return nil
     }
 
     private func parseSpeed(_ output: String, test: String) -> Double? {
