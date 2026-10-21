@@ -3865,3 +3865,97 @@ extension ReapDiagnosticsTests {
             .init(name: "testRecordedReapFailureLinesAreStampedAndASCII") { $0.testRecordedReapFailureLinesAreStampedAndASCII() },
         ])
 }
+
+/// Census W8 Servers-group conversions (T2-2 chunk C): engine-adjacent
+/// silent catches surface while launch-path behavior is unchanged — an
+/// unreadable dir still pairs no draft and no projector, an unreadable
+/// measurement store still starts fresh, and a failed orphan sweep still
+/// skips (now recorded for the diagnostics report).
+final class ServerSurfacingTests: CheckCase {
+    private func makeTempDir(_ name: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("server-surfacing-\(name)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func testOrphanSweepFailureIsRecordedForDiagnostics() {
+        let original = ServerController.pgrepExecutableForReap
+        ServerController.pgrepExecutableForReap = "/nonexistent/pgrep-for-checks"
+        defer { ServerController.pgrepExecutableForReap = original }
+        let before = EngineLock.reapFailureReport()
+        ServerController.reapChildren(of: ProcessInfo.processInfo.processIdentifier)
+        let after = EngineLock.reapFailureReport()
+        let last = after.last ?? ""
+        XCTAssertTrue(last.contains("orphan sweep skipped"),
+                      "a failed orphan sweep must surface as the newest reap record")
+        XCTAssertTrue(last != before.last,
+                      "the record is fresh, not residue from an earlier failure")
+    }
+
+    func testMeasuredBenchRoundTripsThroughThePublicAPI() {
+        let key = SettingsKeys.measuredBenchByModel
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original { UserDefaults.standard.set(original, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+        let bench = ServerSettings.MeasuredBench(ncmoe: 24, threads: 4, tg: 10.5, pp: 100.25,
+                                                   date: Date(timeIntervalSince1970: 1_700_000_000))
+        ServerSettings.rememberMeasuredBench(bench, forModel: "/tmp/check-model.gguf")
+        let recalled = ServerSettings.recalledMeasuredBench(forModel: "/tmp/check-model.gguf")
+        XCTAssertEqual(recalled?.threads, 4, "a remembered measurement survives the round trip")
+        XCTAssertEqual(recalled?.tg ?? 0, 10.5, accuracy: 0.001)
+    }
+
+    func testCorruptMeasuredBenchStoreStartsFreshAndRecovers() {
+        let key = SettingsKeys.measuredBenchByModel
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original { UserDefaults.standard.set(original, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.set("not a measured-bench map {", forKey: key)
+        XCTAssertNil(ServerSettings.recalledMeasuredBench(forModel: "/tmp/check-model.gguf"),
+                     "a corrupt store starts fresh, exactly as before — surfaced, not fatal")
+        let bench = ServerSettings.MeasuredBench(ncmoe: 24, threads: 2, tg: 5, pp: 50,
+                                                   date: Date(timeIntervalSince1970: 1))
+        ServerSettings.rememberMeasuredBench(bench, forModel: "/tmp/check-model.gguf")
+        XCTAssertEqual(ServerSettings.recalledMeasuredBench(forModel: "/tmp/check-model.gguf")?.threads, 2,
+                       "a fresh start after corruption still persists new measurements")
+    }
+
+    func testMTPScanOnUnreadableDirStaysNil() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX read bits are not enforced for root") }
+        let dir = try makeTempDir("locked-mtp")
+        try Data("gguf-stub".utf8).write(to: dir.appendingPathComponent("model.gguf"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        XCTAssertNil(ServerSettings.mtpDraftPath(forModel: dir.appendingPathComponent("model.gguf").path),
+                     "an unscannable dir pairs no draft — unchanged, now surfaced")
+    }
+
+    func testMmprojScanOnUnreadableDirStaysNil() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX read bits are not enforced for root") }
+        let dir = try makeTempDir("locked-mmproj")
+        try Data("gguf-stub".utf8).write(to: dir.appendingPathComponent("model.gguf"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        XCTAssertNil(ServerSettings.mmprojPath(forModel: dir.appendingPathComponent("model.gguf").path),
+                     "an unscannable dir pairs no projector — unchanged, now surfaced")
+    }
+}
+
+extension ServerSurfacingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ServerSurfacingTests",
+        instance: { ServerSurfacingTests() },
+        checks: [
+            .init(name: "testOrphanSweepFailureIsRecordedForDiagnostics") { $0.testOrphanSweepFailureIsRecordedForDiagnostics() },
+            .init(name: "testMeasuredBenchRoundTripsThroughThePublicAPI") { $0.testMeasuredBenchRoundTripsThroughThePublicAPI() },
+            .init(name: "testCorruptMeasuredBenchStoreStartsFreshAndRecovers") { $0.testCorruptMeasuredBenchStoreStartsFreshAndRecovers() },
+            .init(name: "testMTPScanOnUnreadableDirStaysNil") { try $0.testMTPScanOnUnreadableDirStaysNil() },
+            .init(name: "testMmprojScanOnUnreadableDirStaysNil") { try $0.testMmprojScanOnUnreadableDirStaysNil() },
+        ])
+}

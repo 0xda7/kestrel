@@ -1468,8 +1468,13 @@ struct ServerSettings {
         let selected = gpus.filter { indices.contains($0.index) }
         guard !selected.isEmpty else { return nil }
 
-        guard let baseBytes = (try? FileManager.default.attributesOfItem(atPath: modelPath)[.size] as? NSNumber)?.doubleValue,
-              let draftBytes = (try? FileManager.default.attributesOfItem(atPath: draftPath)[.size] as? NSNumber)?.doubleValue else {
+        let baseBytes = (try? FileManager.default.attributesOfItem(atPath: modelPath)[.size] as? NSNumber)?.doubleValue
+        let draftBytes = (try? FileManager.default.attributesOfItem(atPath: draftPath)[.size] as? NSNumber)?.doubleValue
+        guard let baseBytes, let draftBytes else {
+            // Census W8 (T2-2 chunk C): an unreadable size used to disable
+            // the layer split silently. The feature stays off (launch-path
+            // behavior unchanged); the failure now surfaces.
+            AppLog.server.warning("speculative decode: cannot read the size of \(modelPath) or \(draftPath) — the layer split stays off")
             return nil
         }
         let baseLayers = Int(Self.ggufUInt32("block_count", at: modelPath) ?? 0)
@@ -1606,12 +1611,23 @@ struct ServerSettings {
         let modelStem = mtpStem(modelURL.lastPathComponent)
 
         let fm = FileManager.default
-        var files: [URL] = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        var files: [URL] = []
+        do {
+            files = try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        } catch {
+            // Census W8 (T2-2 chunk C): a failed scan used to pair no draft,
+            // silently. Pairing behavior is unchanged; the failure is logged.
+            AppLog.server.warning("MTP: cannot scan \(dir.path) (\(error.localizedDescription)) — draft heads may be missed")
+        }
         for sub in ["MTP", "mtp"] {
             let subDir = dir.appendingPathComponent(sub)
             var isDir: ObjCBool = false
             if fm.fileExists(atPath: subDir.path, isDirectory: &isDir), isDir.boolValue {
-                files += (try? fm.contentsOfDirectory(at: subDir, includingPropertiesForKeys: nil)) ?? []
+                do {
+                    files += try fm.contentsOfDirectory(at: subDir, includingPropertiesForKeys: nil)
+                } catch {
+                    AppLog.server.warning("MTP: cannot scan \(subDir.path) (\(error.localizedDescription)) — draft heads may be missed")
+                }
             }
         }
 
@@ -1744,20 +1760,36 @@ struct ServerSettings {
         guard !path.isEmpty else { return }
         var map = Self.measuredBenchMap()
         map[path] = value
-        if let data = try? JSONEncoder().encode(map) {
+        do {
+            let data = try JSONEncoder().encode(map)
             UserDefaults.standard.set(String(decoding: data, as: UTF8.self), forKey: SettingsKeys.measuredBenchByModel)
+        } catch {
+            // Census W8 (T2-2 chunk C): a failed encode used to drop the
+            // measurement silently. Persistence is skipped as before, loudly.
+            AppLog.app.error("could not encode the measured-bench map: \(error.localizedDescription) — this measurement will not persist")
         }
     }
 
     nonisolated static func recalledMeasuredBench(forModel path: String) -> MeasuredBench? {
         guard !path.isEmpty, let data = UserDefaults.standard.string(forKey: SettingsKeys.measuredBenchByModel)?.data(using: .utf8) else { return nil }
-        return (try? JSONDecoder().decode([String: MeasuredBench].self, from: data))?[path]
+        do {
+            return try JSONDecoder().decode([String: MeasuredBench].self, from: data)[path]
+        } catch {
+            // Census W8 (T2-2 chunk C): a corrupt store used to read as "no
+            // measurement" silently. Fresh start unchanged; surfaced now.
+            AppLog.app.warning("stored measurements unreadable (\(error.localizedDescription)); starting fresh")
+            return nil
+        }
     }
 
     nonisolated private static func measuredBenchMap() -> [String: MeasuredBench] {
-        guard let data = UserDefaults.standard.string(forKey: SettingsKeys.measuredBenchByModel)?.data(using: .utf8),
-              let map = try? JSONDecoder().decode([String: MeasuredBench].self, from: data) else { return [:] }
-        return map
+        guard let data = UserDefaults.standard.string(forKey: SettingsKeys.measuredBenchByModel)?.data(using: .utf8) else { return [:] }
+        do {
+            return try JSONDecoder().decode([String: MeasuredBench].self, from: data)
+        } catch {
+            AppLog.app.warning("stored measurements unreadable (\(error.localizedDescription)); starting fresh")
+            return [:]
+        }
     }
 
     /// Remembers the ncmoe at which the expert-prefetch overlap stalls the GPU; prefetch
@@ -1893,7 +1925,16 @@ struct ServerSettings {
         }
 
         let dir = url.deletingLastPathComponent()
-        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return nil }
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        } catch {
+            // Census W8 (T2-2 chunk C): an unreadable model dir used to end
+            // vision auto-pairing silently. Pairing behavior is unchanged;
+            // the failure surfaces.
+            AppLog.server.warning("mmproj: cannot scan \(dir.path) (\(error.localizedDescription)) — vision auto-pairing stays off for this model")
+            return nil
+        }
         var projectors = files.filter {
             $0.pathExtension.lowercased() == "gguf" && $0.lastPathComponent.lowercased().contains("mmproj")
         }
@@ -1993,20 +2034,26 @@ final class ServerManager: ObservableObject {
         let first = ServerController()
         var list = [first]
         // Recreate any extra servers the user added, each with its own config.
-        if let data = UserDefaults.standard.data(forKey: Self.storeKey),
-           let profiles = try? JSONDecoder().decode([Profile].self, from: data) {
-            for var p in profiles {
-                // Freeze the currently inherited model once, without changing the
-                // model users were seeing before instance selection was restored.
-                if let pins = p.pinned, !pins.contains(Profile.Pin.model) {
-                    let current = ServerSettings.fromDefaults()
-                    p.selectInstanceModel(path: current.modelPath,
-                                          ncmoe: pins.contains(Profile.Pin.moe) ? p.ncmoe : current.ncmoe)
+        if let data = UserDefaults.standard.data(forKey: Self.storeKey) {
+            do {
+                let profiles = try JSONDecoder().decode([Profile].self, from: data)
+                for var p in profiles {
+                    // Freeze the currently inherited model once, without changing the
+                    // model users were seeing before instance selection was restored.
+                    if let pins = p.pinned, !pins.contains(Profile.Pin.model) {
+                        let current = ServerSettings.fromDefaults()
+                        p.selectInstanceModel(path: current.modelPath,
+                                              ncmoe: pins.contains(Profile.Pin.moe) ? p.ncmoe : current.ncmoe)
+                    }
+                    let c = ServerController()
+                    c.name = p.name
+                    c.profile = p
+                    list.append(c)
                 }
-                let c = ServerController()
-                c.name = p.name
-                c.profile = p
-                list.append(c)
+            } catch {
+                // Census W8 (T2-2 chunk C): a corrupt profile store used to
+                // reset the server list silently. Fresh start unchanged.
+                AppLog.app.error("saved servers unreadable (\(error.localizedDescription)); starting with the default server")
             }
         }
         servers = list
@@ -2064,8 +2111,13 @@ final class ServerManager: ObservableObject {
     func persist() {
         pendingPersist?.cancel()
         let profiles = servers.compactMap { $0.profile }
-        if let data = try? JSONEncoder().encode(profiles) {
+        do {
+            let data = try JSONEncoder().encode(profiles)
             UserDefaults.standard.set(data, forKey: Self.storeKey)
+        } catch {
+            // Census W8 (T2-2 chunk C): a failed encode used to skip the
+            // save silently. Skipping is unchanged; the failure surfaces.
+            AppLog.app.error("could not encode server profiles: \(error.localizedDescription) — the change is not persisted")
         }
     }
 
@@ -2554,16 +2606,29 @@ final class ServerController: ObservableObject {
         return "El motor terminó con código \(exitCode) — revisa el registro en Ajustes / engine exited with code \(exitCode) — see the log in Settings"
     }
 
+    /// Injectable seam, same doctrine as EngineLock.liveCountForTriage: the
+    /// orphan sweep runs pgrep from this path, and checks override it to
+    /// exercise the failure path without touching real processes.
+    nonisolated(unsafe) static var pgrepExecutableForReap = "/usr/bin/pgrep"
+
     /// Router mode spawns one child engine per loaded model. They hold the weights
     /// (mlock'd), so a survivor keeps the RAM until it is killed by hand.
     nonisolated static func reapChildren(of parent: pid_t) {
         let pgrep = Process()
-        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.executableURL = URL(fileURLWithPath: pgrepExecutableForReap)
         pgrep.arguments = ["-P", String(parent)]
         let pipe = Pipe()
         pgrep.standardOutput = pipe
         pgrep.standardError = FileHandle.nullDevice
-        guard (try? pgrep.run()) != nil else { return }
+        do {
+            try pgrep.run()
+        } catch {
+            // Census W8 (T2-2 chunk C): a failed pgrep used to skip reaping
+            // silently, leaving port conflicts on relaunch. The skip is
+            // unchanged (surfacing only); it now rides the diagnostics ring.
+            EngineLock.recordReapFailure("orphan sweep skipped: pgrep could not run (\(error.localizedDescription)) — port conflicts are possible on relaunch")
+            return
+        }
         let out = pipe.fileHandleForReading.readDataToEndOfFile()
         pgrep.waitUntilExit()
         let kids = String(decoding: out, as: UTF8.self)

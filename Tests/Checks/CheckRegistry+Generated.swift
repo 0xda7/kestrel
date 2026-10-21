@@ -61,6 +61,7 @@ enum CheckRegistry {
         ("SecretHashSurfacingTests", SecretHashSurfacingTests.__checkSet),
         ("SecretRedactionTests", SecretRedactionTests.__checkSet),
         ("ServerModelSelectionTests", ServerModelSelectionTests.__checkSet),
+        ("ServerSurfacingTests", ServerSurfacingTests.__checkSet),
         ("ServerNavigationTests", ServerNavigationTests.__checkSet),
         ("SpecMetricsTests", SpecMetricsTests.__checkSet),
         ("ToolConsentTests", ToolConsentTests.__checkSet),
