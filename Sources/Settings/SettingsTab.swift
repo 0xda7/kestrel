@@ -445,12 +445,17 @@ struct SettingsView: View {
             // KES-06: a settings file can carry process-spawning config —
             // binaries, MCP commands, engine flags. Show exactly what would
             // run and require explicit approval before applying any of it.
-            let risks = SettingsArchive.processSpawningSummary(for: data)
-            if risks.isEmpty {
+            switch SettingsArchive.importDecision(for: data) {
+            case .applyNow:
                 applyImportedSettings(data)
-            } else {
+            case .needsApproval(let risks):
                 pendingImportRisks = risks
                 pendingImportData = data
+            case .declined(let message):
+                // Census W8 (T2-2 chunk D): an archive that cannot be
+                // summarized must never read as "nothing would spawn" — it
+                // is declined, never auto-applied.
+                settingsTransferMessage = message
             }
         } catch {
             settingsTransferMessage = error.localizedDescription

@@ -3959,3 +3959,101 @@ extension ServerSurfacingTests {
             .init(name: "testMmprojScanOnUnreadableDirStaysNil") { try $0.testMmprojScanOnUnreadableDirStaysNil() },
         ])
 }
+
+/// Census W8 Settings-group conversion (T2-2 chunk D): the KES-06 consent
+/// surface is typed. An archive that cannot be summarized is declined, never
+/// read as "nothing would spawn", and the MCP decode cannot silently drop
+/// server commands from the approval list.
+final class SettingsArchiveConsentTests: CheckCase {
+    private var suite: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        suite = UserDefaults(suiteName: "settings-archive-consent-tests")
+        suite.removePersistentDomain(forName: "settings-archive-consent-tests")
+    }
+
+    override func tearDown() {
+        suite.removePersistentDomain(forName: "settings-archive-consent-tests")
+        super.tearDown()
+    }
+
+    func testGarbageArchiveIsUnavailableNotSilentlySafe() throws {
+        let summary = SettingsArchive.processSpawningSummary(for: Data("this is not json {{".utf8), defaults: suite)
+        guard case .unavailable(let reason) = summary else {
+            return XCTFail("an unparseable archive must not read as nothing-to-spawn")
+        }
+        XCTAssertFalse(reason.isEmpty)
+        XCTAssertTrue(reason.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+    }
+
+    func testArchiveWithoutAConfigSectionIsUnavailable() throws {
+        let payload = try JSONSerialization.data(withJSONObject: ["format": "kestrel-settings", "version": 1])
+        guard case .unavailable = SettingsArchive.processSpawningSummary(for: payload, defaults: suite) else {
+            return XCTFail("an archive with no config section cannot be consent-checked")
+        }
+    }
+
+    func testUndecodableMCPServersBlobIsUnavailable() throws {
+        let blob = Data("not an mcp server list {{".utf8)
+        let config: [String: Any] = ["mcpServers": ["$data": blob.base64EncodedString()]]
+        let payload = try JSONSerialization.data(withJSONObject:
+                ["format": "kestrel-settings", "version": 1, "config": config])
+        guard case .unavailable(let reason) = SettingsArchive.processSpawningSummary(for: payload, defaults: suite) else {
+            return XCTFail("a present-but-undecodable MCP blob must fail safe, not summarize partially")
+        }
+        XCTAssertTrue(reason.contains("MCP"), "the reason names the undecodable section")
+    }
+
+    func testHealthyArchiveStillSummarizesToRows() throws {
+        var server = MCPServer(name: "evil", url: "")
+        server.transport = .stdio
+        server.command = "/tmp/consent-evil-mcp"
+        server.arguments = ["--run"]
+        let blob = try JSONEncoder().encode([server])
+        let config: [String: Any] = ["mcpServers": ["$data": blob.base64EncodedString()]]
+        let payload = try JSONSerialization.data(withJSONObject:
+                ["format": "kestrel-settings", "version": 1, "config": config])
+        guard case .rows(let rows) = SettingsArchive.processSpawningSummary(for: payload, defaults: suite) else {
+            return XCTFail("a decodable MCP server must still summarize to approval rows")
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(rows[0].contains("/tmp/consent-evil-mcp"))
+    }
+
+    func testImportDecisionFailsSafeOnUnsummarizableArchives() throws {
+        // The T2-2 hole: an unsummarizable archive used to auto-apply.
+        let garbage = Data("this is not json {{".utf8)
+        guard case .declined(let message) = SettingsArchive.importDecision(for: garbage, defaults: suite) else {
+            return XCTFail("an unsummarizable archive must be declined, never applied")
+        }
+        XCTAssertTrue(message.contains("Import declined"))
+        XCTAssertTrue(message.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+
+        let benign = #"{"format":"kestrel-settings","version":1,"config":{"port": 9999}}"#
+        guard case .applyNow = SettingsArchive.importDecision(for: Data(benign.utf8), defaults: suite) else {
+            return XCTFail("a benign config still applies without an approval round-trip")
+        }
+
+        let risky = #"{"format":"kestrel-settings","version":1,"config":{"serverBinary":"/tmp/evil"}}"#
+        guard case .needsApproval(let rows) = SettingsArchive.importDecision(for: Data(risky.utf8), defaults: suite) else {
+            return XCTFail("spawn-bearing config still requires approval")
+        }
+        XCTAssertEqual(rows.count, 1)
+    }
+}
+
+extension SettingsArchiveConsentTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SettingsArchiveConsentTests",
+        instance: { SettingsArchiveConsentTests() },
+        checks: [
+            .init(name: "testGarbageArchiveIsUnavailableNotSilentlySafe") { try $0.testGarbageArchiveIsUnavailableNotSilentlySafe() },
+            .init(name: "testArchiveWithoutAConfigSectionIsUnavailable") { try $0.testArchiveWithoutAConfigSectionIsUnavailable() },
+            .init(name: "testUndecodableMCPServersBlobIsUnavailable") { try $0.testUndecodableMCPServersBlobIsUnavailable() },
+            .init(name: "testHealthyArchiveStillSummarizesToRows") { try $0.testHealthyArchiveStillSummarizesToRows() },
+            .init(name: "testImportDecisionFailsSafeOnUnsummarizableArchives") { try $0.testImportDecisionFailsSafeOnUnsummarizableArchives() },
+        ])
+}

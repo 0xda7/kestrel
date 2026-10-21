@@ -23,7 +23,9 @@ final class ImportSafetyTests: CheckCase {
 
     func testProcessSpawningSummaryListsBinaryOverride() throws {
         let json = #"{"format":"kestrel-settings","version":1,"config":{"serverBinary":"/tmp/evil-llama-server"}}"#
-        let rows = SettingsArchive.processSpawningSummary(for: Data(json.utf8), defaults: suite)
+        guard case .rows(let rows) = SettingsArchive.processSpawningSummary(for: Data(json.utf8), defaults: suite) else {
+            return XCTFail("a replaced engine binary must summarize to approval rows (KES-06)")
+        }
         XCTAssertEqual(rows.count, 1)
         XCTAssertTrue(rows[0].contains("/tmp/evil-llama-server"),
                       "a replaced engine binary must be surfaced before import (KES-06)")
@@ -38,7 +40,9 @@ final class ImportSafetyTests: CheckCase {
         let config: [String: Any] = ["mcpServers": ["$data": blob.base64EncodedString()]]
         let payload = try JSONSerialization.data(withJSONObject:
                 ["format": "kestrel-settings", "version": 1, "config": config])
-        let rows = SettingsArchive.processSpawningSummary(for: payload, defaults: suite)
+        guard case .rows(let rows) = SettingsArchive.processSpawningSummary(for: payload, defaults: suite) else {
+            return XCTFail("an MCP server command must summarize to approval rows (KES-06)")
+        }
         XCTAssertEqual(rows.count, 1)
         XCTAssertTrue(rows[0].contains("/tmp/evil-mcp"))
         XCTAssertTrue(rows[0].contains("--steal"))
@@ -46,8 +50,9 @@ final class ImportSafetyTests: CheckCase {
 
     func testProcessSpawningSummaryEmptyForBenignConfig() {
         let json = #"{"format":"kestrel-settings","version":1,"config":{"port": 9999}}"#
-        let rows = SettingsArchive.processSpawningSummary(for: Data(json.utf8), defaults: suite)
-        XCTAssertTrue(rows.isEmpty)
+        guard case .none = SettingsArchive.processSpawningSummary(for: Data(json.utf8), defaults: suite) else {
+            return XCTFail("a benign config must read as nothing-to-spawn (KES-06)")
+        }
     }
 
     func testImportedWorkingDirectoryIsNeutralized() {

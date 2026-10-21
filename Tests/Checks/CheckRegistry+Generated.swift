@@ -31,6 +31,7 @@ enum CheckRegistry {
         ("ImageGenTests", ImageGenTests.__checkSet),
         ("ServerSettingsTests", ServerSettingsTests.__checkSet),
         ("VRAMWindowTests", VRAMWindowTests.__checkSet),
+        ("SettingsArchiveConsentTests", SettingsArchiveConsentTests.__checkSet),
         ("SettingsNumericCoercionTests", SettingsNumericCoercionTests.__checkSet),
         ("TypedSettingsDriftTests", TypedSettingsDriftTests.__checkSet),
         ("TypedSettingsRegistryTests", TypedSettingsRegistryTests.__checkSet),

@@ -46,15 +46,45 @@ enum SettingsArchive {
         return count
     }
 
+    /// Census W8 (T2-2 chunk D): the KES-06 consent summary must
+    /// distinguish "nothing in this archive would spawn a process" from
+    /// "the archive could not be summarized" — the caller fails safe on the
+    /// latter instead of reading silence as consent.
+    enum ProcessSpawnSummary {
+        case none                      // parses; nothing in it would spawn a process
+        case rows([String])            // parses; these entries would spawn processes
+        case unavailable(String)       // cannot be summarized; consent cannot be computed
+    }
+
+    /// The consent decision for importing `data` (KES-06). Pure and
+    /// check-pinned: an unsummarizable archive is declined, never silently
+    /// applied.
+    enum ImportDecision {
+        case applyNow
+        case needsApproval([String])
+        case declined(String)
+    }
+
+    static func importDecision(for data: Data, defaults: UserDefaults = .standard) -> ImportDecision {
+        switch processSpawningSummary(for: data, defaults: defaults) {
+        case .none: return .applyNow
+        case .rows(let risks): return .needsApproval(risks)
+        case .unavailable(let reason):
+            return .declined("Import declined: \(reason). Fix or re-export the file and try again.")
+        }
+    }
+
     /// KES-06: everything an import would restore that can spawn a process
     /// or change what gets spawned — engine and sidecar binary paths, MCP
     /// server commands, and extra engine arguments. The import UI shows this
     /// list and requires explicit approval before any of it is applied: a
     /// settings file handed to the user is otherwise one-click arbitrary
     /// process execution.
-    static func processSpawningSummary(for data: Data, defaults: UserDefaults = .standard) -> [String] {
+    static func processSpawningSummary(for data: Data, defaults: UserDefaults = .standard) -> ProcessSpawnSummary {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let config = root["config"] as? [String: Any] else { return [] }
+              let config = root["config"] as? [String: Any] else {
+            return .unavailable("the file is not a readable Kestrel settings archive")
+        }
         var rows: [String] = []
         let binaryKeys: [(String, String)] = [
             (SettingsKeys.serverBinary, "engine"),
@@ -69,13 +99,27 @@ enum SettingsArchive {
            !extra.isEmpty, extra != (defaults.string(forKey: SettingsKeys.extraArgs) ?? "") {
             rows.append("engine extraArgs: \(extra)")
         }
-        if let raw = config[SettingsKeys.mcpServers], let blob = restoredValue(raw) as? Data,
-           let servers = try? JSONDecoder().decode([MCPServer].self, from: blob) {
-            for server in servers where server.transport.isLocal && server.isConfigured {
-                rows.append("MCP '\(server.name)': \(([server.command] + server.arguments).joined(separator: " "))")
+        if let raw = config[SettingsKeys.mcpServers], let blob = restoredValue(raw) as? Data {
+            do {
+                let servers = try JSONDecoder().decode([MCPServer].self, from: blob)
+                for server in servers where server.transport.isLocal && server.isConfigured {
+                    rows.append("MCP '\(server.name)': \(([server.command] + server.arguments).joined(separator: " "))")
+                }
+            } catch {
+                // A present-but-undecodable MCP blob used to read as "no MCP
+                // risk". The consent surface cannot be computed, so the
+                // import must fail safe rather than summarize partially.
+                // Foundation error strings carry typographic quotes; the
+                // user-visible reason stays ASCII (product doctrine).
+                let detail = error.localizedDescription
+                    .replacingOccurrences(of: "\u{201C}", with: "\"")
+                    .replacingOccurrences(of: "\u{201D}", with: "\"")
+                    .replacingOccurrences(of: "\u{2019}", with: "'")
+                let ascii = String(detail.unicodeScalars.filter { $0.isASCII })
+                return .unavailable("the MCP server list cannot be decoded (\(ascii))")
             }
         }
-        return rows
+        return rows.isEmpty ? .none : .rows(rows)
     }
 
     private static func archiveValue(_ value: Any) -> Any {
