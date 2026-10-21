@@ -25,6 +25,7 @@ final class TypedSettingsDriftTests: CheckCase {
         super.setUp()
         suite = UserDefaults(suiteName: "typed-settings-drift-tests")
         suite.removePersistentDomain(forName: "typed-settings-drift-tests")
+        SettingsNumericCoercion.resetDriftReportingForChecks()
     }
 
     override func tearDown() {
@@ -89,6 +90,64 @@ final class TypedSettingsDriftTests: CheckCase {
         XCTAssertTrue(ServerSettings.fromDefaults().loadVision,
                       "a String under loadVision must yield the declared true default, not a silent false")
     }
+
+    /// W4-7, registry machinery: the gate decision fails SAFE under any
+    /// unreadable value, is reported, and stays honest for typed values.
+    func testGateDecisionFailsSafe() {
+        XCTAssertFalse(ServerSettings.apiKeyGateArmed(defaults: suite),
+                       "absent means the declared default: off")
+        suite.set(true, forKey: SettingsKeys.apiKeyEnabled)
+        XCTAssertTrue(ServerSettings.apiKeyGateArmed(defaults: suite))
+        suite.set(false, forKey: SettingsKeys.apiKeyEnabled)
+        XCTAssertFalse(ServerSettings.apiKeyGateArmed(defaults: suite),
+                       "a typed false is honored — fail-safe is for drift, not for consent")
+        for drift in ["on", "enabled", "x"] {
+            suite.set(drift, forKey: SettingsKeys.apiKeyEnabled)
+            XCTAssertTrue(ServerSettings.apiKeyGateArmed(defaults: suite),
+                          "a String ('\(drift)') must fail SAFE: the gate stays armed")
+        }
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.apiKeyEnabled),
+                      "gate drift is reported, never silent")
+    }
+
+    /// W4-7 migration/import: parseable spellings survive typed; garbage
+    /// keeps the gate ARMED instead of dropping it to the off default.
+    func testGateMigrationAndImportFailSafe() {
+        for (raw, expected) in [("true", true), ("TRUE", true), ("1", true),
+                                ("false", false), ("0", false)] {
+            suite.set(raw, forKey: SettingsKeys.apiKeyEnabled)
+            _ = SettingsNumericCoercion.migrateMistypedNumerics(in: suite)
+            XCTAssertEqual(suite.object(forKey: SettingsKeys.apiKeyEnabled) as? Bool, expected,
+                           "'\(raw)' migrates to a typed \(expected)")
+        }
+        suite.set("banana", forKey: SettingsKeys.apiKeyEnabled)
+        _ = SettingsNumericCoercion.migrateMistypedNumerics(in: suite)
+        XCTAssertEqual(suite.object(forKey: SettingsKeys.apiKeyEnabled) as? Bool, true,
+                       "unparseable garbage under the gate migrates ARMED, never removed to off")
+        XCTAssertEqual(SettingsNumericCoercion.typedImportValue("banana", forKey: SettingsKeys.apiKeyEnabled) as? Bool,
+                       true, "importing garbage under the gate stores ARMED, never drops it")
+        XCTAssertEqual(SettingsNumericCoercion.typedImportValue("false", forKey: SettingsKeys.apiKeyEnabled) as? Bool,
+                       false, "a parseable import lands typed")
+    }
+
+    /// W4-5/W4-6 class, registry machinery: Bool drift yields the declared
+    /// default and is REPORTED — never silent in either direction.
+    func testBoolDriftIsReportedNotSilent() {
+        suite.set("off", forKey: SettingsKeys.loadVision)
+        XCTAssertTrue(SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: true, in: suite))
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.loadVision))
+        suite.set("on", forKey: SettingsKeys.agentToolsEnabled)
+        XCTAssertFalse(SettingsNumericCoercion.bool(SettingsKeys.agentToolsEnabled, default: false, in: suite),
+                       "drift yields the declared default (false), not a parse of the string")
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.agentToolsEnabled))
+        // Typed values pass through untouched; numbers keep Foundation's
+        // bool conversion (a stored 1 still means true).
+        suite.set(true, forKey: SettingsKeys.loadVision)
+        XCTAssertTrue(SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: false, in: suite))
+        suite.set(1, forKey: SettingsKeys.loadVision)
+        XCTAssertTrue(SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: false, in: suite),
+                      "a stored number keeps UserDefaults' bool conversion")
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -101,5 +160,8 @@ extension TypedSettingsDriftTests {
             .init(name: "testIntDriftYieldsDeclaredDefault") { $0.testIntDriftYieldsDeclaredDefault() },
             .init(name: "testVADThresholdDriftYieldsBalancedFallback") { $0.testVADThresholdDriftYieldsBalancedFallback() },
             .init(name: "testAbsentTrueBoolSurvivesDrift") { $0.testAbsentTrueBoolSurvivesDrift() },
+            .init(name: "testGateDecisionFailsSafe") { $0.testGateDecisionFailsSafe() },
+            .init(name: "testGateMigrationAndImportFailSafe") { $0.testGateMigrationAndImportFailSafe() },
+            .init(name: "testBoolDriftIsReportedNotSilent") { $0.testBoolDriftIsReportedNotSilent() },
         ])
 }

@@ -1028,8 +1028,8 @@ struct ServerSettings {
     /// Reads persisted settings (same keys as the views' @AppStorage).
     static func fromDefaults() -> ServerSettings {
         let d = UserDefaults.standard
-        func int(_ key: String, _ def: Int) -> Int { d.object(forKey: key) == nil ? def : d.integer(forKey: key) }
-        func bool(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) == nil ? def : d.bool(forKey: key) }
+        func int(_ key: String, _ def: Int) -> Int { SettingsNumericCoercion.int(key, default: def, in: d) }
+        func bool(_ key: String, _ def: Bool) -> Bool { SettingsNumericCoercion.bool(key, default: def, in: d) }
         return ServerSettings(
             serverBinary: resolvedBinary(),
             modelPath: d.string(forKey: SettingsKeys.modelPath) ?? "",
@@ -1861,9 +1861,19 @@ struct ServerSettings {
         return matches.count == 1 ? matches[0].path : nil
     }
 
+    /// The KES-01 API-key gate's decision, registry-typed. Absent means the
+    /// declared default (off), but a value the reader cannot interpret as Bool
+    /// is drift that FAILS SAFE — the operator armed protection, and
+    /// corruption or a foreign writer must not silently un-arm it for LAN
+    /// binds (W4-7: Foundation's bool(forKey:) recognizes only true/yes/1, so
+    /// a stored "on" used to read as false).
+    static func apiKeyGateArmed(defaults: UserDefaults = .standard) -> Bool {
+        SettingsNumericCoercion.bool(SettingsKeys.apiKeyEnabled, default: false, in: defaults)
+    }
+
     /// The API key the chat must send, when protection is enabled in Settings.
     static func activeAPIKey() -> String? {
-        UserDefaults.standard.bool(forKey: SettingsKeys.apiKeyEnabled) ? Keychain.apiKey() : nil
+        apiKeyGateArmed() ? Keychain.apiKey() : nil
     }
 
     /// The model alias the native chat should send as `"model"`, or nil when
@@ -2753,7 +2763,7 @@ final class ServerController: ObservableObject {
         ]
         // Advertise protection only when it exists; never broadcast
         // "auth: none" to the LAN (KES-02).
-        if UserDefaults.standard.bool(forKey: SettingsKeys.apiKeyEnabled) {
+        if ServerSettings.apiKeyGateArmed() {
             txt["auth"] = Data("bearer".utf8)
         }
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
