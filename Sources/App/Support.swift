@@ -15,10 +15,16 @@ import Security
 /// error instead of a silent bug.
 enum SettingsKeys {
     /// "bundled" or "custom". Not a path: two installs share this domain.
+    /// Excluded from resettableOptionKeys: the engine selection survives a
+    /// reset (a reset re-tunes the engine, it does not re-pick it).
     static let engineKind = "engineKind"
     /// Only read when engineKind is "custom".
     static let serverBinary = "serverBinary"
+    /// The selected model file. Excluded from resettableOptionKeys: a reset
+    /// never hides or detaches the model the operator runs.
     static let modelPath = "modelPath"
+    /// The models folder. Excluded from resettableOptionKeys: a reset never
+    /// repoints where the operator's models live.
     static let modelsDir = "modelsDir"
     static let whisperModel = "whisperModel"
     static let speechInputMethod = "speechInputMethod"
@@ -42,20 +48,33 @@ enum SettingsKeys {
     static let audioVADSpeechPadMS = "audioVADSpeechPadMS"
     /// Persisted (model, projector) pairs that failed to load, so a bad mmproj
     /// isn't auto-attached again.
+    /// Excluded from resettableOptionKeys: a per-model record the app
+    /// learned; a reset must not re-attach a projector that failed to load.
     static let incompatibleMmproj = "incompatibleMmproj"
     /// Per-model manual projector override: a path pins that mmproj, "" disables
     /// vision, absent falls back to auto-pairing.
+    /// Excluded from resettableOptionKeys: a per-model override record,
+    /// same preserve-across-reset doctrine as the other per-model maps.
     static let mmprojOverride = "mmprojOverride"
     /// Per-file source URL a model was downloaded from, for sibling downloads
     /// (mmproj, dflash draft) and the model-update check.
+    /// Excluded from resettableOptionKeys: per-model download provenance,
+    /// preserved across resets.
     static let modelSource = "modelSource"
     /// Per-file SHA-256 verified at download time, compared against the remote
     /// digest to detect a re-uploaded model.
+    /// Excluded from resettableOptionKeys: per-model verification record,
+    /// preserved across resets.
     static let modelDigest = "modelDigest"
     /// Legacy model paths whose downloaded DFlash draft was turned off.
+    /// Excluded from resettableOptionKeys: read-never-written legacy
+    /// (census W7-3); the one-shot migration (Tier 4 H2) retires it.
     static let dflashDisabled = "dflashDisabled"
     static let dflashModes = "dflashModes"
     static let mtpDisabledModels = "mtpDisabledModels"
+    /// One-time operator acknowledgment of the DFlash warning — a consent
+    /// record, not a tunable, so it's excluded from resettableOptionKeys
+    /// (a reset must not un-accept a warning the operator already saw).
     static let dflashWarningAcknowledged = "dflashWarningAcknowledged"
     static let port = "port"
     /// Idle bound for the engine control plane's shared session (census
@@ -65,14 +84,20 @@ enum SettingsKeys {
     static let ngl = "ngl"
     static let ncmoe = "ncmoe"
     /// Last user-set ncmoe per model file, restored when that model is re-selected.
+    /// Excluded from resettableOptionKeys: a per-model record restored on
+    /// re-selection, preserved across resets.
     static let ncmoeByModel = "ncmoeByModel"
     /// Per-model ncmoe at which prompt processing collapses (expert-prefetch overlap
     /// stalls at/above it); the sweep measures it and prefetch is gated below it.
+    /// Excluded from resettableOptionKeys: a per-model measured record,
+    /// preserved across resets.
     static let prefetchCliffByModel = "prefetchCliffByModel"
     /// JSON archive ([String: MeasuredBench]) of completed per-model benchmarks,
     /// keyed by model path: the measured-best ncmoe/threads and the tok/s they
     /// delivered. Feeds selection pre-fill; survives settings reset like the
     /// other per-model maps.
+    /// Excluded from resettableOptionKeys: measured per-model data,
+    /// preserved across resets.
     static let measuredBenchByModel = "measuredBenchByModel"
     static let ctx = "ctx"
     static let contextAutomatic = "contextAutomatic"
@@ -84,17 +109,23 @@ enum SettingsKeys {
     static let gpuIndex = "gpuIndex"
     /// Comma-separated physical GPU indices to split across (2+ entries).
     static let gpuList = "gpuList"
+    /// Collapsed/expanded state of the GPUs card — pure view state, so it's
+    /// excluded from resettableOptionKeys like the other UI-preference keys.
     static let gpusCardCollapsed = "gpusCardCollapsed"
     static let extraArgs = "extraArgs"
 
     /// Per-model extra arguments, keyed by model path. They are appended after the
     /// shared ones, so a model can override a flag the global field also sets.
+    /// Excluded from resettableOptionKeys: a per-model record, preserved
+    /// across resets.
     static let extraArgsByModel = "extraArgsByModel"
 
     /// Where to POST the turns memory_archive sets aside. Empty disables the hook.
     static let memoryArchiveHookURL = "memoryArchiveHookURL"
 
     /// Sent as a bearer token with each delivery, for receivers that want one.
+    /// Excluded from resettableOptionKeys: read-once legacy (census W7-4)
+    /// migrated into the local secret store; Tier 4 H2 retires it.
     static let memoryArchiveHookSecret = "memoryArchiveHookSecret"
     /// Delivery policy for the memory-archive hook (census W3-14): the queue
     /// drops its oldest past this many pending files, and each delivery
@@ -137,6 +168,8 @@ enum SettingsKeys {
     static let dynamicMoePolicy = "dynamicMoePolicy"
     static let routerMode = "routerMode"
     static let routerModelsMax = "routerModelsMax"
+    /// Advanced-section disclosure state — pure view state, so it's
+    /// excluded from resettableOptionKeys like the other UI-preference keys.
     static let serverConfigurationAdvanced = "serverConfigurationAdvanced"
     /// Alias of the model the native chat targets in router mode. A runtime
     /// pick, not a "setting", so it's excluded from resettableOptionKeys.
@@ -230,40 +263,68 @@ enum SettingsKeys {
     static let chatShowSystemMessage = "chatShowSystemMessage"
     static let smoothTyping = "smoothTyping"
     static let chatFontScale = "chatFontScale"
+    /// Onboarding state: deliberately excluded from resettableOptionKeys
+    /// (see the list's doc comment) so a reset never re-runs onboarding.
     static let onboardingDone = "onboardingDone"
 
     // Benchmark workload sizes (llama-bench -p / -n)
     static let benchPP = "benchPP"
     static let benchTG = "benchTG"
     static let benchDepth = "benchDepth"
+    /// Declared, never read (census W7-1); Tier 4 H1 deletes it. Excluded
+    /// from resettableOptionKeys until then: there is nothing to reset.
     static let benchAdvanced = "benchAdvanced"
 
     // Signed benchmark sharing (public identity from the server; the private key
     // lives in the Keychain, never here). Deliberately outside resettableOptionKeys.
     static let benchmarkInstallationId = "benchmarkInstallationId"
+    /// Sibling of benchmarkInstallationId: public identity, not a tunable,
+    /// so it's excluded from resettableOptionKeys like its pair above.
     static let benchmarkKeyFingerprint = "benchmarkKeyFingerprint"
 
     // Image generation (text-to-image)
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenPrompt = "imagenPrompt"
     static let imagenAspect = "imagenAspect"
     static let imagenBaseSize = "imagenBaseSize"
     static let imagenSteps = "imagenSteps"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenSeed = "imagenSeed"
     static let imagenFormat = "imagenFormat"
     static let imagenOffloadCPU = "imagenOffloadCPU"
     static let imagenGPU = "imagenGPU"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenModel = "imagenModel"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenCustomModel = "imagenCustomModel"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenCustomVAE = "imagenCustomVAE"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenCustomTextEncoder = "imagenCustomTextEncoder"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenCustomIsDiffusion = "imagenCustomIsDiffusion"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenCustomCfg = "imagenCustomCfg"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenInitImage = "imagenInitImage"
+    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
+    /// from resettableOptionKeys: read-never-written, nothing to reset.
     static let imagenStrength = "imagenStrength"
     /// Extra parallel generation instances (JSON: [ImageInstanceConfig]).
     static let imagenInstances = "imagenInstances"
     /// Delete generated output images (kestrel_*) when the app quits.
     static let imagenCleanupOnClose = "imagenCleanupOnClose"
+    /// The selected video model — a model pick, excluded from
+    /// resettableOptionKeys like modelPath: a reset never hides models.
     static let videoModel = "videoModel"
     static let videoFrames = "videoFrames"
     static let videoSteps = "videoSteps"
@@ -277,11 +338,17 @@ enum SettingsKeys {
     /// Decode the frames in tiles (default on): fixed 3.4 GB instead of up to 16.
     static let videoVAETiling = "videoVAETiling"
     static let upscalerFlavor = "upscalerFlavor"
+    /// Create/Upscale workspace pick — a view preference (like chatSortOrder),
+    /// excluded from resettableOptionKeys.
     static let imageStudioMode = "imageStudioMode"
     static let upscalerScale = "upscalerScale"
     static let upscalerCustomModel = "upscalerCustomModel"
-    /// Show results as a grid instead of a list (queue feed / instances canvas).
+    /// Show results as a grid instead of a list (queue feed / instances
+    /// canvas) — view preferences, so both keys are excluded from
+    /// resettableOptionKeys like the other UI-preference keys.
     static let imagenQueueGrid = "imagenQueueGrid"
+    /// Grid/canvas view preference; excluded from resettableOptionKeys
+    /// (see its sibling above).
     static let imagenCanvasGrid = "imagenCanvasGrid"
 
     /// A stale "lang" value from pre-English-only builds lingers in upgraded
@@ -296,6 +363,10 @@ enum SettingsKeys {
     /// selected model and onboarding state are deliberately NOT included, so a reset
     /// never hides or deletes downloaded models. Profiles and the Keychain API key
     /// live outside UserDefaults and are untouched.
+    /// A2 completeness law (mission T3-2): every SettingsKeys constant is
+    /// either in this list or carries an exclusion comment naming
+    /// resettableOptionKeys on its declaration — pinned self-enforcing by
+    /// SettingsCompletenessTests.
     static let resettableOptionKeys = [
         serverBinary, port, engineControlTimeoutSeconds, ngl, ncmoe, ctx, contextAutomatic, threads, flashAttn, noMmap, jinja,
         vramReserve, gpuIndex, gpuList, whisperModel, speechInputMethod, whisperLoadPolicy,
@@ -328,11 +399,23 @@ enum SettingsKeys {
         chatCompactionMinTailMessages, chatRecallMaxResults, chatRecallMaxCharacters,
         chatToolResultMaxTokens, chatToolResultMinTokens, chatShowSystemMessage, smoothTyping,
         imagenAspect, imagenBaseSize, imagenSteps, imagenFormat, imagenOffloadCPU, imagenGPU,
+        // Census W7-5/W7-6 + the A2 law (T3-2): the video/upscaler/bench
+        // tunables and the remaining functional keys join reset+archive —
+        // imagenInstances rides along so the multi-instance config is
+        // exported and imported with the rest. Pinned by
+        // SettingsCompletenessTests.testEverySettingsKeyIsResettableOrDocumentedExcluded.
+        videoVAETiling, videoNegativePrompt, videoNegativeSeeded,
+        videoFrames, videoSteps, videoRecipeVersion, videoSize, videoGPU,
+        imagenCleanupOnClose, imagenInstances,
+        upscalerFlavor, upscalerScale, upscalerCustomModel,
+        imageMaxTokens, loadVision, subtitleStyle, chatFontScale,
+        benchPP, benchTG, benchDepth, memoryArchiveHookURL, dflashModes,
     ]
 
-    /// Clears every tunable option so they revert to defaults, keeping models intact.
-    static func resetOptionsToDefaults() {
-        let defaults = UserDefaults.standard
+    /// Clears every tunable option so they revert to defaults, keeping models
+    /// intact. The defaults parameter exists so checks can run the reset
+    /// against a scratch suite instead of the operator's real defaults.
+    static func resetOptionsToDefaults(defaults: UserDefaults = .standard) {
         for key in resettableOptionKeys { defaults.removeObject(forKey: key) }
     }
 }
