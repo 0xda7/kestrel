@@ -360,7 +360,7 @@ final class ChatStore: ObservableObject {
         }
     }
     private static var configuredAgentTurnLimit: Int {
-        max(1, UserDefaults.standard.object(forKey: SettingsKeys.chatAgenticMaxTurns) as? Int ?? 10)
+        max(1, SettingsNumericCoercion.int(SettingsKeys.chatAgenticMaxTurns, default: ChatDefaults.agenticMaxTurns))
     }
     /// Appended to the system prompt only when tools are mounted. Kept short
     /// and imperative: small context windows are the norm here.
@@ -742,8 +742,8 @@ final class ChatStore: ObservableObject {
         // for this generation (engine stop/resume/stall paths stand down).
         let sendRoute = InferenceRoutes.active()
         activeStreamRemote = sendRoute?.isConfigured == true
-        let toolsEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled)
-        let javaScriptEnabled = UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled)
+        let toolsEnabled = SettingsNumericCoercion.bool(SettingsKeys.agentToolsEnabled, default: false)
+        let javaScriptEnabled = SettingsNumericCoercion.bool(SettingsKeys.jsSandboxEnabled, default: false)
         let memoryToolsEnabled = ChatMemoryService.isEnabled
         let agentTurnLimit = Self.configuredAgentTurnLimit
         let enabledToolNames = conversations[i].enabledToolNames
@@ -1552,11 +1552,11 @@ final class ChatStore: ObservableObject {
     /// Read live from defaults so toggling it in Settings takes effect next turn.
     nonisolated var slotPersistEnabled: Bool {
         let d = UserDefaults.standard
-        guard d.bool(forKey: SettingsKeys.persistCache) else { return false }
-        guard d.object(forKey: SettingsKeys.faAmd) as? Bool ?? ServerSettings.defaultFaAmd else { return false }
+        guard SettingsNumericCoercion.bool(SettingsKeys.persistCache, default: false, in: d) else { return false }
+        guard SettingsNumericCoercion.bool(SettingsKeys.faAmd, default: ServerSettings.defaultFaAmd, in: d) else { return false }
         // Only an actually loaded projector blocks slot save/restore; with the
         // vision eye off the model runs text-only and persistence works.
-        guard d.object(forKey: SettingsKeys.loadVision) as? Bool ?? true else { return true }
+        guard SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: true, in: d) else { return true }
         return ServerSettings.mmprojPath(forModel: d.string(forKey: SettingsKeys.modelPath) ?? "") == nil
     }
 
@@ -1974,8 +1974,9 @@ final class ChatStore: ObservableObject {
 
     private func compactIfNeeded(conversation id: UUID, port: Int) {
         let d = UserDefaults.standard
-        let enabled = d.object(forKey: SettingsKeys.chatAutoCompact) == nil
-            ? true : d.bool(forKey: SettingsKeys.chatAutoCompact)
+        // Tri-state absent-means-true, registry-typed (W4-5): drift reads
+        // the declared true default and is reported, never a silent false.
+        let enabled = SettingsNumericCoercion.bool(SettingsKeys.chatAutoCompact, default: true, in: d)
         // The live engine's window — its own /props n_ctx when running —
         // not a fresh solver run that may no longer match the launched ctx.
         let limit = ServerSettings.liveResolvedCtx(port: port)
@@ -2507,7 +2508,7 @@ struct NativeChatView: View {
     @AppStorage(SettingsKeys.chatBackendSampling) private var backendSampling = false
     @AppStorage(SettingsKeys.chatCustomJSON) private var customJSON = ""
     @AppStorage(SettingsKeys.chatStopSequences) private var stopSequences = ""
-    @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = 10
+    @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = ChatDefaults.agenticMaxTurns
     @AppStorage(SettingsKeys.chatPasteLongTextLength) private var pasteLongTextLength = 2500
     @AppStorage(SettingsKeys.chatMaxImageMegapixels) private var maxImageMegapixels = 1.0
     @AppStorage(SettingsKeys.chatPDFAsImages) private var pdfAsImages = false
@@ -3742,7 +3743,7 @@ struct NativeChatView: View {
                         samplers = ""
                         backendSampling = false
                         customJSON = ""
-                        agenticMaxTurns = 10
+                        agenticMaxTurns = ChatDefaults.agenticMaxTurns
                         pasteLongTextLength = 2500
                         maxImageMegapixels = 1
                         pdfAsImages = false
@@ -4152,11 +4153,11 @@ struct NativeChatView: View {
     private func refreshAvailableTools() async {
         loadingTools = true
         var tools: [BuiltinToolInfo] = []
-        if UserDefaults.standard.bool(forKey: SettingsKeys.agentToolsEnabled),
+        if SettingsNumericCoercion.bool(SettingsKeys.agentToolsEnabled, default: false),
            let builtins = try? await ChatToolsService.list(port: port) {
             tools += builtins
         }
-        if UserDefaults.standard.bool(forKey: SettingsKeys.jsSandboxEnabled) {
+        if SettingsNumericCoercion.bool(SettingsKeys.jsSandboxEnabled, default: false) {
             tools.append(JavaScriptSandboxService.tool)
         }
         // Same enable flags the send path uses, so the per-conversation

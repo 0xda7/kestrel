@@ -32,8 +32,10 @@ enum AudioVADPreferences {
         )
     }
 
+    /// Registry-typed (W4-4): a stored String used to coerce or zero
+    /// silently; now the balanced fallback applies and drift is reported.
     private static func value(_ key: String, _ fallback: Double,
                               _ defaults: UserDefaults) -> Double {
-        defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
+        SettingsNumericCoercion.double(key, default: fallback, in: defaults)
     }
 }

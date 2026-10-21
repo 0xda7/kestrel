@@ -270,11 +270,14 @@ enum Estimator {
     static func estimateCurrent(spec: ModelSpec, hw: HardwareInfo,
                                 ncmoeOverride: Int? = nil) -> MemoryEstimate {
         let d = UserDefaults.standard
-        let ctx = d.object(forKey: SettingsKeys.ctx) == nil ? 16384 : d.integer(forKey: SettingsKeys.ctx)
+        // Registry-typed: drift yields the single-sourced declared default
+        // (W4-2 — this inline copy used to hand-duplicate the 16384 and read
+        // a silent 0 for a mistyped String).
+        let ctx = SettingsNumericCoercion.int(SettingsKeys.ctx, default: ServerSettings.defaultCtx, in: d)
         let scale = (kvTypeScale(d.string(forKey: SettingsKeys.cacheTypeK) ?? "f16")
                    + kvTypeScale(d.string(forKey: SettingsKeys.cacheTypeV) ?? "f16")) / 2
         return estimate(spec: spec, hw: hw, ctx: ctx, kvScale: scale,
-                        multiGPU: d.bool(forKey: SettingsKeys.multiGPU),
+                        multiGPU: SettingsNumericCoercion.bool(SettingsKeys.multiGPU, default: false, in: d),
                         tensorSplit: (d.string(forKey: SettingsKeys.splitMode) ?? "layer") == "tensor",
                         ncmoeOverride: ncmoeOverride)
     }

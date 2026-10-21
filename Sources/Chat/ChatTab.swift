@@ -136,7 +136,7 @@ struct ChatMainView: View {
             if !onboardingDone && models.models.isEmpty {
                 showOnboarding = true
             }
-            if UserDefaults.standard.bool(forKey: SettingsKeys.autoStart),
+            if SettingsNumericCoercion.bool(SettingsKeys.autoStart, default: false),
                server.state == .stopped,
                !(UserDefaults.standard.string(forKey: SettingsKeys.modelPath) ?? "").isEmpty {
                 server.start(.fromDefaults())

@@ -26,7 +26,7 @@ enum ChatMemoryService {
     /// On unless the user turned them off; the key is absent for everyone who
     /// never opened the setting.
     static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: SettingsKeys.memoryToolsEnabled) as? Bool ?? true
+        SettingsNumericCoercion.bool(SettingsKeys.memoryToolsEnabled, default: true)
     }
 
     /// Characters of a message shown in a listing or a recall hit. Enough to

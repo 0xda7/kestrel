@@ -268,7 +268,7 @@ enum VideoGenLimits {
     static let nCB = 32
 
     static var vaeTilingEnabled: Bool {
-        UserDefaults.standard.object(forKey: SettingsKeys.videoVAETiling) as? Bool ?? true
+        SettingsNumericCoercion.bool(SettingsKeys.videoVAETiling, default: true)
     }
 }
 
@@ -394,7 +394,7 @@ final class VideoGenerator: ObservableObject {
             env["GGML_METAL_DEVICE_INDEX"] = String(gpuIndex)
         }
         let external = gpuIndex >= 0 && gpuIndex < devices.count && devices[gpuIndex].location == .external
-        if UserDefaults.standard.bool(forKey: SettingsKeys.forcePrivateBuffers) || external {
+        if SettingsNumericCoercion.bool(SettingsKeys.forcePrivateBuffers, default: false) || external {
             env["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
         }
 

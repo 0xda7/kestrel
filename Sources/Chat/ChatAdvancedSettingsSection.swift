@@ -39,7 +39,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.chatStopSequences) private var stopSequences = ""
     @AppStorage(SettingsKeys.chatBackendSampling) private var backendSampling = false
     @AppStorage(SettingsKeys.chatCustomJSON) private var customJSON = ""
-    @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = 10
+    @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = ChatDefaults.agenticMaxTurns
     @AppStorage(SettingsKeys.chatPasteLongTextLength) private var pasteLongTextLength = 2500
     @AppStorage(SettingsKeys.chatMaxImageMegapixels) private var maxImageMegapixels = 1.0
     @AppStorage(SettingsKeys.chatPDFAsImages) private var pdfAsImages = false
@@ -480,7 +480,7 @@ struct ChatAdvancedSettingsSection: View {
         typicalP = 1; presencePenalty = 0; frequencyPenalty = 0; dryMultiplier = 0
         dryBase = 1.75; dryAllowedLength = 2; dryPenaltyLastN = 0; samplers = ""
         stopSequences = ""
-        backendSampling = false; customJSON = ""; agenticMaxTurns = 10; pasteLongTextLength = 2500
+        backendSampling = false; customJSON = ""; agenticMaxTurns = ChatDefaults.agenticMaxTurns; pasteLongTextLength = 2500
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
         memoryToolsEnabled = true; toolsRuntime = ""

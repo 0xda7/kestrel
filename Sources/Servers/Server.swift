@@ -283,7 +283,7 @@ struct ServerSettings {
     private static func slotKVSignature() -> String {
         let d = UserDefaults.standard
         // a slot holding media only restores with a projector loaded, so vision state splits it too
-        let vision = d.object(forKey: SettingsKeys.loadVision) as? Bool ?? true
+        let vision = SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: true, in: d)
         return "\(sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeK), default: "f16"))"
              + "-\(sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeV), default: "f16"))"
              + (vision ? "-v" : "")
@@ -299,6 +299,12 @@ struct ServerSettings {
     }
 
     static let defaultFaAmd = true
+
+    /// Declared default context window — single-sourced because two readers
+    /// must agree on it: fromDefaults (the engine's launch config) and the
+    /// Hardware estimator's inline copy (W4-2; they diverged as literals
+    /// before the registry conversion).
+    static let defaultCtx = 16384
     static let dynamicMoeTensorOverride = #"\.ffn_(up|down|gate|gate_up)_(ch|)exps=MTL0"#
     static let kvCacheTypes = ["f16", "q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl", "turbo4", "turbo3"]
 
@@ -1036,7 +1042,7 @@ struct ServerSettings {
             port: int(SettingsKeys.port, 8080),
             ngl: int(SettingsKeys.ngl, 99),
             ncmoe: int(SettingsKeys.ncmoe, 0),
-            ctx: int(SettingsKeys.ctx, 16384),
+            ctx: int(SettingsKeys.ctx, defaultCtx),
             contextAutomatic: bool(SettingsKeys.contextAutomatic, false),
             threads: int(SettingsKeys.threads, 6),
             flashAttn: d.string(forKey: SettingsKeys.flashAttn) ?? "auto",
@@ -1073,7 +1079,7 @@ struct ServerSettings {
             multiGPU: bool(SettingsKeys.multiGPU, false),
             multiGPUCount: int(SettingsKeys.multiGPUCount, 0),
             splitMode: d.string(forKey: SettingsKeys.splitMode) ?? "layer",
-            splitGroupSize: d.integer(forKey: SettingsKeys.splitGroupSize),
+            splitGroupSize: int(SettingsKeys.splitGroupSize, 0),
             mgpuEvents: bool(SettingsKeys.mgpuEvents, true),
             mgpuPeer: bool(SettingsKeys.mgpuPeer, true),
             forcePrivateBuffers: bool(SettingsKeys.forcePrivateBuffers, false),
@@ -1880,7 +1886,7 @@ struct ServerSettings {
     /// the primary server isn't in router mode (single-model requests omit it).
     static func activeRouterModel() -> String? {
         let d = UserDefaults.standard
-        guard d.bool(forKey: SettingsKeys.routerMode) else { return nil }
+        guard SettingsNumericCoercion.bool(SettingsKeys.routerMode, default: false, in: d) else { return nil }
         let alias = d.string(forKey: SettingsKeys.chatSelectedModel) ?? ""
         if !alias.isEmpty { return alias }
         // Default to the first model when the chat hasn't picked one yet (its

@@ -41,8 +41,8 @@ final class UpdateChecker: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                let enabled = UserDefaults.standard.object(forKey: SettingsKeys.updateAutoCheck) == nil
-                    || UserDefaults.standard.bool(forKey: SettingsKeys.updateAutoCheck)
+                // Tri-state absent-means-true, registry-typed (W4-5).
+                let enabled = SettingsNumericCoercion.bool(SettingsKeys.updateAutoCheck, default: true)
                 if enabled { await self?.check() }
             }
         }

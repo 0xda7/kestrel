@@ -287,6 +287,14 @@ enum SettingsKeys {
     }
 }
 
+/// Declared chat-setting defaults that more than one site must agree on.
+/// The agentic turn budget's default 10 existed as three hand-copied
+/// literals (reader, two @AppStorage bindings) plus two reset writers — one
+/// divergence and the chat's exhaustion UX stops matching the stepper (W4-10).
+enum ChatDefaults {
+    static let agenticMaxTurns = 10
+}
+
 // MARK: - Logging
 
 enum AppLog {

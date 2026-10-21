@@ -837,7 +837,7 @@ final class ImageGenerator: ObservableObject {
         let picked = split ? [gpuIndex, auxGPUIndex] : [gpuIndex]
         let anyExternal = picked.contains { $0 >= 0 && $0 < devices.count && devices[$0].location == .external }
             || (gpuIndex < 0 && MTLCreateSystemDefaultDevice()?.location == .external)
-        if UserDefaults.standard.bool(forKey: SettingsKeys.forcePrivateBuffers) || anyExternal {
+        if SettingsNumericCoercion.bool(SettingsKeys.forcePrivateBuffers, default: false) || anyExternal {
             env["GGML_METAL_SHARED_BUFFERS_DISABLE"] = "1"
         }
 
@@ -1113,25 +1113,42 @@ final class ImageGenPool: ObservableObject {
     /// updated app keeps the user's prompt and choices.
     private static func legacyConfig() -> ImageInstanceConfig {
         let d = UserDefaults.standard
-        func int(_ key: String, _ def: Int) -> Int { d.object(forKey: key) == nil ? def : d.integer(forKey: key) }
-        func dbl(_ key: String, _ def: Double) -> Double { d.object(forKey: key) == nil ? def : d.double(forKey: key) }
+        // Registry-typed, present-only overrides: the declared defaults live
+        // once, in ImageInstanceConfig's member defaults (the old inline
+        // literals duplicated them; drift read a silent 0/0.0 — W4-3).
         var c = ImageInstanceConfig()
         c.modelID = d.string(forKey: SettingsKeys.imagenModel) ?? ""
         c.customModelPath = d.string(forKey: SettingsKeys.imagenCustomModel) ?? ""
         c.customVAEPath = d.string(forKey: SettingsKeys.imagenCustomVAE) ?? ""
         c.customTextEncoderPath = d.string(forKey: SettingsKeys.imagenCustomTextEncoder) ?? ""
-        c.customIsDiffusion = d.bool(forKey: SettingsKeys.imagenCustomIsDiffusion)
-        c.customCfg = dbl(SettingsKeys.imagenCustomCfg, 7.0)
+        if let diffusion = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenCustomIsDiffusion, in: d) {
+            c.customIsDiffusion = diffusion
+        }
+        if let cfg = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenCustomCfg, in: d) {
+            c.customCfg = cfg
+        }
         c.prompt = d.string(forKey: SettingsKeys.imagenPrompt) ?? ""
         c.initImagePath = d.string(forKey: SettingsKeys.imagenInitImage) ?? ""
-        c.strength = dbl(SettingsKeys.imagenStrength, 0.6)
+        if let strength = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenStrength, in: d) {
+            c.strength = strength
+        }
         c.aspect = d.string(forKey: SettingsKeys.imagenAspect) ?? ImageAspect.square.rawValue
-        c.baseSize = int(SettingsKeys.imagenBaseSize, 1024)
-        c.gpuIndex = int(SettingsKeys.imagenGPU, 0)
-        c.steps = int(SettingsKeys.imagenSteps, 8)
-        c.seed = int(SettingsKeys.imagenSeed, -1)
+        if let baseSize = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenBaseSize, in: d) {
+            c.baseSize = baseSize
+        }
+        if let gpu = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenGPU, in: d) {
+            c.gpuIndex = gpu
+        }
+        if let steps = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: d) {
+            c.steps = steps
+        }
+        if let seed = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSeed, in: d) {
+            c.seed = seed
+        }
         c.format = d.string(forKey: SettingsKeys.imagenFormat) ?? ImageFormat.png.rawValue
-        c.offloadCPU = d.bool(forKey: SettingsKeys.imagenOffloadCPU)
+        if let offload = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenOffloadCPU, in: d) {
+            c.offloadCPU = offload
+        }
         return c
     }
 
@@ -1275,7 +1292,7 @@ final class ImageGenPool: ObservableObject {
     /// user opts in. Upscales of those files are kept: they are the version the
     /// user asked to produce, not accumulated output.
     nonisolated static func cleanupOutputsIfEnabled() {
-        guard UserDefaults.standard.bool(forKey: SettingsKeys.imagenCleanupOnClose) else { return }
+        guard SettingsNumericCoercion.bool(SettingsKeys.imagenCleanupOnClose, default: false) else { return }
         let dir = ServerSettings.modelsDirectory.appendingPathComponent("imagen", isDirectory: true)
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         for f in files {

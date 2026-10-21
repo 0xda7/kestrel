@@ -9,11 +9,13 @@ struct AudioVADCalibrationView: View {
 
     @AppStorage(SettingsKeys.audioVADMode) private var modeRaw = AudioVADMode.defaultMode.rawValue
     @AppStorage(SettingsKeys.audioVADProfile) private var profileRaw = AudioVADProfile.defaultProfile.rawValue
-    @AppStorage(SettingsKeys.audioVADThreshold) private var threshold = 0.5
-    @AppStorage(SettingsKeys.audioVADMinSpeechMS) private var minSpeechMS = 250.0
-    @AppStorage(SettingsKeys.audioVADMinSilenceMS) private var minSilenceMS = 100.0
-    @AppStorage(SettingsKeys.audioVADMaxSpeechSeconds) private var maxSpeechSeconds = 30.0
-    @AppStorage(SettingsKeys.audioVADSpeechPadMS) private var speechPadMS = 80.0
+    // Declared defaults single-sourced from the balanced profile — the same
+    // fallback AudioVADPreferences reads (W4-4: two literal copies could drift).
+    @AppStorage(SettingsKeys.audioVADThreshold) private var threshold = AudioVADProfile.balanced.calibration.threshold
+    @AppStorage(SettingsKeys.audioVADMinSpeechMS) private var minSpeechMS = Double(AudioVADProfile.balanced.calibration.minSpeechDurationMS)
+    @AppStorage(SettingsKeys.audioVADMinSilenceMS) private var minSilenceMS = Double(AudioVADProfile.balanced.calibration.minSilenceDurationMS)
+    @AppStorage(SettingsKeys.audioVADMaxSpeechSeconds) private var maxSpeechSeconds = AudioVADProfile.balanced.calibration.maxSpeechDurationSeconds
+    @AppStorage(SettingsKeys.audioVADSpeechPadMS) private var speechPadMS = Double(AudioVADProfile.balanced.calibration.speechPadMS)
 
     private var profile: AudioVADProfile {
         AudioVADProfile(rawValue: profileRaw) ?? .defaultProfile
