@@ -685,6 +685,23 @@ final class DflashPolicyTests: CheckCase {
         XCTAssertFalse(DflashPolicy.shouldWarn(fractions: [0.96, 0.94, 0.97]))
         XCTAssertTrue(DflashPolicy.shouldWarn(fractions: [0.96, 0.95, 0.94, 0.97]))
     }
+
+    /// Census §2.0 marker row 7 / mission T3-2 V5: the DFlash download
+    /// pill's caveat is the codebase's only genuine workaround marker — a
+    /// BUG-SHIELD disclosing that DFlash speculative decoding currently
+    /// regresses on full-GPU dense models and only wins with CPU-offloaded
+    /// experts. The disclosure is doctrine: pinned character-for-character
+    /// so it cannot be quietly edited away (drill: edit the caveat sentence
+    /// out of ModelsView.dflashDownloadHelpEN -> this check RED).
+    func testDownloadPillCaveatDisclosesHardwareClass() {
+        XCTAssertEqual(ModelsView.dflashDownloadHelpEN,
+                       "Download the DFlash draft for speculative decoding (experimental). For now it speeds up generation on MoE models with CPU-offloaded experts; on full-GPU dense models it can be slower.")
+        XCTAssertTrue(ModelsView.dflashDownloadHelpEN.contains(
+            "For now it speeds up generation on MoE models with CPU-offloaded experts; on full-GPU dense models it can be slower."),
+                      "the hardware-class disclosure sentence must survive any restructure")
+        XCTAssertEqual(ModelsView.dflashDownloadHelpES,
+                       "Descargar el draft DFlash para decodificación especulativa (experimental). Por ahora acelera la generación en modelos MoE con expertos en CPU (offload); en denso a GPU completa puede ser más lento.")
+    }
 }
 
 // MARK: - Image generation
@@ -2827,6 +2844,7 @@ extension DflashPolicyTests {
         checks: [
             .init(name: "testAutoAllowsDenseAndFullGPUModels") { $0.testAutoAllowsDenseAndFullGPUModels() },
             .init(name: "testRuntimeWarningRequiresThreeCriticalSamples") { $0.testRuntimeWarningRequiresThreeCriticalSamples() },
+            .init(name: "testDownloadPillCaveatDisclosesHardwareClass") { $0.testDownloadPillCaveatDisclosesHardwareClass() },
         ])
 }
 

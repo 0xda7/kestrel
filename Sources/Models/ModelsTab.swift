@@ -16,6 +16,18 @@ struct ModelsView: View {
 
     enum Tab: Hashable { case recommended, browse, mine }
 
+    /// Census §2.0 marker row 7 — the codebase's only genuine workaround
+    /// marker: a BUG-SHIELD disclosing a real upstream engine characteristic.
+    /// DFlash speculative decoding currently regresses on full-GPU dense
+    /// models and only wins with MoE models with CPU-offloaded experts, and
+    /// this caveat is the only thing between the operator and a
+    /// slower-by-default download. Its wording is therefore doctrine, pinned
+    /// character-for-character by
+    /// DflashPolicyTests.testDownloadPillCaveatDisclosesHardwareClass —
+    /// editing the caveat away turns that check RED. Revisit when upstream
+    /// speculative decoding changes.
+    nonisolated static let dflashDownloadHelpEN = "Download the DFlash draft for speculative decoding (experimental). For now it speeds up generation on MoE models with CPU-offloaded experts; on full-GPU dense models it can be slower."
+    nonisolated static let dflashDownloadHelpES = "Descargar el draft DFlash para decodificación especulativa (experimental). Por ahora acelera la generación en modelos MoE con expertos en CPU (offload); en denso a GPU completa puede ser más lento."
     var body: some View {
         VStack(spacing: 0) {
             ModelSectionSwitcher(selection: $tab, items: [
@@ -851,8 +863,9 @@ private struct FileRow: View {
     private func dflashPill(_ draft: SearchStore.DraftInfo) -> some View {
         AssetDownloadButton(
             icon: "bolt.circle", label: "DFlash",
-            help: loc.t("Descargar el draft DFlash para decodificación especulativa (experimental). Por ahora acelera la generación en modelos MoE con expertos en CPU (offload); en denso a GPU completa puede ser más lento.",
-                        "Download the DFlash draft for speculative decoding (experimental). For now it speeds up generation on MoE models with CPU-offloaded experts; on full-GPU dense models it can be slower."),
+            // The caveat wording is pinned doctrine (see ModelsView
+            // .dflashDownloadHelpEN); edit it away and that check goes RED.
+            help: loc.t(ModelsView.dflashDownloadHelpES, ModelsView.dflashDownloadHelpEN),
             downloaded: models.isDownloaded(fileName: draftName),
             item: models.downloadItem(fileName: draftName), busy: false, disabledReason: nil) {
             models.downloadDflashDraft(repo: draft.repo, file: draft.file, modelStem: stem)
