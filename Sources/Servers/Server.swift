@@ -2569,13 +2569,7 @@ final class ServerController: ObservableObject {
                                   file: Self.externalSlotFile(port: currentPort).lastPathComponent,
                                   timeout: 10)
         }
-        p.terminate()
-        var waited = 0
-        while p.isRunning && waited < 20 {
-            usleep(100_000)
-            waited += 1
-        }
-        if p.isRunning { kill(pid, SIGKILL) }
+        Self.terminateAndReap(p)
     }
 
     /// Restart with new settings, if currently up. Waits (bounded) for the old
@@ -2610,6 +2604,23 @@ final class ServerController: ObservableObject {
         let task = EngineHTTP.session.dataTask(with: req) { _, _, _ in done.signal() }
         task.resume()
         if done.wait(timeout: .now() + timeout) == .timedOut { task.cancel() }
+    }
+
+    /// Quit-path teardown, inline and bounded ON PURPOSE (census W2-3/W2-4
+    /// family, promoted to doctrine): a detached task does not outlive this
+    /// process, so the SIGTERM → bounded wait → SIGKILL ladder must complete
+    /// before app exit, or the engine orphans with its VRAM held until the
+    /// next launch reaps it. The cap is the contract — 20 × 100 ms, then
+    /// SIGKILL — pinned behaviorally by EngineTeardownTests against a
+    /// SIGTERM-immune child.
+    nonisolated static func terminateAndReap(_ p: Process) {
+        p.terminate()
+        var waited = 0
+        while p.isRunning && waited < 20 {
+            usleep(100_000)
+            waited += 1
+        }
+        if p.isRunning { kill(p.processIdentifier, SIGKILL) }
     }
 
     /// Restore the saved external-client prefix into slot 0 (only if a file exists).
