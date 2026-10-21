@@ -491,6 +491,14 @@ enum ToolCallRescue {
         return calls
     }
 
+    /// The call-site gate (ChatNative): rescue only when the engine's own
+    /// function-calling channel delivered nothing usable, the turn was not
+    /// cancelled, and no error was reported. Extracted verbatim from the
+    /// inline condition so the gate itself can be pinned (Mission C1 Phase B).
+    static func shouldRescue(channelToolCalls: [ChatToolCall], cancelled: Bool, reportedError: Bool) -> Bool {
+        channelToolCalls.filter { !$0.name.isEmpty }.isEmpty && !cancelled && !reportedError
+    }
+
     /// Extracts balanced `{...}` spans that look like tool-call objects:
     /// bare, fenced, or wrapped in `<tool_call>` tags. A naive brace-count is
     /// string-aware so braces inside quoted values do not break balancing.

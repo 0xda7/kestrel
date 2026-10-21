@@ -1133,7 +1133,8 @@ final class ChatStore: ObservableObject {
             // JSON blob or a <tool_call> tag instead of using the engine's
             // function-calling channel, then claim the tool ran. Salvage those
             // into real pending calls so permissions still flow.
-            if rescuedToolCalls.isEmpty, !wasCancelled, !didReportError {
+            if ToolCallRescue.shouldRescue(channelToolCalls: accumulator.toolCalls,
+                                           cancelled: wasCancelled, reportedError: didReportError) {
                 // Rescue from the visible answer only: a call the model merely
                 // reasoned about inside <think> must not fire a real tool.
                 let visible = hadReasoning
