@@ -849,7 +849,8 @@ final class ChatStore: ObservableObject {
             let window = ServerSettings.liveResolvedCtx(port: port)
             let estimate = Self.estimatedRequestTokens(messages: conversations[i].messages,
                                                        system: systemWithCwd)
-            if window > 0, estimate + maxTokens + 256 > window {
+            let margin = Self.responseMarginTokens()
+            if window > 0, estimate + maxTokens + margin > window {
                 conversations[i].messages.append(ChatMessage(
                     role: "assistant", content: Self.contextOverflowNotice(
                         estimated: estimate, window: window)))
@@ -860,7 +861,8 @@ final class ChatStore: ObservableObject {
                 save()
                 return
             }
-            sentMaxTokens = Self.clampedResponseTokens(maxTokens, window: window, estimatedPrompt: estimate)
+            sentMaxTokens = Self.clampedResponseTokens(maxTokens, window: window, estimatedPrompt: estimate,
+                                                       margin: margin)
         } else {
             sentMaxTokens = maxTokens
         }
@@ -1863,12 +1865,42 @@ final class ChatStore: ObservableObject {
         system.utf8.count / 4 + messages.reduce(0) { $0 + $1.estimatedTokens }
     }
 
+    /// The response-token headroom the operator set (T3-1, census W3-3).
+    /// Absent key -> the declared default; a drifted String is reported and
+    /// the declared default applies, never a silent coercion.
+    nonisolated static func responseMarginTokens(in defaults: UserDefaults = .standard) -> Int {
+        SettingsNumericCoercion.int(SettingsKeys.chatResponseMarginTokens,
+                                    default: ChatDefaults.responseMarginTokens, in: defaults)
+    }
+
+    /// Whether auto-compaction is due: the operator's trigger (T3-1, census
+    /// W3-1) fraction of the live window has been consumed.
+    nonisolated static func autoCompactionDue(contextUsed: Int, window: Int,
+                                              in defaults: UserDefaults = .standard) -> Bool {
+        guard window > 0, contextUsed >= 0 else { return false }
+        let trigger = SettingsNumericCoercion.double(SettingsKeys.chatCompactionTrigger,
+                                                     default: ChatDefaults.compactionTrigger,
+                                                     in: defaults)
+        return Double(contextUsed) / Double(window) > trigger
+    }
+
+    /// How many recent tokens auto-compaction must leave un-summarized: the
+    /// operator's keep-tail fraction (T3-1, census W3-2) of the live window.
+    nonisolated static func compactionKeepTailTokens(window: Int,
+                                                     in defaults: UserDefaults = .standard) -> Int {
+        guard window > 0 else { return 0 }
+        let fraction = SettingsNumericCoercion.double(SettingsKeys.chatCompactionKeepTailFraction,
+                                                      default: ChatDefaults.compactionKeepTailFraction,
+                                                      in: defaults)
+        return Int((Double(window) * fraction).rounded())
+    }
+
     /// A turn may never reserve more room than the window has left after the
     /// prompt: an uncapped repetition loop otherwise decodes to the window
     /// edge, the server truncates the reply into history, and the next
     /// exchange no longer fits (the 65,547-token wedge).
     nonisolated static func clampedResponseTokens(_ requested: Int, window: Int, estimatedPrompt: Int,
-                                                  margin: Int = 256) -> Int {
+                                                  margin: Int = ChatDefaults.responseMarginTokens) -> Int {
         guard window > 0 else { return requested }
         return max(1, min(requested, window - estimatedPrompt - margin))
     }
@@ -1881,12 +1913,14 @@ final class ChatStore: ObservableObject {
     /// them, because a wedge-proof partial summary beats a permanent deadlock.
     nonisolated static func compactionPrompt(summary: String?, messages: [ChatMessage],
                                              window: Int,
-                                             summaryResponseTokens: Int = 512) -> (prompt: String, dropped: Int) {
+                                             summaryResponseTokens: Int = 512,
+                                             margin: Int = ChatDefaults.responseMarginTokens)
+                                             -> (prompt: String, dropped: Int) {
         func line(_ m: ChatMessage) -> String {
             (m.role == "user" ? "User: " : "Assistant: ")
                 + (m.role == "assistant" ? m.parts.body : m.content) + "\n\n"
         }
-        let budget = window - summaryResponseTokens - 256
+        let budget = window - summaryResponseTokens - margin
         guard budget > 0, !messages.isEmpty else {
             return ("Conversation to summarize:\n\n" + messages.map(line).joined(), 0)
         }
@@ -2063,11 +2097,13 @@ final class ChatStore: ObservableObject {
         let limit = ServerSettings.liveResolvedCtx(port: port)
         guard enabled, !generating, !compacting, limit > 0,
               let i = conversations.firstIndex(where: { $0.id == id }),
-              let used = conversations[i].contextUsed, Double(used) / Double(limit) > 0.7 else { return }
+              let used = conversations[i].contextUsed,
+              Self.autoCompactionDue(contextUsed: used, window: limit, in: d) else { return }
         let start = conversations[i].summarizedCount ?? 0
         guard let cutoff = Self.compactionCutoff(messages: conversations[i].messages,
                                                  alreadyCompacted: start,
-                                                 keepTokens: limit / 4) else { return }
+                                                 keepTokens: Self.compactionKeepTailTokens(window: limit, in: d))
+        else { return }
         compact(conversation: id, index: i, from: start, through: cutoff, port: port)
     }
 
@@ -2095,7 +2131,8 @@ final class ChatStore: ObservableObject {
         // a partial summary instead of a conversation that can never compact.
         let built = Self.compactionPrompt(summary: conversations[i].summary,
                                           messages: Array(conversations[i].messages[start..<cutoff]),
-                                          window: ServerSettings.liveResolvedCtx(port: port))
+                                          window: ServerSettings.liveResolvedCtx(port: port),
+                                          margin: Self.responseMarginTokens())
         if built.dropped > 0 {
             AppLog.chat.warning("compaction prompt dropped \(built.dropped) leading message(s) to fit the window")
         }

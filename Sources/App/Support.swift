@@ -137,6 +137,10 @@ enum SettingsKeys {
     static let mgpuPeer = "mgpuPeer"
     static let forcePrivateBuffers = "forcePrivateBuffers"
     static let cacheReuse = "cacheReuse"
+    /// The --cache-reuse chunk size passed when prompt-cache reuse is on
+    /// (census W3-4): read by both writers, the single-model argv and the
+    /// router preset, so the two can never drift apart again.
+    static let cacheReuseWindowSize = "cacheReuseWindowSize"
     static let loadVision = "loadVision"
     static let imageMaxTokens = "imageMaxTokens"
     static let apiKeyEnabled = "apiKeyEnabled"
@@ -182,6 +186,16 @@ enum SettingsKeys {
     /// preference excluded from resettableOptionKeys, not a real "setting".
     static let chatSortOrder = "chatSortOrder"
     static let chatAutoCompact = "chatAutoCompact"
+    /// The context fraction consumed before auto-compaction fires
+    /// (census W3-1; was a hardwired 0.7).
+    static let chatCompactionTrigger = "chatCompactionTrigger"
+    /// The fraction of the window auto-compaction must leave un-summarized
+    /// (census W3-2; was limit/4).
+    static let chatCompactionKeepTailFraction = "chatCompactionKeepTailFraction"
+    /// Response-token headroom subtracted when clamping a turn to the window
+    /// (census W3-3): one setting drives three sites — the context-trap turn
+    /// guard, clampedResponseTokens, and the compaction-prompt budget.
+    static let chatResponseMarginTokens = "chatResponseMarginTokens"
     static let chatShowSystemMessage = "chatShowSystemMessage"
     static let smoothTyping = "smoothTyping"
     static let chatFontScale = "chatFontScale"
@@ -265,7 +279,7 @@ enum SettingsKeys {
         parallelSlots, reasoningInline, specMTP, mtpDisabledModels, faAmd, prefetchExperts, ubatch,
         dynamicMoe, dynamicMoeSlots, dynamicMoePrefetch, dynamicMoePolicy, routerMode, routerModelsMax,
         persistCache, multiGPU, multiGPUCount, splitMode, splitGroupSize, mgpuEvents, mgpuPeer,
-        forcePrivateBuffers, cacheReuse, apiKeyEnabled, localNetworkDiscovery,
+        forcePrivateBuffers, cacheReuse, cacheReuseWindowSize, apiKeyEnabled, localNetworkDiscovery,
         menuBarIcon, menuBarGPU, autoStart, updateAutoCheck, appAccent,
         chatTemp, chatMaxTokens, chatSystem, chatThinking, chatReasoningEffort,
         chatTopP, chatMinP, chatTopK,
@@ -276,7 +290,8 @@ enum SettingsKeys {
         chatBackendSampling, chatCustomJSON, chatAgenticMaxTurns,
         chatPasteLongTextLength, chatMaxImageMegapixels,
         chatPDFAsImages,
-        chatAutoCompact, chatShowSystemMessage, smoothTyping,
+        chatAutoCompact, chatCompactionTrigger, chatCompactionKeepTailFraction,
+        chatResponseMarginTokens, chatShowSystemMessage, smoothTyping,
         imagenAspect, imagenBaseSize, imagenSteps, imagenFormat, imagenOffloadCPU, imagenGPU,
     ]
 
@@ -293,6 +308,15 @@ enum SettingsKeys {
 /// divergence and the chat's exhaustion UX stops matching the stepper (W4-10).
 enum ChatDefaults {
     static let agenticMaxTurns = 10
+    /// Auto-compaction fires once this fraction of the live window is
+    /// consumed (census W3-1).
+    static let compactionTrigger = 0.7
+    /// Fraction of the window auto-compaction leaves un-summarized
+    /// (census W3-2; was the hardwired limit/4).
+    static let compactionKeepTailFraction = 0.25
+    /// Response-token headroom subtracted when clamping a turn to the
+    /// window (census W3-3; was a 256 literal at three independent sites).
+    static let responseMarginTokens = 256
 }
 
 // MARK: - Logging

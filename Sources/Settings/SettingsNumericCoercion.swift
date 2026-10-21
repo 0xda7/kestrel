@@ -59,6 +59,7 @@ enum SettingsNumericCoercion {
         SettingsKeys.benchPP: .int,
         SettingsKeys.benchTG: .int,
         SettingsKeys.cacheRAM: .int,
+        SettingsKeys.cacheReuseWindowSize: .int,
         SettingsKeys.ctx: .int,
         SettingsKeys.dynamicMoePrefetch: .int,
         SettingsKeys.dynamicMoeSlots: .int,
@@ -92,6 +93,10 @@ enum SettingsNumericCoercion {
         SettingsKeys.chatMaxImageMegapixels: .double,
         SettingsKeys.imagenCustomCfg: .double,
         SettingsKeys.imagenStrength: .double,
+        // The engine's secret-run constants become settings (T3-1, census
+        // W3-1/W3-2): the compaction trigger and keep-tail fraction.
+        SettingsKeys.chatCompactionKeepTailFraction: .double,
+        SettingsKeys.chatCompactionTrigger: .double,
         // Chat sampling numerics (@AppStorage(Double/Int)) — the first
         // cured class (6f7478b).
         SettingsKeys.chatTemp: .double,
@@ -115,6 +120,9 @@ enum SettingsNumericCoercion {
         SettingsKeys.chatMaxTokens: .int,
         SettingsKeys.chatAgenticMaxTurns: .int,
         SettingsKeys.chatPasteLongTextLength: .int,
+        // Response-token window headroom (T3-1, census W3-3; one setting,
+        // three sites).
+        SettingsKeys.chatResponseMarginTokens: .int,
         // Bool states, read directly (fromDefaults, bare bool(forKey:), or
         // `as? Bool ?? default`).
         SettingsKeys.agentToolsEnabled: .bool,

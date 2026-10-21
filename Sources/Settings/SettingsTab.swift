@@ -50,6 +50,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.embeddings) private var embeddings = false
     @AppStorage(SettingsKeys.forcePrivateBuffers) private var forcePrivateBuffers = false
     @AppStorage(SettingsKeys.cacheReuse) private var cacheReuse = true
+    @AppStorage(SettingsKeys.cacheReuseWindowSize) private var cacheReuseWindowSize = ServerSettings.defaultCacheReuseWindowSize
     @AppStorage(SettingsKeys.extraArgs) private var extraArgs = ""
     @AppStorage(SettingsKeys.cacheTypeK) private var cacheTypeK = "f16"
     @AppStorage(SettingsKeys.cacheTypeV) private var cacheTypeV = "f16"
@@ -1076,6 +1077,10 @@ struct SettingsView: View {
                     .settingsGlyph("arrow.triangle.2.circlepath")
                     .infoTip(loc.t("Cuando reescribes/editas el prompt (asistentes de código) o se recorta el razonamiento entre turnos, reutiliza la caché desplazándola en vez de reprocesar — mucho más rápido. Es una aproximación: la salida sigue coherente pero puede variar levemente frente a un cálculo exacto. Desactívalo si quieres resultados idénticos y reproducibles.",
                                 "When the prompt is rewritten/edited (coding assistants) or the reasoning is trimmed between turns, it reuses the cache by shifting it instead of reprocessing — much faster. It's an approximation: output stays coherent but can differ slightly from an exact recompute. Turn it off for identical, reproducible results."))
+                Stepper("Cache reuse window (tokens): \(cacheReuseWindowSize)",
+                        value: $cacheReuseWindowSize, in: 16...8192, step: 16)
+                    .settingsGlyph("arrow.triangle.2.circlepath")
+                    .infoTip("Chunk size for prompt-cache reuse (--cache-reuse): how much of a shifted prompt is reprocessed in one piece when it diverges mid-way. Applies when prompt cache reuse is on and no projector is loaded.")
                 Stepper(loc.t("Hilos de CPU: %@", "CPU threads: %@", "\(threads)"),
                         value: $threads, in: 1...max(1, hardware.logicalCores))
                     .settingsGlyph("cpu")

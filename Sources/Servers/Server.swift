@@ -172,6 +172,14 @@ struct ServerSettings {
     /// Reuse shifted KV chunks across mid-prompt divergences (agent edits, a
     /// stripped <think>). Fast but approximate, hence user-toggleable.
     var cacheReuse: Bool = true
+    /// The declared --cache-reuse chunk size (T3-1, census W3-4). One source:
+    /// the struct default, fromDefaults' typed read, and the UI binding all
+    /// reference it, so the two writers (argv and router preset) can never
+    /// disagree about what the engine runs.
+    static let defaultCacheReuseWindowSize = 256
+    /// The chunk size passed as --cache-reuse when `cacheReuse` is on and no
+    /// projector is loaded. Read by both writers.
+    var cacheReuseWindowSize: Int = ServerSettings.defaultCacheReuseWindowSize
     /// Load the multimodal projector (mmproj) for vision-capable models. Off skips it
     /// so a vision model runs text-only and frees the VRAM the image encoder would use.
     var loadVision: Bool = true
@@ -528,7 +536,7 @@ struct ServerSettings {
         args.append("--metrics")
         args += ["--cache-ram", String(cacheRAM)]
         if cacheReuse && mmproj == nil {
-            args += ["--cache-reuse", "256"]
+            args += ["--cache-reuse", String(cacheReuseWindowSize)]
         }
         if parallelSlots > 0 { args += ["--parallel", String(parallelSlots)] }
         // An explicit --parallel N splits the context pool across slots instead of
@@ -789,7 +797,7 @@ struct ServerSettings {
             if kv.k != "f16" { lines.append("cache-type-k = \(kv.k)") }
             if kv.v != "f16" { lines.append("cache-type-v = \(kv.v)") }
             lines.append("cache-ram = \(cacheRAM)")
-            if cacheReuse && mmproj == nil { lines.append("cache-reuse = 256") }
+            if cacheReuse && mmproj == nil { lines.append("cache-reuse = \(cacheReuseWindowSize)") }
             if parallelSlots > 0 { lines.append("parallel = \(parallelSlots)") }
             if parallelSlots > 1 { lines.append("kv-unified = true") }
             if isSplitting { lines.append("split-mode = \(effectiveSplitMode)") }
@@ -1164,6 +1172,8 @@ struct ServerSettings {
             mgpuPeer: bool(SettingsKeys.mgpuPeer, true),
             forcePrivateBuffers: bool(SettingsKeys.forcePrivateBuffers, false),
             cacheReuse: bool(SettingsKeys.cacheReuse, true),
+            cacheReuseWindowSize: int(SettingsKeys.cacheReuseWindowSize,
+                                      ServerSettings.defaultCacheReuseWindowSize),
             loadVision: bool(SettingsKeys.loadVision, true),
             imageMaxTokens: int(SettingsKeys.imageMaxTokens, 0),
             benchPP: int(SettingsKeys.benchPP, 512),

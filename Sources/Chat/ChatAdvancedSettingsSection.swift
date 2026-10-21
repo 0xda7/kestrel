@@ -40,6 +40,9 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.chatBackendSampling) private var backendSampling = false
     @AppStorage(SettingsKeys.chatCustomJSON) private var customJSON = ""
     @AppStorage(SettingsKeys.chatAgenticMaxTurns) private var agenticMaxTurns = ChatDefaults.agenticMaxTurns
+    @AppStorage(SettingsKeys.chatCompactionTrigger) private var compactionTrigger = ChatDefaults.compactionTrigger
+    @AppStorage(SettingsKeys.chatCompactionKeepTailFraction) private var compactionKeepTailFraction = ChatDefaults.compactionKeepTailFraction
+    @AppStorage(SettingsKeys.chatResponseMarginTokens) private var responseMarginTokens = ChatDefaults.responseMarginTokens
     @AppStorage(SettingsKeys.chatPasteLongTextLength) private var pasteLongTextLength = 2500
     @AppStorage(SettingsKeys.chatMaxImageMegapixels) private var maxImageMegapixels = 1.0
     @AppStorage(SettingsKeys.chatPDFAsImages) private var pdfAsImages = false
@@ -63,6 +66,12 @@ struct ChatAdvancedSettingsSection: View {
                                         "When the conversation nears the context limit, older messages are summarized automatically so it can keep answering without losing the thread.")) {
                     SettingsToggle(isOn: $autoCompact)
                 }
+                parameterSlider("Compaction trigger", value: $compactionTrigger, range: 0.1...0.95,
+                                help: "Auto-compact once this fraction of the context window is in use. Lower compacts earlier; raise it to summarize less often.")
+                parameterSlider("Compaction keep-tail", value: $compactionKeepTailFraction, range: 0.05...0.5,
+                                help: "Fraction of the window auto-compaction must leave un-summarized, so recent turns stay verbatim; the rest becomes the running summary.")
+                integerStepper("Response margin (tokens)", value: $responseMarginTokens, range: 0...4096, step: 64,
+                               help: "Headroom kept between the prompt and the context window when capping a response. A larger margin leaves room for engine overhead and long tool turns.")
                 SettingsRow(icon: "text.cursor",
                             title: loc.t("Animación de escritura fluida", "Smooth typing animation"),
                             help: loc.t("Anima la aparición del texto token a token. Desactívalo si prefieres que el texto aparezca de golpe o notas parpadeo.",
@@ -478,6 +487,9 @@ struct ChatAdvancedSettingsSection: View {
         dryBase = 1.75; dryAllowedLength = 2; dryPenaltyLastN = 0; samplers = ""
         stopSequences = ""
         backendSampling = false; customJSON = ""; agenticMaxTurns = ChatDefaults.agenticMaxTurns; pasteLongTextLength = 2500
+        compactionTrigger = ChatDefaults.compactionTrigger
+        compactionKeepTailFraction = ChatDefaults.compactionKeepTailFraction
+        responseMarginTokens = ChatDefaults.responseMarginTokens
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
         memoryToolsEnabled = true; toolsRuntime = ""
