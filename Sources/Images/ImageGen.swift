@@ -4,6 +4,7 @@
 
 import SwiftUI
 import Metal
+import os
 import Combine
 import ImageIO
 import UniformTypeIdentifiers
@@ -997,29 +998,74 @@ struct ImageInstanceConfig: Codable, Identifiable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
-        modelID = (try? c.decode(String.self, forKey: .modelID)) ?? ""
-        customModelPath = (try? c.decode(String.self, forKey: .customModelPath)) ?? ""
-        customVAEPath = (try? c.decode(String.self, forKey: .customVAEPath)) ?? ""
-        customTextEncoderPath = (try? c.decode(String.self, forKey: .customTextEncoderPath)) ?? ""
-        customIsDiffusion = (try? c.decode(Bool.self, forKey: .customIsDiffusion)) ?? false
-        customCfg = (try? c.decode(Double.self, forKey: .customCfg)) ?? 7.0
-        prompt = (try? c.decode(String.self, forKey: .prompt)) ?? ""
-        negativePrompt = (try? c.decode(String.self, forKey: .negativePrompt)) ?? ""
-        initImagePath = (try? c.decode(String.self, forKey: .initImagePath)) ?? ""
-        referenceImagePaths = (try? c.decode([String].self, forKey: .referenceImagePaths)) ?? []
-        maskPath = (try? c.decode(String.self, forKey: .maskPath)) ?? ""
-        strength = (try? c.decode(Double.self, forKey: .strength)) ?? 0.6
-        aspect = (try? c.decode(String.self, forKey: .aspect)) ?? ImageAspect.square.rawValue
-        customAspect = (try? c.decode(String.self, forKey: .customAspect)) ?? "21:9"
-        baseSize = (try? c.decode(Int.self, forKey: .baseSize)) ?? 1024
-        gpuIndex = (try? c.decode(Int.self, forKey: .gpuIndex)) ?? 0
-        auxGPUIndex = (try? c.decode(Int.self, forKey: .auxGPUIndex)) ?? -1
-        steps = (try? c.decode(Int.self, forKey: .steps)) ?? 8
-        seed = (try? c.decode(Int.self, forKey: .seed)) ?? -1
-        format = (try? c.decode(String.self, forKey: .format)) ?? ImageFormat.png.rawValue
-        offloadCPU = (try? c.decode(Bool.self, forKey: .offloadCPU)) ?? false
-        fastMode = (try? c.decode(String.self, forKey: .fastMode)) ?? ImageFastMode.off.rawValue
+        // Census W8 ImageGen:1000-1022 (T2-3 chunk D): the field-tolerant
+        // decode keeps its semantics byte-identical — an ABSENT key still
+        // quietly keeps its default (first-launch and older payloads are not
+        // drift) — but a PRESENT key that fails to decode now records drift
+        // naming the field, so a renamed/removed schema entry can never
+        // silently reset that user setting again. One English line per
+        // decode, not one per field.
+        var drifted: [String] = []
+        func read<T: Decodable>(_ key: CodingKeys, default fallback: T, named name: String) -> T {
+            do {
+                return try c.decodeIfPresent(T.self, forKey: key) ?? fallback
+            } catch {
+                drifted.append(name)
+                return fallback
+            }
+        }
+        id = read(.id, default: UUID(), named: "id")
+        modelID = read(.modelID, default: "", named: "modelID")
+        customModelPath = read(.customModelPath, default: "", named: "customModelPath")
+        customVAEPath = read(.customVAEPath, default: "", named: "customVAEPath")
+        customTextEncoderPath = read(.customTextEncoderPath, default: "", named: "customTextEncoderPath")
+        customIsDiffusion = read(.customIsDiffusion, default: false, named: "customIsDiffusion")
+        customCfg = read(.customCfg, default: 7.0, named: "customCfg")
+        prompt = read(.prompt, default: "", named: "prompt")
+        negativePrompt = read(.negativePrompt, default: "", named: "negativePrompt")
+        initImagePath = read(.initImagePath, default: "", named: "initImagePath")
+        referenceImagePaths = read(.referenceImagePaths, default: [String](), named: "referenceImagePaths")
+        maskPath = read(.maskPath, default: "", named: "maskPath")
+        strength = read(.strength, default: 0.6, named: "strength")
+        aspect = read(.aspect, default: ImageAspect.square.rawValue, named: "aspect")
+        customAspect = read(.customAspect, default: "21:9", named: "customAspect")
+        baseSize = read(.baseSize, default: 1024, named: "baseSize")
+        gpuIndex = read(.gpuIndex, default: 0, named: "gpuIndex")
+        auxGPUIndex = read(.auxGPUIndex, default: -1, named: "auxGPUIndex")
+        steps = read(.steps, default: 8, named: "steps")
+        seed = read(.seed, default: -1, named: "seed")
+        format = read(.format, default: ImageFormat.png.rawValue, named: "format")
+        offloadCPU = read(.offloadCPU, default: false, named: "offloadCPU")
+        fastMode = read(.fastMode, default: ImageFastMode.off.rawValue, named: "fastMode")
+        if let notice = Self.driftNotice(id: id.uuidString, fields: drifted) {
+            AppLog.app.warning("\(notice, privacy: .public)")
+        }
+    }
+
+    /// Census W8 ImageGen:1000-1022 (T2-3 chunk D): the single English drift
+    /// line for one decode — the config id plus every field that was present
+    /// in the stored payload but could not be decoded (a renamed/removed
+    /// schema entry) and therefore kept its default. Nil when nothing
+    /// drifted, so first-launch and healthy decodes stay quiet. Pure so
+    /// checks can pin both outcomes (D3).
+    static func driftNotice(id: String, fields: [String]) -> String? {
+        guard !fields.isEmpty else { return nil }
+        return "Image studio configuration \(id): field(s) [\(fields.joined(separator: ", "))] could not be read from the saved data and were reset to their defaults (possible schema drift)"
+    }
+
+    /// Census W8 ImageGen:1104 (T2-3 chunk D): the stored-configurations
+    /// decode, in the T2-2 profiles-decode pattern. Returns the configs plus
+    /// an English notice when the store cannot be decoded at all — the
+    /// caller logs the notice and falls back to the legacy seed instead of
+    /// resetting the user's studio silently. A decode that succeeds (even to
+    /// an empty array) returns no notice. Pure so checks can pin both
+    /// outcomes (D3).
+    static func decodeConfigs(from data: Data) -> (configs: [ImageInstanceConfig], unreadable: String?) {
+        do {
+            return (try JSONDecoder().decode([ImageInstanceConfig].self, from: data), nil)
+        } catch {
+            return ([], "Saved image studio configurations unreadable; starting fresh: \(error.localizedDescription)")
+        }
     }
 
     var isCustom: Bool { modelID == ImageGenCatalog.customID }
@@ -1100,13 +1146,22 @@ final class ImageGenPool: ObservableObject {
     private var forwards: [UUID: AnyCancellable] = [:]
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: SettingsKeys.imagenInstances),
-           let c = try? JSONDecoder().decode([ImageInstanceConfig].self, from: data),
-           !c.isEmpty {
-            configs = c
-        } else {
-            configs = [Self.legacyConfig()]
+        if let data = UserDefaults.standard.data(forKey: SettingsKeys.imagenInstances) {
+            let (c, unreadable) = ImageInstanceConfig.decodeConfigs(from: data)
+            if let unreadable {
+                // Census W8 ImageGen:1104 (T2-3 chunk D): the fallback below
+                // starts fresh, but an unreadable store is named instead of
+                // resetting the user's studio setups silently (T2-2
+                // profiles-decode pattern). A valid — even empty — store
+                // stays quiet.
+                AppLog.app.warning("\(unreadable, privacy: .public)")
+            }
+            if !c.isEmpty {
+                configs = c
+                return
+            }
         }
+        configs = [Self.legacyConfig()]
     }
 
     /// Seed instance 1 from the pre-multi-instance per-key settings, so an
@@ -1294,7 +1349,16 @@ final class ImageGenPool: ObservableObject {
     nonisolated static func cleanupOutputsIfEnabled() {
         guard SettingsNumericCoercion.bool(SettingsKeys.imagenCleanupOnClose, default: false) else { return }
         let dir = ServerSettings.modelsDirectory.appendingPathComponent("imagen", isDirectory: true)
-        let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        } catch {
+            // Census W8 ImageGen:1280→1297 (T2-3 chunk D): the promised
+            // cleanup-on-quit silently skipped when the scan failed, so
+            // outputs could pile up unnoticed. Name the skip instead.
+            AppLog.app.error("Could not scan \(dir.path, privacy: .public) for image-output cleanup; cleanup skipped: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         for f in files {
             let name = f.deletingPathExtension().lastPathComponent
             guard name.hasPrefix("kestrel_"), !name.contains("-x2"), !name.contains("-x4") else { continue }
@@ -1318,8 +1382,17 @@ final class ImageGenPool: ObservableObject {
     }
 
     private func save() {
-        UserDefaults.standard.set(try? JSONEncoder().encode(configs),
-                                  forKey: SettingsKeys.imagenInstances)
+        do {
+            let data = try JSONEncoder().encode(configs)
+            UserDefaults.standard.set(data, forKey: SettingsKeys.imagenInstances)
+        } catch {
+            // Census W8 ImageGen:1304→1320 (T2-3 chunk D): an encode failure
+            // used to UserDefaults.set(nil) the key away — silently deleting
+            // the stored configurations so the next launch started fresh.
+            // The save is skipped (the last good store survives) and the
+            // failure is named.
+            AppLog.app.error("Could not encode the image studio configurations; keeping the previously saved set: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 

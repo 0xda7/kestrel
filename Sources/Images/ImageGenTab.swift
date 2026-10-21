@@ -1458,9 +1458,36 @@ struct ImageInstanceForm: View {
     panel.allowsMultipleSelection = false
     panel.prompt = loc.t("Guardar aquí", "Save here")
     guard panel.runModal() == .OK, let dir = panel.url else { return }
+    // Census W8 ImageGenTab:1462 (T2-3 chunk D): a failed copy used to
+    // vanish, so "Save all" could silently drop images. Per-file failures
+    // are collected and named after the loop — one file's failure must not
+    // abort the rest.
+    var failures: [(file: String, reason: String)] = []
     for src in urls {
-        try? FileManager.default.copyItem(at: src, to: dir.appendingPathComponent(src.lastPathComponent))
+        do {
+            try FileManager.default.copyItem(at: src, to: dir.appendingPathComponent(src.lastPathComponent))
+        } catch {
+            failures.append((src.lastPathComponent, error.localizedDescription))
+        }
     }
+    if let message = imageCopyFailureSummary(failures, destinationName: dir.lastPathComponent) {
+        let alert = NSAlert()
+        alert.messageText = "Kestrel"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+}
+
+/// Census W8 ImageGenTab:1462 (T2-3 chunk D): the English summary for the
+/// per-file copy failures of saveImagesToFolder, naming every file that
+/// could not be copied. Nil when every copy succeeded. Pure so checks can
+/// pin which files are named (D3).
+func imageCopyFailureSummary(_ failures: [(file: String, reason: String)],
+                             destinationName: String) -> String? {
+    guard !failures.isEmpty else { return nil }
+    let named = failures.map { "\($0.file) (\($0.reason))" }.joined(separator: "; ")
+    return "Some images could not be copied to \(destinationName): \(named)"
 }
 
 /// Turn the engine's failure sentinel into a bilingual, actionable message.
