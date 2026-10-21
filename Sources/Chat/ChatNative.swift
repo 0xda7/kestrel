@@ -1075,10 +1075,11 @@ final class ChatStore: ObservableObject {
                 }
                 // Pin to slot 0 so the saved/restored KV always matches the chat.
                 if self?.slotPersistEnabled == true { body["id_slot"] = 0 }
-                if let data = sampling.customJSON.data(using: .utf8),
-                   let custom = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    body.merge(custom) { _, customValue in customValue }
-                }
+                // Census W8 ChatNative:1014: the operator's custom sampling is
+                // never silently dropped — the same strict rule the settings
+                // gate enforces, and a miss (stale or imported value) fails
+                // the turn instead of sending different sampling.
+                body = try Self.mergedCustomSampling(body, customJSON: sampling.customJSON)
                 let wire = RouteWire.wire(body: body, port: port, route: remote ? route : nil,
                                           localAPIKey: ServerSettings.activeAPIKey(),
                                           remoteAPIKey: remote
@@ -2098,13 +2099,31 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    private func applyCompaction(conversation id: UUID, cutoff: Int, summary: String?) {
+    func applyCompaction(conversation id: UUID, cutoff: Int, summary: String?) {
         compacting = false
         guard let summary, let i = conversations.firstIndex(where: { $0.id == id }),
               cutoff <= conversations[i].messages.count else { return }
         conversations[i].summary = summary
         conversations[i].summarizedCount = cutoff
         save()
+    }
+
+    /// Merges the operator's custom sampling JSON into the request body —
+    /// the one strict rule, shared with the settings gate
+    /// (ChatSamplingSettings.customJSONIssue): an empty field merges nothing,
+    /// a JSON object overrides key by key, anything else is a typed
+    /// rejection, never a silent drop (census W8 ChatNative:1014).
+    nonisolated static func mergedCustomSampling(_ body: [String: Any],
+                                                 customJSON: String) throws -> [String: Any] {
+        if let issue = ChatSamplingSettings.customJSONIssue(customJSON) {
+            throw StreamError(message: "Custom sampling JSON \(issue). The turn was not sent; fix or clear it in Settings → Chat → Advanced.")
+        }
+        guard let data = customJSON.data(using: .utf8),
+              let custom = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return body }
+        var merged = body
+        merged.merge(custom) { _, customValue in customValue }
+        return merged
     }
 
     /// Non-streamed completion that condenses old turns. Returns nil on any
@@ -2127,19 +2146,41 @@ final class ChatStore: ObservableObject {
             "chat_template_kwargs": ["enable_thinking": false],
         ]
         if let model = ServerSettings.activeRouterModel() { body["model"] = model }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (data, response) = try? await EngineHTTP.session.data(for: req),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        // Census W8 ChatNative:2014-2017: every failure stage names itself —
+        // a single opaque nil once hid whether the body encode, the send, the
+        // HTTP status or the response shape failed. The wedge-proof caller
+        // contract (5a455ce) is unchanged: nil leaves the conversation
+        // uncompacted and retryable (pinned by ChatImportSurfacingTests).
+        guard let httpBody = try? JSONSerialization.data(withJSONObject: body) else {
+            AppLog.chat.error("compaction summarize failed: request body did not encode")
+            return nil
+        }
+        req.httpBody = httpBody
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await EngineHTTP.session.data(for: req)
+        } catch {
+            AppLog.chat.error("compaction summarize failed: \(error.localizedDescription)")
+            return nil
+        }
+        guard let status = (response as? HTTPURLResponse)?.statusCode, status == 200 else {
+            AppLog.chat.error("compaction summarize failed: engine answered HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+            return nil
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = obj["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String else {
-            AppLog.chat.error("compaction summarize request failed")
+            AppLog.chat.error("compaction summarize failed: unreadable response body")
             return nil
         }
         // Reasoning models may emit a think block anyway; keep only the body.
         let text = ChatMessage(role: "assistant",
                                content: content.trimmingCharacters(in: .whitespacesAndNewlines)).parts.body
+        if text.isEmpty {
+            AppLog.chat.error("compaction summarize failed: the model returned an empty summary")
+        }
         return text.isEmpty ? nil : text
     }
 
@@ -2477,16 +2518,23 @@ final class ChatStore: ObservableObject {
         try ChatJSONL.encode(conversations)
     }
 
-    func importArchiveData(_ data: Data) throws -> Int {
+    /// Import ladder, most specific first: full archive → legacy flat
+    /// [Conversation] → llama.app JSONL. The ladder is exhaustive because the
+    /// final rung throws the typed ChatArchiveError.unsupported (census W8
+    /// ChatNative:2278-2282 — comment-only conversion). The JSONL rung also
+    /// reports the malformed lines it skipped so a partial import is visible.
+    func importArchiveData(_ data: Data) throws -> (imported: Int, skippedLines: Int) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let imported: ChatArchive
+        var skippedLines = 0
         if let archive = try? decoder.decode(ChatArchive.self, from: data) {
             imported = archive
         } else if let legacy = try? JSONDecoder().decode([Conversation].self, from: data) {
             imported = ChatArchive(conversations: legacy, projects: [])
         } else if let jsonl = try? ChatJSONL.decode(data) {
-            imported = ChatArchive(conversations: jsonl, projects: [])
+            imported = ChatArchive(conversations: jsonl.conversations, projects: [])
+            skippedLines = jsonl.skippedLines
         } else {
             throw ChatArchiveError.unsupported
         }
@@ -2499,7 +2547,7 @@ final class ChatStore: ObservableObject {
         conversations.insert(contentsOf: additions, at: 0)
         if currentID == nil { currentID = conversations.first?.id }
         save()
-        return additions.count
+        return (additions.count, skippedLines)
     }
 
     /// KES-07: a transcript authored elsewhere can aim the agent tools at any
@@ -4316,9 +4364,14 @@ struct NativeChatView: View {
     private func refreshAvailableTools() async {
         loadingTools = true
         var tools: [BuiltinToolInfo] = []
-        if SettingsNumericCoercion.bool(SettingsKeys.agentToolsEnabled, default: false),
-           let builtins = try? await ChatToolsService.list(port: port) {
-            tools += builtins
+        if SettingsNumericCoercion.bool(SettingsKeys.agentToolsEnabled, default: false) {
+            do {
+                tools += try await ChatToolsService.list(port: port)
+            } catch {
+                // Census W8 ChatNative:4109: a failed listing must not read as
+                // "no tools" — surface it; the sheet still opens with the rest.
+                AppLog.chat.error("tool listing failed: \(error.localizedDescription)")
+            }
         }
         if SettingsNumericCoercion.bool(SettingsKeys.jsSandboxEnabled, default: false) {
             tools.append(JavaScriptSandboxService.tool)
@@ -4348,7 +4401,16 @@ struct NativeChatView: View {
         }
         loadingModalities = true
         let selected = routerMode && !chatSelectedModel.isEmpty ? chatSelectedModel : nil
-        if let fetched = try? await ModelCapabilitiesService.fetch(port: port, model: selected) {
+        let fetched: ModelModalities?
+        do {
+            fetched = try await ModelCapabilitiesService.fetch(port: port, model: selected)
+        } catch {
+            // Census W8 ChatNative:4140: a failed fetch falls through to the
+            // stale-guess fallback below — that fallback must be visible.
+            fetched = nil
+            AppLog.chat.error("model capabilities fetch failed: \(error.localizedDescription)")
+        }
+        if let fetched {
             modelModalities = fetched
             capabilitiesAreComplete = true
         } else if routerMode,
@@ -4600,6 +4662,8 @@ struct NativeChatView: View {
                 continue
             }
 
+            // Census W8 ChatNative:4392 — surfaced via the per-file errors list;
+            // already compliant, kept (naming comment only).
             guard let data = try? Data(contentsOf: url) else {
                 errors.append(loc.t("%@: no se pudo leer", "%@: couldn't read it", "\(name)")); continue
             }
@@ -4650,12 +4714,18 @@ struct NativeChatView: View {
                         let ocr = await Self.ocrPDF(data: data, maxPages: 20, maxChars: Self.maxAttachChars)
                         ocrPending -= 1
                         guard let idx = attachments.firstIndex(where: { $0.id == pendingID }) else { return }
-                        if ocr.isEmpty {
+                        if ocr.failed {
+                            // Census W8 ChatNative:4591: Vision could not run —
+                            // distinct from "ran and found no text".
+                            attachments.remove(at: idx)
+                            attachError = (attachError.map { $0 + "\n" } ?? "")
+                                + loc.t("%@: falló el OCR", "%@: OCR failed", "\(name)")
+                        } else if ocr.text.isEmpty {
                             attachments.remove(at: idx)
                             attachError = (attachError.map { $0 + "\n" } ?? "")
                                 + loc.t("%@: el OCR no encontró texto", "%@: OCR found no text", "\(name)")
                         } else {
-                            attachments[idx].content = loc.t("[Texto extraído por OCR — %@]\n\n", "[Text extracted via OCR — %@]\n\n", "\(name)") + ocr
+                            attachments[idx].content = loc.t("[Texto extraído por OCR — %@]\n\n", "[Text extracted via OCR — %@]\n\n", "\(name)") + ocr.text
                         }
                     }
                     continue
@@ -4775,10 +4845,17 @@ struct NativeChatView: View {
         return output
     }
 
-    private static func ocrPDF(data: Data, maxPages: Int, maxChars: Int) async -> String {
-        await Task.detached(priority: .userInitiated) { () -> String in
-            guard let doc = PDFDocument(data: data) else { return "" }
+    /// OCRs the page images of a text-less PDF (Vision framework, on-device).
+    /// `failed` distinguishes "Vision could not run at all" (every attempted
+    /// page errored) from "ran and found no text" — the attach flow reports
+    /// those differently instead of silently returning an empty string
+    /// (census W8 ChatNative:4591).
+    private static func ocrPDF(data: Data, maxPages: Int, maxChars: Int) async -> (text: String, failed: Bool) {
+        await Task.detached(priority: .userInitiated) { () -> (text: String, failed: Bool) in
+            guard let doc = PDFDocument(data: data) else { return ("", false) }
             var out = ""
+            var attemptedPages = 0
+            var failedPages = 0
             for i in 0..<min(doc.pageCount, maxPages) {
                 guard let page = doc.page(at: i) else { continue }
                 let rect = page.bounds(for: .mediaBox)
@@ -4794,18 +4871,28 @@ struct NativeChatView: View {
                 ctx.translateBy(x: -rect.minX, y: -rect.minY)
                 page.draw(with: .mediaBox, to: ctx)
                 guard let cg = ctx.makeImage() else { continue }
+                attemptedPages += 1
                 let req = VNRecognizeTextRequest()
                 req.recognitionLevel = .accurate
                 req.recognitionLanguages = ["es-ES", "en-US"]
                 req.usesLanguageCorrection = true
                 let handler = VNImageRequestHandler(cgImage: cg, options: [:])
-                try? handler.perform([req])
+                do {
+                    try handler.perform([req])
+                } catch {
+                    failedPages += 1
+                    continue
+                }
                 for obs in req.results ?? [] {
                     if let top = obs.topCandidates(1).first { out += top.string + "\n" }
                 }
                 if out.count >= maxChars { break }
             }
-            return String(out.prefix(maxChars))
+            if failedPages > 0 {
+                AppLog.chat.error("OCR failed on \(failedPages) of \(attemptedPages) page(s); extracted \(out.count) characters so far")
+            }
+            let failed = attemptedPages > 0 && failedPages == attemptedPages && out.isEmpty
+            return (String(out.prefix(maxChars)), failed)
         }.value
     }
 
@@ -5263,8 +5350,12 @@ struct ConversationListView: View {
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let count = try chat.importArchiveData(Data(contentsOf: url))
-            archiveMessage = loc.t("Se importaron %@ conversaciones nuevas.", "Imported %@ new conversations.", "\(count)")
+            let result = try chat.importArchiveData(Data(contentsOf: url))
+            var message = loc.t("Se importaron %@ conversaciones nuevas.", "Imported %@ new conversations.", "\(result.imported)")
+            if result.skippedLines > 0 {
+                message += loc.t(" Se omitieron %@ líneas defectuosas.", " %@ malformed line(s) were skipped.", "\(result.skippedLines)")
+            }
+            archiveMessage = message
         } catch {
             archiveMessage = error.localizedDescription
         }

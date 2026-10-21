@@ -34,6 +34,24 @@ struct ChatSamplingSettings: Equatable {
     var stopSequences = ""
 }
 
+extension ChatSamplingSettings {
+    /// The one validity rule for engine-bound custom sampling JSON, enforced
+    /// at the settings gate (ChatAdvancedSettingsSection) and again at the
+    /// request-body merge (ChatStore.mergedCustomSampling): it must parse as
+    /// a top-level JSON object, because the merge overrides request
+    /// parameters key by key. nil = valid; an empty field overrides nothing.
+    static func customJSONIssue(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              object is [String: Any] else {
+            return "must be a JSON object like {\"temperature\": 0.7}"
+        }
+        return nil
+    }
+}
+
 struct ChatTimings: Codable, Equatable {
     var cachedTokens: Int?
     var promptTokens: Int?

@@ -16,17 +16,23 @@ enum ChatJSONL {
         return Data(lines.joined(separator: "\n").utf8)
     }
 
-    static func decode(_ data: Data) throws -> [Conversation] {
+    static func decode(_ data: Data) throws -> (conversations: [Conversation], skippedLines: Int) {
         guard let text = String(data: data, encoding: .utf8) else { throw ChatArchiveError.unsupported }
         var sessions: [(header: [String: Any], messages: [[String: Any]])] = []
+        var skippedLines = 0
         for raw in text.split(whereSeparator: \.isNewline) {
             // A line that fails to parse is skipped, not fatal: an interrupted
             // export (killed mid-write, partial copy) leaves a truncated tail
             // on an otherwise-intact archive, and one malformed line must not
-            // reject the import of every conversation before it.
+            // reject the import of every conversation before it. The skip is
+            // counted so a partial import is visible, never silent
+            // (census W8 ChatJSONL:28).
             guard let lineData = String(raw).data(using: .utf8),
                   let record = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any],
-                  let type = record["type"] as? String else { continue }
+                  let type = record["type"] as? String else {
+                skippedLines += 1
+                continue
+            }
             if type == "session" {
                 sessions.append((record, []))
             } else if type == "message", let message = record["message"] as? [String: Any], !sessions.isEmpty {
@@ -34,7 +40,10 @@ enum ChatJSONL {
             }
         }
         guard !sessions.isEmpty else { throw ChatArchiveError.unsupported }
-        return sessions.map(makeConversation)
+        if skippedLines > 0 {
+            AppLog.chat.warning("JSONL import skipped \(skippedLines) malformed line(s); the rest of the archive imported")
+        }
+        return (sessions.map(makeConversation), skippedLines)
     }
 
     private static func records(for conversation: Conversation) throws -> [[String: Any]] {
@@ -72,15 +81,23 @@ enum ChatJSONL {
         // a silent behavior change on a lossless "round-trip".
         if let value = conversation.projectID { header["kestrelProjectID"] = value.uuidString }
         if let value = conversation.workingDirectory, !value.isEmpty { header["kestrelWorkingDirectory"] = value }
-        if let draft = conversation.draft,
-           let data = try? JSONEncoder().encode(draft),
-           let json = try? JSONSerialization.jsonObject(with: data) {
-            header["kestrelDraft"] = json
+        // Census W8 ChatJSONL:76-82: a conversation that HAS a draft or
+        // archived range must not lose it silently when serialization fails.
+        if let draft = conversation.draft {
+            if let data = try? JSONEncoder().encode(draft),
+               let json = try? JSONSerialization.jsonObject(with: data) {
+                header["kestrelDraft"] = json
+            } else {
+                AppLog.chat.error("JSONL export could not encode the draft of conversation \(conversation.title, privacy: .public) — the draft will not survive the round trip")
+            }
         }
-        if let blocks = conversation.archived, !blocks.isEmpty,
-           let data = try? JSONEncoder().encode(blocks),
-           let json = try? JSONSerialization.jsonObject(with: data) {
-            header["kestrelArchived"] = json
+        if let blocks = conversation.archived, !blocks.isEmpty {
+            if let data = try? JSONEncoder().encode(blocks),
+               let json = try? JSONSerialization.jsonObject(with: data) {
+                header["kestrelArchived"] = json
+            } else {
+                AppLog.chat.error("JSONL export could not encode the archived range of conversation \(conversation.title, privacy: .public) — it will not survive the round trip")
+            }
         }
         if let value = conversation.enabledToolNames { header["kestrelEnabledToolNames"] = value }
 
@@ -181,10 +198,15 @@ enum ChatJSONL {
             pinned: header["pinned"] as? Bool,
             systemPrompt: header["kestrelSystemPrompt"] as? String,
             enabledToolNames: header["kestrelEnabledToolNames"] as? [String])
-        if let json = header["kestrelArchived"],
-           let data = try? JSONSerialization.data(withJSONObject: json),
-           let blocks = try? JSONDecoder().decode([ArchivedBlock].self, from: data) {
-            conversation.archived = ChatMemoryService.clamped(blocks, toCount: currentMessages.count)
+        // Census W8 ChatJSONL:185-186: a header that CARRIES an archived range
+        // must not drop it silently when it fails to decode back.
+        if let json = header["kestrelArchived"] {
+            if let data = try? JSONSerialization.data(withJSONObject: json),
+               let blocks = try? JSONDecoder().decode([ArchivedBlock].self, from: data) {
+                conversation.archived = ChatMemoryService.clamped(blocks, toCount: currentMessages.count)
+            } else {
+                AppLog.chat.error("JSONL import could not decode the archived range of conversation \(conversation.title, privacy: .public) — it is not restored")
+            }
         }
         // Modernization fields (see the export side): restore the routing and
         // workspace the conversation was exported with, plus any unsent draft.
@@ -194,10 +216,14 @@ enum ChatJSONL {
         if let value = header["kestrelWorkingDirectory"] as? String {
             conversation.workingDirectory = value
         }
-        if let json = header["kestrelDraft"],
-           let data = try? JSONSerialization.data(withJSONObject: json),
-           let draft = try? JSONDecoder().decode(ChatDraft.self, from: data) {
-            conversation.draft = draft
+        // Census W8 ChatJSONL:198-199: same surfacing for the unsent draft.
+        if let json = header["kestrelDraft"] {
+            if let data = try? JSONSerialization.data(withJSONObject: json),
+               let draft = try? JSONDecoder().decode(ChatDraft.self, from: data) {
+                conversation.draft = draft
+            } else {
+                AppLog.chat.error("JSONL import could not decode the draft of conversation \(conversation.title, privacy: .public) — it is not restored")
+            }
         }
         if allPaths.count > 1 {
             let branches = allPaths.enumerated().map { ChatBranch(name: "Branch \($0.offset + 1)", messages: $0.element) }

@@ -15,6 +15,7 @@ enum CheckRegistry {
         ("AudioVideoExportIntegrationTests", AudioVideoExportIntegrationTests.__checkSet),
         ("BenchmarkShareReviewTests", BenchmarkShareReviewTests.__checkSet),
         ("ChatStoreSurfacingTests", ChatStoreSurfacingTests.__checkSet),
+        ("ChatImportSurfacingTests", ChatImportSurfacingTests.__checkSet),
         ("ContextTrapTests", ContextTrapTests.__checkSet),
         ("ImportSafetyTests", ImportSafetyTests.__checkSet),
         ("WhisperTranscriptTests", WhisperTranscriptTests.__checkSet),

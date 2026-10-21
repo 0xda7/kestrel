@@ -383,8 +383,8 @@ struct ChatAdvancedSettingsSection: View {
                         .padding(8)
                         .workspaceFieldSurface()
                     if customJSONInvalid {
-                        Label(loc.t("JSON inválido: debe ser un objeto {…}. Se ignorará hasta corregirlo.",
-                                    "Invalid JSON: it must be an object {…}. It will be ignored until fixed."),
+                        Label(loc.t("JSON inválido: debe ser un objeto {…}. No se enviará ningún turno hasta corregirlo.",
+                                    "Invalid JSON: it must be an object {…}. Turns are not sent until it is fixed."),
                               systemImage: "exclamationmark.triangle.fill")
                             .font(.caption).foregroundStyle(.orange)
                     } else {
@@ -422,12 +422,9 @@ struct ChatAdvancedSettingsSection: View {
     }
 
     private var customJSONInvalid: Bool {
-        let trimmed = customJSON.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        guard let data = trimmed.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data),
-              object is [String: Any] else { return true }
-        return false
+        // The same strict rule the engine-bound merge enforces
+        // (ChatStore.mergedCustomSampling) — one rule, two enforcement points.
+        ChatSamplingSettings.customJSONIssue(customJSON) != nil
     }
 
 

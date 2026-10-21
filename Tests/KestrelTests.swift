@@ -1914,7 +1914,7 @@ final class ChatMessageTests: CheckCase {
         let data = try ChatJSONL.encode([conversation])
         let text = try XCTUnwrap(String(data: data, encoding: .utf8))
         XCTAssertTrue(text.contains(#""harness":"llama.app""#))
-        let decoded = try XCTUnwrap(ChatJSONL.decode(data).first)
+        let decoded = try XCTUnwrap(ChatJSONL.decode(data).conversations.first)
         XCTAssertEqual(decoded.title, "JSONL")
         XCTAssertEqual(decoded.branches?.count, 2)
         XCTAssertEqual(decoded.systemPrompt, "Be useful")
