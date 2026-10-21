@@ -5,11 +5,12 @@
 import Foundation
 @testable import KestrelCore
 
-/// Mission C1 Phase B pins (pre-conversion freeze): the exact behavior of the
-/// W1-1 text-side rescue as it stands BEFORE grammar-constrained tool calls
-/// convert the channel. When Phase C gates the rescue behind the constrained
-/// request path, these checks are updated in the same commit to pin the new
-/// contract — until then they freeze the rescue's parsing semantics exactly.
+/// Mission C1 Phase B froze the W1-1 rescue's parsing semantics; Phase C
+/// converted it to doctrine: the checks below pin the UNCONSTRAINED
+/// behavior (remote providers, custom engine binaries — where prose
+/// emission is still possible and the rescue is deliberate), and the
+/// constrained checks at the end pin the census drill: on the
+/// grammar-constrained local path the rescue is retired and returns [].
 final class ToolCallRescueTests: CheckCase {
     private let offeredTools: Set<String> = ["get_datetime", "read_file", "grep_logs"]
 
@@ -106,6 +107,32 @@ final class ToolCallRescueTests: CheckCase {
         XCTAssertEqual(calls.first?.arguments, "{}")
     }
 
+    // MARK: Constrained path (mission C1 census drill)
+
+    /// THE census drill: post-conversion, a grammar-constrained turn
+    /// rescues nothing — the envelope grammar has already made fenced blobs
+    /// unemittable at the engine, so even a hand-fed fenced blob returns [].
+    func testConstrainedFencedBlobRescuesNothing() {
+        let text = """
+        Sure, let me check the time.
+        ```json
+        {"name": "get_datetime", "arguments": {}}
+        ```
+        """
+
+        XCTAssertTrue(ToolCallRescue.rescuedCalls(text: text, toolNames: offeredTools,
+                                                  constrained: true).isEmpty)
+    }
+
+    /// Same drill for the `<tool_call>` tag shape: constrained turns never
+    /// rescue, whatever prose shape arrives.
+    func testConstrainedToolCallTagRescuesNothing() {
+        let text = "<tool_call>{\"name\":\"read_file\",\"arguments\":{\"path\":\"a.txt\"}}</tool_call>"
+
+        XCTAssertTrue(ToolCallRescue.rescuedCalls(text: text, toolNames: offeredTools,
+                                                  constrained: true).isEmpty)
+    }
+
     // MARK: Call-site gate
 
     /// The call-site gate extracted verbatim from ChatNative: rescue only
@@ -146,6 +173,8 @@ extension ToolCallRescueTests {
             .init(name: "testCapsRescuesAtMaxPerTurn") { $0.testCapsRescuesAtMaxPerTurn() },
             .init(name: "testEmptyTextRescuesNothing") { $0.testEmptyTextRescuesNothing() },
             .init(name: "testNonDictArgumentsBecomeEmptyArguments") { $0.testNonDictArgumentsBecomeEmptyArguments() },
+            .init(name: "testConstrainedFencedBlobRescuesNothing") { $0.testConstrainedFencedBlobRescuesNothing() },
+            .init(name: "testConstrainedToolCallTagRescuesNothing") { $0.testConstrainedToolCallTagRescuesNothing() },
             .init(name: "testShouldRescueGateMatchesCallSiteSemantics") { $0.testShouldRescueGateMatchesCallSiteSemantics() },
         ]
     )

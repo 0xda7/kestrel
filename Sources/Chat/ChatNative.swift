@@ -859,6 +859,10 @@ final class ChatStore: ObservableObject {
             // Set when a remote route served this turn: the persisted model
             // field then names the route's model, not the local router alias.
             var remoteModelID: String?
+            // Set when this turn's request carried the tool-turn envelope
+            // schema (mission C1): finalization then unwraps the envelope
+            // instead of running the legacy text-side rescue.
+            var grammarConstrained = false
 
             func composed() -> String {
                 guard !accumulator.reasoning.isEmpty else { return accumulator.visible }
@@ -988,8 +992,22 @@ final class ChatStore: ObservableObject {
                 if !stopList.isEmpty { body["stop"] = stopList }
                 if let activeModel { body["model"] = activeModel }
                 if !availableTools.isEmpty {
-                    body["tools"] = availableTools.compactMap(\.openAIDefinition)
+                    let toolDefinitions = availableTools.compactMap(\.openAIDefinition)
+                    body["tools"] = toolDefinitions
                     body["tool_choice"] = "auto"
+                    // Mission C1: grammar-constrained tool calls. The envelope
+                    // schema rides every tools-carrying turn on the local
+                    // bundled engine, and the engine's per-family precedence
+                    // does the rest (see ToolTurnEnvelope). A custom binary
+                    // may predate json_schema support, so it keeps the legacy
+                    // unconstrained path.
+                    if ToolTurnEnvelope.shouldConstrain(remote: remote,
+                                                        engineKind: ServerSettings.engineKind,
+                                                        toolCount: toolDefinitions.count),
+                       let format = ToolTurnEnvelope.responseFormat(definitions: toolDefinitions) {
+                        body["response_format"] = format
+                        grammarConstrained = true
+                    }
                 }
                 if reasoningOff {
                     body["chat_template_kwargs"] = ["enable_thinking": false]
@@ -1097,8 +1115,15 @@ final class ChatStore: ObservableObject {
                     AppLog.chat.error("stream failed: \(error.localizedDescription)")
                     let store = self
                     let raw = error.localizedDescription
-                    // the engine kills the turn when the model writes the call in the wrong
-                    // shape, and it does it on every tool, so the model stops getting them
+                    // W6-1 doctrine (mission C1): the engine kills the turn when
+                    // the model writes the call in the wrong shape, and it does it
+                    // on every tool, so the model stops getting them. Remaining
+                    // trigger post-C1: CUSTOM engine binaries only — one that
+                    // predates json_schema support or still synthesizes the
+                    // buggy generic grammar ("peg-native"). For the bundled
+                    // 0.89.5 engine the 500 is unreachable: the envelope
+                    // schema skips the generic tools branch that produces it,
+                    // and named template families use their own handlers.
                     let rejected = raw.contains("peg-native") && !availableTools.isEmpty
                     if rejected { ToolSupport.block(ToolSupport.currentModelIdentity) }
                     let message = rejected ? Self.toolsRejectedMessage : raw
@@ -1128,22 +1153,43 @@ final class ChatStore: ObservableObject {
             let didReportError = reportedError
             let hadReasoning = !accumulator.reasoning.isEmpty
             var rescuedToolCalls = accumulator.toolCalls.filter { !$0.name.isEmpty }
-            let finalText = streamedText
-            // Text-side rescue: small models often write the call as a fenced
-            // JSON blob or a <tool_call> tag instead of using the engine's
-            // function-calling channel, then claim the tool ran. Salvage those
-            // into real pending calls so permissions still flow.
+            var displayText = streamedText
             if ToolCallRescue.shouldRescue(channelToolCalls: accumulator.toolCalls,
                                            cancelled: wasCancelled, reportedError: didReportError) {
-                // Rescue from the visible answer only: a call the model merely
-                // reasoned about inside <think> must not fire a real tool.
+                // Unwrap/rescue from the visible answer only: a call the model
+                // merely reasoned about inside <think> must not fire a real tool.
                 let visible = hadReasoning
-                    ? finalText.split(separator: "</think>", maxSplits: 1,
-                                      omittingEmptySubsequences: false).last.map(String.init) ?? finalText
-                    : finalText
+                    ? displayText.split(separator: "</think>", maxSplits: 1,
+                                        omittingEmptySubsequences: false).last.map(String.init) ?? displayText
+                    : displayText
                 let names = Set(availableTools.map(\.name))
-                rescuedToolCalls = ToolCallRescue.rescuedCalls(text: visible, toolNames: names)
+                if grammarConstrained {
+                    // Mission C1: the bound grammar already forced the answer
+                    // into the envelope; unwrap it. A tool branch becomes the
+                    // pending call (the envelope JSON never enters the
+                    // transcript — the call card is the answer); a reply
+                    // branch becomes the displayed text. Anything else is the
+                    // expected prose of a named-family template (its own
+                    // grammar wins over the schema) and displays untouched.
+                    switch ToolTurnEnvelope.unwrap(text: visible, toolNames: names) {
+                    case .calls(let calls):
+                        rescuedToolCalls = calls
+                        displayText = ""
+                    case .reply(let reply):
+                        displayText = reply
+                    case nil:
+                        AppLog.chat.notice("tool turn carried no JSON envelope (expected for named-family templates, anomalous for generic ones): \(String(visible.prefix(200)))")
+                    }
+                } else {
+                    // Legacy unconstrained path (remote providers, custom
+                    // engine binaries): small models often write the call as
+                    // a fenced JSON blob or a <tool_call> tag instead of
+                    // using the channel, then claim the tool ran. Salvage
+                    // those into real pending calls so permissions still flow.
+                    rescuedToolCalls = ToolCallRescue.rescuedCalls(text: visible, toolNames: names)
+                }
             }
+            let finalText = displayText
             // Immutable snapshots: the MainActor.run closure below is @Sendable,
             // so it must not reference vars this task has mutated.
             let finalToolCalls = rescuedToolCalls

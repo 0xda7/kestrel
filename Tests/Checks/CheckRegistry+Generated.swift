@@ -64,6 +64,7 @@ enum CheckRegistry {
         ("ToolSupportTests", ToolSupportTests.__checkSet),
         ("ToolCallRescueTests", ToolCallRescueTests.__checkSet),
         ("ToolArgumentsRepairTests", ToolArgumentsRepairTests.__checkSet),
+        ("ToolTurnEnvelopeTests", ToolTurnEnvelopeTests.__checkSet),
         ("SurgicalChecks", SurgicalChecks.__checkSet),
     ]
 }

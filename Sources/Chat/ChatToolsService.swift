@@ -253,9 +253,15 @@ enum ChatToolsService {
         throw ChatToolsError.invalidResponse
     }
 
-    /// Small models emit tool arguments with BOMs, ```json fences, trailing
-    /// commas, or single quotes. Tolerate all of it before giving up: an
-    /// unusable arguments blob costs the whole turn.
+    /// Doctrine (mission C1, W1-2): small models emit tool arguments with
+    /// BOMs, ```json fences, trailing commas, or single quotes — but only on
+    /// UNCONSTRAINED paths (remote providers, custom engine binaries), where
+    /// nothing forces the arguments into valid JSON before they arrive. On
+    /// the grammar-constrained local path (`ToolTurnEnvelope`) the engine's
+    /// schema grammar has already rejected everything this ladder repairs,
+    /// so these tiers are unreachable there by construction. Tolerate the
+    /// unconstrained shapes before giving up: an unusable arguments blob
+    /// costs the whole turn.
     static func parseArguments(_ source: String) throws -> [String: Any] {
         var text = source
         if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
@@ -279,9 +285,10 @@ enum ChatToolsService {
            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return value
         }
-        // An arguments blob that is only whitespace (or only a comment) means
-        // "no arguments" for every builtin tool; throwing here would kill the
-        // turn for tools like get_datetime.
+        // An arguments blob that is only whitespace means "no arguments" for
+        // every builtin tool; throwing here would kill the turn for tools
+        // like get_datetime. A comment-only blob is NOT whitespace and does
+        // throw (pinned in ToolArgumentsRepairTests).
         if strippedOfStrings(text).allSatisfy({ $0.isWhitespace }) { return [:] }
         throw ChatToolsError.invalidResponse
     }
@@ -456,17 +463,27 @@ enum ChatToolsService {
     }
 }
 
-/// Small distilled models frequently emit tool calls as plain text — a fenced
-/// `{"name": ..., "arguments": ...}` blob or a `<tool_call>{...}</tool_call>`
-/// tag — instead of using the engine's function-calling channel. The engine
-/// then answers "I used the tool" while nothing ran. This rescues that text
-/// into real pending tool calls, capped low so a rambling model cannot fire a
-/// dozen of them in one turn.
+/// Doctrine (mission C1, W1-1): small distilled models frequently emit tool
+/// calls as plain text — a fenced `{"name": ..., "arguments": ...}` blob or
+/// a `<tool_call>{...}</tool_call>` tag — instead of using the engine's
+/// function-calling channel, then answer "I used the tool" while nothing
+/// ran. RETIRED on the grammar-constrained local path: `ToolTurnEnvelope`'s
+/// schema makes those prose shapes unemittable, so `constrained: true`
+/// rescues nothing. Deliberately retained (`constrained: false`, the
+/// default) for unconstrained paths — remote providers and custom engine
+/// binaries — where prose emission is still possible and this remains the
+/// only salvage into real pending tool calls, capped low so a rambling
+/// model cannot fire a dozen of them in one turn.
 
 enum ToolCallRescue {
     static let maxPerTurn = 3
 
-    static func rescuedCalls(text: String, toolNames: Set<String>) -> [ChatToolCall] {
+    static func rescuedCalls(text: String, toolNames: Set<String>,
+                             constrained: Bool = false) -> [ChatToolCall] {
+        // Grammar-constrained turns never see prose blobs: the envelope
+        // grammar admits only the JSON envelope, so there is nothing to
+        // rescue. Returning [] here is the C1 census drill.
+        if constrained { return [] }
         guard !text.isEmpty else { return [] }
         var calls: [ChatToolCall] = []
         for blob in candidateBlobs(in: text) {
@@ -542,5 +559,97 @@ enum ToolCallRescue {
             }
         }
         return blobs
+    }
+}
+
+/// Mission C1: the grammar-constrained tool-call channel for the local
+/// bundled engine. Every tools-carrying request also carries
+/// `response_format json_schema` over an envelope that admits exactly one
+/// of: a tool call `{"name": <offered name>, "arguments": <that tool's
+/// schema>}` or a free-text reply `{"reply": "…"}`. The engine's
+/// per-family precedence makes the SAME request shape correct everywhere:
+/// generic-path templates (GLM-class prose emitters) enforce the envelope
+/// grammar — malformed, fenced, or tagged blobs become unemittable, and the
+/// generic tools branch that produced the peg-native 500 is never
+/// synthesized — while named families (LFM2/LFM2.5, Kimi, Qwen) keep their
+/// own specialized tool grammar and carry calls through the channel. One
+/// call per turn by construction; the agent loop iterates for multi-tool
+/// flows.
+enum ToolTurnEnvelope {
+    enum Outcome: Equatable {
+        case calls([ChatToolCall])
+        case reply(String)
+    }
+
+    /// When the constraint binds: a local request, the bundled engine (a
+    /// custom binary may predate json_schema support and keeps the legacy
+    /// unconstrained path), and tools actually offered after every gate —
+    /// a blocklisted model offers no tools, sends no schema, and cannot
+    /// 500 (ToolSupport clears `availableTools` before this point).
+    static func shouldConstrain(remote: Bool, engineKind: String, toolCount: Int) -> Bool {
+        !remote && engineKind == "bundled" && toolCount > 0
+    }
+
+    /// The `response_format` value for a tools-carrying turn, built from the
+    /// SAME OpenAI definitions the engine receives (nil when none survive).
+    /// Per-tool branches carry each tool's own parameters schema verbatim,
+    /// so the grammar enforces argument shapes, not just JSON syntax; a
+    /// tool with no (or an empty) parameters schema gets a bare object.
+    static func responseFormat(definitions: [[String: Any]]) -> [String: Any]? {
+        var branches: [[String: Any]] = []
+        for definition in definitions {
+            let function = definition["function"] as? [String: Any] ?? definition
+            guard let name = function["name"] as? String, !name.isEmpty else { continue }
+            let arguments = (function["parameters"] as? [String: Any])
+                .flatMap { $0.isEmpty ? nil : $0 } ?? ["type": "object"]
+            branches.append([
+                "type": "object",
+                "properties": [
+                    "name": ["const": name],
+                    "arguments": arguments,
+                ],
+                "required": ["name", "arguments"],
+            ])
+        }
+        guard !branches.isEmpty else { return nil }
+        branches.append([
+            "type": "object",
+            "properties": ["reply": ["type": "string"]],
+            "required": ["reply"],
+        ])
+        return [
+            "type": "json_schema",
+            "json_schema": [
+                "name": "kestrelToolTurn",
+                "strict": false,
+                "schema": ["oneOf": branches],
+            ],
+        ]
+    }
+
+    /// Unwraps a completed turn's visible text. Under the bound grammar the
+    /// whole visible answer is one envelope object: a `name` naming an
+    /// offered tool becomes a pending call (arguments re-serialized); a
+    /// `reply` becomes the displayed answer. Returns nil for anything
+    /// else — plain prose is the EXPECTED shape for named-family templates
+    /// whose own grammar wins over the schema, and the caller displays it
+    /// untouched rather than inventing a call.
+    static func unwrap(text: String, toolNames: Set<String>) -> Outcome? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let data = trimmed.data(using: .utf8),
+              let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        if let name = object["name"] as? String, toolNames.contains(name) {
+            let arguments = (object["arguments"] as? [String: Any]) ?? [:]
+            guard let argumentsData = try? JSONSerialization.data(withJSONObject: arguments)
+            else { return nil }
+            return .calls([ChatToolCall(serverID: nil, name: name,
+                                        arguments: String(decoding: argumentsData, as: UTF8.self))])
+        }
+        if let reply = object["reply"] as? String {
+            return .reply(reply)
+        }
+        return nil
     }
 }

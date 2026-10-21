@@ -837,6 +837,16 @@ enum AppCodeSignature {
 /// A model whose tool call the engine refuses kills the turn with an HTTP 500, and it does it
 /// on every tool, not only on one. Nothing in the template says which model gets it wrong, so
 /// the failure itself is the signal: the model is remembered and stops receiving tools.
+///
+/// Mission C1 doctrine: the remaining trigger is a CUSTOM engine binary — one
+/// that predates json_schema support or still synthesizes the buggy generic
+/// grammar ("peg-native"). For the bundled engine (0.89.5) the 500 is
+/// unreachable post-C1: the tool-turn envelope schema bound to every
+/// tools-carrying request skips the generic tools branch that produces it,
+/// and named template families use their own specialized handlers. The
+/// blocklist therefore stays live for custom binaries only; existing entries
+/// are kept (any model may run through a custom binary) and the unblock UI
+/// remains the way out.
 enum ToolSupport {
     static var currentModelIdentity: String? {
         if let alias = ServerSettings.activeRouterModel(), !alias.isEmpty { return alias }
