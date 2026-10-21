@@ -648,23 +648,23 @@ final class ModelStore: ObservableObject {
     }
 
     static func recordSource(_ urlString: String, forFile fileName: String) {
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.modelSource) as? [String: String] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.modelSource) as? [String: String] ?? [:]
         map[fileName] = urlString
         UserDefaults.standard.set(map, forKey: SettingsKeys.modelSource)
     }
 
     static func source(forFile fileName: String) -> String? {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.modelSource) as? [String: String])?[fileName]
+        (SettingsNumericCoercion.dictionary(SettingsKeys.modelSource) as? [String: String])?[fileName]
     }
 
     static func recordDigest(_ sha256: String, forFile fileName: String) {
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.modelDigest) as? [String: String] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.modelDigest) as? [String: String] ?? [:]
         map[fileName] = sha256.lowercased()
         UserDefaults.standard.set(map, forKey: SettingsKeys.modelDigest)
     }
 
     static func digest(forFile fileName: String) -> String? {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.modelDigest) as? [String: String])?[fileName]
+        (SettingsNumericCoercion.dictionary(SettingsKeys.modelDigest) as? [String: String])?[fileName]
     }
 
     /// Re-downloads every shard from its recorded source.
@@ -718,7 +718,7 @@ final class ModelStore: ObservableObject {
                         ServerSettings.mtpDraftPath(forModel: model.url.path)].compactMap({ $0 }) {
             try? FileManager.default.trashItem(at: URL(fileURLWithPath: sibling), resultingItemURL: nil)
         }
-        var digests = UserDefaults.standard.dictionary(forKey: SettingsKeys.modelDigest) as? [String: String] ?? [:]
+        var digests = SettingsNumericCoercion.dictionary(SettingsKeys.modelDigest) as? [String: String] ?? [:]
         for url in model.partURLs {
             digests[url.lastPathComponent] = nil
             try? FileManager.default.trashItem(at: url, resultingItemURL: nil)

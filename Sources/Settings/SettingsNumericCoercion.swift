@@ -161,6 +161,21 @@ enum SettingsNumericCoercion {
         SettingsKeys.videoVAETiling: .bool,
         // The KES-01 gate: drift fails SAFE (armed).
         SettingsKeys.apiKeyEnabled: .boolFailSafe,
+        // String collections (W4-11): per-model maps and model lists read
+        // via stringArray/dictionary; drift surfaces instead of silently
+        // reading empty.
+        SettingsKeys.dflashDisabled: .stringArray,
+        SettingsKeys.dflashWarningAcknowledged: .stringArray,
+        SettingsKeys.incompatibleMmproj: .stringArray,
+        SettingsKeys.mtpDisabledModels: .stringArray,
+        SettingsKeys.toolsUnsupportedModels: .stringArray,
+        SettingsKeys.dflashModes: .stringDictionary,
+        SettingsKeys.extraArgsByModel: .stringDictionary,
+        SettingsKeys.mmprojOverride: .stringDictionary,
+        SettingsKeys.modelDigest: .stringDictionary,
+        SettingsKeys.modelSource: .stringDictionary,
+        SettingsKeys.ncmoeByModel: .stringDictionary,
+        SettingsKeys.prefetchCliffByModel: .stringDictionary,
     ]
 
     /// What one mistyped string becomes.
@@ -294,6 +309,39 @@ enum SettingsNumericCoercion {
         reportDrift(key, stored: raw,
                     policy: "caller keeps its declared default; migration rewrites or removes it")
         return nil
+    }
+
+    /// Typed [String] read (W4-11): a stored value that is not a string
+    /// array is drift — reported, and the caller reads [] instead of the
+    /// silently empty list the old `?? []` shape returned. Writers are
+    /// same-process typed, so an absent key is legitimately empty and stays
+    /// silent.
+    static func stringArray(_ key: String, in defaults: UserDefaults = .standard) -> [String] {
+        guard let raw = defaults.object(forKey: key) else { return [] }
+        guard let array = defaults.stringArray(forKey: key) else {
+            if registry[key] != nil {
+                reportDrift(key, stored: raw,
+                            policy: "not a string array; reading empty; migration removes it")
+            }
+            return []
+        }
+        return array
+    }
+
+    /// Typed dictionary read (W4-11): a stored value that is not a
+    /// property-list dictionary is drift — reported, and the caller's own
+    /// `as? [String: T] ?? [:]` falls to empty instead of silently losing
+    /// per-model overrides. Absent is legitimately empty and stays silent.
+    static func dictionary(_ key: String, in defaults: UserDefaults = .standard) -> [String: Any]? {
+        guard let raw = defaults.object(forKey: key) else { return nil }
+        guard let dict = defaults.dictionary(forKey: key) else {
+            if registry[key] != nil {
+                reportDrift(key, stored: raw,
+                            policy: "not a dictionary; reading empty; migration removes it")
+            }
+            return nil
+        }
+        return dict
     }
 
     /// The kind registered for `key`, for the completeness contract checks.

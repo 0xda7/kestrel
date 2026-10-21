@@ -136,6 +136,18 @@ final class TypedSettingsRegistryTests: CheckCase {
         SettingsKeys.videoSteps,
         SettingsKeys.videoVAETiling,
         SettingsKeys.vramReserve,
+        SettingsKeys.dflashDisabled,
+        SettingsKeys.dflashWarningAcknowledged,
+        SettingsKeys.incompatibleMmproj,
+        SettingsKeys.mtpDisabledModels,
+        SettingsKeys.toolsUnsupportedModels,
+        SettingsKeys.dflashModes,
+        SettingsKeys.extraArgsByModel,
+        SettingsKeys.mmprojOverride,
+        SettingsKeys.modelDigest,
+        SettingsKeys.modelSource,
+        SettingsKeys.ncmoeByModel,
+        SettingsKeys.prefetchCliffByModel,
         ]
         let registered = Set(SettingsNumericCoercion.registry.keys)
         XCTAssertEqual(registered, expected,
@@ -231,6 +243,35 @@ final class TypedSettingsRegistryTests: CheckCase {
                        "a String 'true' under the gate imports typed")
     }
 
+    /// W4-11: a String where a string-array belongs surfaces instead of
+    /// silently reading empty (the tool blocklist would quietly vanish).
+    func testStringArrayDriftSurfaces() {
+        suite.set(["model-a"], forKey: SettingsKeys.toolsUnsupportedModels)
+        XCTAssertEqual(SettingsNumericCoercion.stringArray(SettingsKeys.toolsUnsupportedModels, in: suite),
+                       ["model-a"], "a typed array round-trips")
+        suite.set("model-a", forKey: SettingsKeys.toolsUnsupportedModels)
+        XCTAssertEqual(SettingsNumericCoercion.stringArray(SettingsKeys.toolsUnsupportedModels, in: suite), [],
+                       "drift reads empty — but reported, never silent")
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.toolsUnsupportedModels))
+        XCTAssertNil(SettingsNumericCoercion.typedImportValue("model-a", forKey: SettingsKeys.toolsUnsupportedModels),
+                     "a String import for a collection key is dropped")
+    }
+
+    /// W4-11: a String where a per-model dictionary belongs surfaces instead
+    /// of silently reading empty (overrides would quietly be lost).
+    func testDictionaryDriftSurfaces() {
+        suite.set(["/m/gguf": 4], forKey: SettingsKeys.ncmoeByModel)
+        XCTAssertEqual((SettingsNumericCoercion.dictionary(SettingsKeys.ncmoeByModel, in: suite) as? [String: Int])?["/m/gguf"],
+                       4, "a typed dictionary round-trips")
+        suite.set("/m/gguf:4", forKey: SettingsKeys.ncmoeByModel)
+        XCTAssertNil(SettingsNumericCoercion.dictionary(SettingsKeys.ncmoeByModel, in: suite),
+                     "drift reads nil — the caller's ?? [:] applies, reported")
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.ncmoeByModel))
+        _ = SettingsNumericCoercion.migrateMistypedNumerics(in: suite)
+        XCTAssertNil(suite.object(forKey: SettingsKeys.ncmoeByModel),
+                     "migration removes the unusable String so the default applies")
+    }
+
     /// Typed storage is untouched by the readers: what was written typed is
     /// what comes back, for every kind.
     func testTypedValuesPassThroughUnchanged() {
@@ -258,5 +299,7 @@ extension TypedSettingsRegistryTests {
             .init(name: "testMigrationRewritesNumericsTyped") { $0.testMigrationRewritesNumericsTyped() },
             .init(name: "testImportRoutesThroughRegistry") { try $0.testImportRoutesThroughRegistry() },
             .init(name: "testTypedValuesPassThroughUnchanged") { $0.testTypedValuesPassThroughUnchanged() },
+            .init(name: "testStringArrayDriftSurfaces") { $0.testStringArrayDriftSurfaces() },
+            .init(name: "testDictionaryDriftSurfaces") { $0.testDictionaryDriftSurfaces() },
         ])
 }

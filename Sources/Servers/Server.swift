@@ -1588,11 +1588,11 @@ struct ServerSettings {
     }
 
     nonisolated static func mtpEnabled(forModel path: String) -> Bool {
-        !(UserDefaults.standard.stringArray(forKey: SettingsKeys.mtpDisabledModels) ?? []).contains(path)
+        !SettingsNumericCoercion.stringArray(SettingsKeys.mtpDisabledModels).contains(path)
     }
 
     nonisolated static func setMTPEnabled(_ enabled: Bool, forModel path: String) {
-        var disabled = Set(UserDefaults.standard.stringArray(forKey: SettingsKeys.mtpDisabledModels) ?? [])
+        var disabled = Set(SettingsNumericCoercion.stringArray(SettingsKeys.mtpDisabledModels))
         if enabled { disabled.remove(path) } else { disabled.insert(path) }
         UserDefaults.standard.set(Array(disabled), forKey: SettingsKeys.mtpDisabledModels)
     }
@@ -1638,13 +1638,13 @@ struct ServerSettings {
     /// that model again restores it instead of re-deriving the recommendation.
     nonisolated static func rememberNcmoe(_ value: Int, forModel path: String) {
         guard !path.isEmpty, modelIsMoE(at: path) else { return }
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.ncmoeByModel) as? [String: Int] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.ncmoeByModel) as? [String: Int] ?? [:]
         map[path] = value
         UserDefaults.standard.set(map, forKey: SettingsKeys.ncmoeByModel)
     }
 
     nonisolated static func recalledNcmoe(forModel path: String) -> Int? {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.ncmoeByModel) as? [String: Int])?[path]
+        (SettingsNumericCoercion.dictionary(SettingsKeys.ncmoeByModel) as? [String: Int])?[path]
     }
 
     /// One completed benchmark for a model: the configuration it ran with and the
@@ -1684,13 +1684,13 @@ struct ServerSettings {
     /// only runs below it. nil clears it, so a re-measuring sweep starts prefetch on.
     nonisolated static func rememberPrefetchCliff(_ value: Int?, forModel path: String) {
         guard !path.isEmpty else { return }
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.prefetchCliffByModel) as? [String: Int] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.prefetchCliffByModel) as? [String: Int] ?? [:]
         if let value { map[path] = value } else { map.removeValue(forKey: path) }
         UserDefaults.standard.set(map, forKey: SettingsKeys.prefetchCliffByModel)
     }
 
     nonisolated static func recalledPrefetchCliff(forModel path: String) -> Int? {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.prefetchCliffByModel) as? [String: Int])?[path]
+        (SettingsNumericCoercion.dictionary(SettingsKeys.prefetchCliffByModel) as? [String: Int])?[path]
     }
 
     /// Finds the multimodal projector (mmproj) paired with a model, if any.
@@ -1701,7 +1701,7 @@ struct ServerSettings {
     /// Records that `projector` failed to load with `model` (e.g. an unknown CLIP
     /// projector type), so `mmprojPath` won't auto-attach it again. Persistent.
     nonisolated static func recordIncompatibleMmproj(model: String, projector: String) {
-        var list = UserDefaults.standard.stringArray(forKey: SettingsKeys.incompatibleMmproj) ?? []
+        var list = SettingsNumericCoercion.stringArray(SettingsKeys.incompatibleMmproj)
         let key = mmprojPairKey(model, projector)
         if !list.contains(key) {
             list.append(key)
@@ -1710,27 +1710,27 @@ struct ServerSettings {
     }
 
     nonisolated static func isIncompatibleMmproj(model: String, projector: String) -> Bool {
-        (UserDefaults.standard.stringArray(forKey: SettingsKeys.incompatibleMmproj) ?? [])
+        SettingsNumericCoercion.stringArray(SettingsKeys.incompatibleMmproj)
             .contains(mmprojPairKey(model, projector))
     }
 
     nonisolated static func extraArgs(forModel path: String) -> String {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.extraArgsByModel) as? [String: String])?[path] ?? ""
+        (SettingsNumericCoercion.dictionary(SettingsKeys.extraArgsByModel) as? [String: String])?[path] ?? ""
     }
 
     nonisolated static func setExtraArgs(_ args: String, forModel path: String) {
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.extraArgsByModel) as? [String: String] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.extraArgsByModel) as? [String: String] ?? [:]
         let trimmed = args.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { map.removeValue(forKey: path) } else { map[path] = trimmed }
         UserDefaults.standard.set(map, forKey: SettingsKeys.extraArgsByModel)
     }
 
     nonisolated static func mmprojOverride(forModel path: String) -> String? {
-        (UserDefaults.standard.dictionary(forKey: SettingsKeys.mmprojOverride) as? [String: String])?[path]
+        (SettingsNumericCoercion.dictionary(SettingsKeys.mmprojOverride) as? [String: String])?[path]
     }
 
     nonisolated static func setMmprojOverride(_ projector: String?, forModel path: String) {
-        var map = UserDefaults.standard.dictionary(forKey: SettingsKeys.mmprojOverride) as? [String: String] ?? [:]
+        var map = SettingsNumericCoercion.dictionary(SettingsKeys.mmprojOverride) as? [String: String] ?? [:]
         if let projector { map[path] = projector } else { map.removeValue(forKey: path) }
         UserDefaults.standard.set(map, forKey: SettingsKeys.mmprojOverride)
     }
@@ -1763,16 +1763,16 @@ struct ServerSettings {
 
     nonisolated static func dflashMode(forModel modelPath: String) -> DflashMode {
         let defaults = UserDefaults.standard
-        if let raw = (defaults.dictionary(forKey: SettingsKeys.dflashModes) as? [String: String])?[modelPath],
+        if let raw = (SettingsNumericCoercion.dictionary(SettingsKeys.dflashModes, in: defaults) as? [String: String])?[modelPath],
            let mode = DflashMode(rawValue: raw) {
             return mode
         }
-        let disabled = defaults.stringArray(forKey: SettingsKeys.dflashDisabled) ?? []
+        let disabled = SettingsNumericCoercion.stringArray(SettingsKeys.dflashDisabled, in: defaults)
         return disabled.contains(modelPath) ? .off : .auto
     }
 
     nonisolated static func setDflashMode(_ mode: DflashMode, forModel modelPath: String) {
-        var modes = UserDefaults.standard.dictionary(forKey: SettingsKeys.dflashModes) as? [String: String] ?? [:]
+        var modes = SettingsNumericCoercion.dictionary(SettingsKeys.dflashModes) as? [String: String] ?? [:]
         modes[modelPath] = mode.rawValue
         UserDefaults.standard.set(modes, forKey: SettingsKeys.dflashModes)
     }
@@ -2716,8 +2716,7 @@ final class ServerController: ObservableObject {
             }
             guard DflashPolicy.shouldWarn(fractions: fractions) else { return }
             let signature = dflashWarningSignature(settings: settings)
-            let acknowledged = UserDefaults.standard.stringArray(
-                forKey: SettingsKeys.dflashWarningAcknowledged) ?? []
+            let acknowledged = SettingsNumericCoercion.stringArray(SettingsKeys.dflashWarningAcknowledged)
             guard !acknowledged.contains(signature) else { return }
             dflashWarning = DflashRuntimeWarning(
                 modelPath: settings.modelPath,
@@ -2738,8 +2737,7 @@ final class ServerController: ObservableObject {
     func acknowledgeDflashWarning() {
         guard let settings = launchedSettings else { dflashWarning = nil; return }
         let signature = dflashWarningSignature(settings: settings)
-        var acknowledged = UserDefaults.standard.stringArray(
-            forKey: SettingsKeys.dflashWarningAcknowledged) ?? []
+        var acknowledged = SettingsNumericCoercion.stringArray(SettingsKeys.dflashWarningAcknowledged)
         if !acknowledged.contains(signature) { acknowledged.append(signature) }
         UserDefaults.standard.set(acknowledged, forKey: SettingsKeys.dflashWarningAcknowledged)
         dflashWarning = nil

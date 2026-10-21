@@ -869,7 +869,7 @@ enum ToolSupport {
     }
 
     static var blockedModels: [String] {
-        UserDefaults.standard.stringArray(forKey: SettingsKeys.toolsUnsupportedModels) ?? []
+        SettingsNumericCoercion.stringArray(SettingsKeys.toolsUnsupportedModels)
     }
 
     static func unblock(_ model: String) {
