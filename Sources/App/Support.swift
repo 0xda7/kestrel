@@ -512,6 +512,12 @@ enum EngineLock {
             .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) } ?? []
     }
 
+    /// How many engines this app currently owns. Injectable seam: launch-
+    /// truth triage (ServerSettings.windowState) reads it to tell "no
+    /// engine" from "engine without a published context", and checks
+    /// override it instead of mutating the real PID lockfile.
+    nonisolated(unsafe) static var liveCountForTriage: () -> Int = { read().count }
+
     private static func save(_ pids: [Int32]) {
         if pids.isEmpty {
             try? FileManager.default.removeItem(at: url)

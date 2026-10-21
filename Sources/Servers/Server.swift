@@ -273,20 +273,59 @@ struct ServerSettings {
     /// files in a shared folder.
     static func slotCacheDir(port: Int) -> URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/slots/\(port)/\(slotKVSignature())")
+            .appendingPathComponent("Kestrel/slots/\(port)/\(slotKVSignature(port: port))")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 
     /// A slot only restores into an identical KV layout; separate folders per type
     /// turn a quant change into a cold prefill instead of a failed restore.
+    /// The port-aware form prefers the LAUNCH-truth signature below.
+    static func slotKVSignature(port: Int) -> String {
+        launchSlotKVSignature(port: port) ?? slotKVSignature()
+    }
+
     private static func slotKVSignature() -> String {
         let d = UserDefaults.standard
         // a slot holding media only restores with a projector loaded, so vision state splits it too
         let vision = SettingsNumericCoercion.bool(SettingsKeys.loadVision, default: true, in: d)
-        return "\(sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeK), default: "f16"))"
-             + "-\(sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeV), default: "f16"))"
-             + (vision ? "-v" : "")
+        return slotKVSignature(k: sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeK), default: "f16"),
+                               v: sanitizedKV(d.string(forKey: SettingsKeys.cacheTypeV), default: "f16"),
+                               vision: vision)
+    }
+
+    static func slotKVSignature(k: String, v: String, vision: Bool) -> String {
+        "\(k)-\(v)" + (vision ? "-v" : "")
+    }
+
+    // MARK: Launch-truth slot signature (census W5-2)
+
+    /// Slot save/restore must follow the values the ENGINE launched with
+    /// (--slot-save-path, KV types, projector), not read-time defaults: a
+    /// mid-run toggle otherwise points the read side at a directory the
+    /// running engine never used. Published beside liveCtx at launch,
+    /// cleared beside it at teardown.
+    private static func launchKVKey(port: Int) -> String { "launchKVSignature.\(port)" }
+    private static func launchPersistKey(port: Int) -> String { "launchPersistCache.\(port)" }
+
+    static func publishLaunchSlotSignature(kv: String, persistCache: Bool, port: Int) {
+        UserDefaults.standard.set(kv, forKey: launchKVKey(port: port))
+        UserDefaults.standard.set(persistCache, forKey: launchPersistKey(port: port))
+    }
+
+    static func clearLaunchSlotSignature(port: Int) {
+        UserDefaults.standard.removeObject(forKey: launchKVKey(port: port))
+        UserDefaults.standard.removeObject(forKey: launchPersistKey(port: port))
+    }
+
+    static func launchSlotKVSignature(port: Int) -> String? {
+        UserDefaults.standard.string(forKey: launchKVKey(port: port))
+    }
+
+    static func launchSlotPersistCache(port: Int) -> Bool? {
+        let d = UserDefaults.standard
+        guard d.object(forKey: launchPersistKey(port: port)) != nil else { return nil }
+        return d.bool(forKey: launchPersistKey(port: port))
     }
 
     /// Slot directory of the primary server (the one the native chat talks to).
@@ -374,10 +413,42 @@ struct ServerSettings {
         return value > 0 ? value : nil
     }
 
-    /// Window for in-flight chat decisions on a port: the live engine's real
-    /// size when one answers there, else the freshly computed estimate.
+    /// Triage for in-flight window decisions (census W5-3): the engine's
+    /// published truth when it has one; a clean "nothing is running" with
+    /// the solver estimate for pre-start planning; and a distinct state for
+    /// an engine that is up without a published window — a foreign or
+    /// racing process whose real ctx is unknown, where the solver estimate
+    /// is a guess, not a measurement, and is logged as such.
+    enum LiveWindow: Equatable {
+        case published(Int)
+        case noEngine(Int)
+        case engineWithoutPublishedCtx
+    }
+
+    static func windowState(port: Int) -> LiveWindow {
+        if let live = liveCtx(port: port) { return .published(live) }
+        return EngineLock.liveCountForTriage() > 0 ? .engineWithoutPublishedCtx : .noEngine(fromDefaults().resolvedCtx)
+    }
+
     static func liveResolvedCtx(port: Int) -> Int {
-        liveCtx(port: port) ?? fromDefaults().resolvedCtx
+        switch windowState(port: port) {
+        case .published(let ctx):
+            return ctx
+        case .noEngine(let estimate):
+            return estimate
+        case .engineWithoutPublishedCtx:
+            AppLog.app.warning("engine on port \(port) has no published context; decisions fall back to the solver estimate")
+            return fromDefaults().resolvedCtx
+        }
+    }
+
+    /// The window the meter and pickers show (census W5-1): the live
+    /// engine's published ctx regardless of manual/automatic mode — the
+    /// engine keeps the -c it launched with either way; configured values
+    /// only stand in when nothing is running.
+    static func displayCtx(port: Int, configured: Int, automaticResolved: Int, automatic: Bool) -> Int {
+        if let live = liveCtx(port: port) { return live }
+        return automatic ? automaticResolved : configured
     }
 
     /// The K/V pair actually launched with. Gemma's attention hits the
@@ -2340,6 +2411,10 @@ final class ServerController: ObservableObject {
         // being started with; watchHealth overwrites it with the engine's own
         // /props n_ctx once it answers.
         ServerSettings.publishLiveCtx(settings.resolvedCtx, port: settings.port)
+        ServerSettings.publishLaunchSlotSignature(
+            kv: ServerSettings.slotKVSignature(k: settings.cacheTypeK, v: settings.cacheTypeV,
+                                     vision: settings.loadVision),
+            persistCache: settings.persistCache, port: settings.port)
 
         let pipe = Pipe()
         p.standardOutput = pipe
@@ -2363,6 +2438,7 @@ final class ServerController: ObservableObject {
                 EngineLock.remove(pid: proc.processIdentifier)
                 if let port = self.launchedSettings?.port {
                     ServerSettings.clearLiveCtx(port: port)
+                    ServerSettings.clearLaunchSlotSignature(port: port)
                 }
                 // a router that died leaves its model children behind, holding their weights
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1) {

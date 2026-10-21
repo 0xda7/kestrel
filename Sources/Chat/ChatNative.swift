@@ -1549,10 +1549,17 @@ final class ChatStore: ObservableObject {
 
     // MARK: KV slot persistence
 
-    /// Read live from defaults so toggling it in Settings takes effect next turn.
+    /// Launch truth first (census W5-2): slot save/restore only works when
+    /// THIS engine started with --slot-save-path, so the decision follows
+    /// the published launch value; the Settings toggle re-applies at the
+    /// next engine start. Without a live engine the current toggle stands.
     nonisolated var slotPersistEnabled: Bool {
         let d = UserDefaults.standard
-        guard SettingsNumericCoercion.bool(SettingsKeys.persistCache, default: false, in: d) else { return false }
+        if let launched = ServerSettings.launchSlotPersistCache(port: ServerSettings.fromDefaults().port) {
+            guard launched else { return false }
+        } else {
+            guard SettingsNumericCoercion.bool(SettingsKeys.persistCache, default: false, in: d) else { return false }
+        }
         guard SettingsNumericCoercion.bool(SettingsKeys.faAmd, default: ServerSettings.defaultFaAmd, in: d) else { return false }
         // Only an actually loaded projector blocks slot save/restore; with the
         // vision eye off the model runs text-only and persistence works.
@@ -2516,12 +2523,17 @@ struct NativeChatView: View {
     @AppStorage(SettingsKeys.port) private var port = 8080
     @AppStorage(SettingsKeys.ctx) private var configuredContextLimit = 16384
     @AppStorage(SettingsKeys.contextAutomatic) private var contextAutomatic = false
-    /// The window the engine actually launched with — the raw setting when
-    /// manual, the live engine's published window (launch estimate, then its
-    /// own /props n_ctx) when automatic, so the meter, the response-token
-    /// picker and the compaction threshold never lie about what fits.
+    /// The window the engine actually launched with (census W5-1): its
+    /// published live window in BOTH modes — the engine keeps the -c it
+    /// launched with whether ctx was set manually or automatically — so
+    /// the meter, the response-token picker and the compaction threshold
+    /// never lie about what fits; configured values only stand in when
+    /// nothing is running.
     private var contextLimit: Int {
-        contextAutomatic ? ServerSettings.liveResolvedCtx(port: port) : configuredContextLimit
+        ServerSettings.displayCtx(port: port,
+                                  configured: configuredContextLimit,
+                                  automaticResolved: ServerSettings.fromDefaults().resolvedCtx,
+                                  automatic: contextAutomatic)
     }
     @AppStorage(SettingsKeys.routerMode) private var routerMode = false
     @AppStorage(SettingsKeys.chatSelectedModel) private var chatSelectedModel = ""

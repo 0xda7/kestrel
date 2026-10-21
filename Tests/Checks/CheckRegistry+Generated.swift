@@ -40,6 +40,7 @@ enum CheckRegistry {
         ("UpdateCheckerTests", UpdateCheckerTests.__checkSet),
         ("UpdateSwapSafetyTests", UpdateSwapSafetyTests.__checkSet),
         ("EngineTeardownTests", EngineTeardownTests.__checkSet),
+        ("LiveWindowTruthTests", LiveWindowTruthTests.__checkSet),
         ("CatalogTests", CatalogTests.__checkSet),
         ("RouterModeTests", RouterModeTests.__checkSet),
         ("ConversationDecodingTests", ConversationDecodingTests.__checkSet),
