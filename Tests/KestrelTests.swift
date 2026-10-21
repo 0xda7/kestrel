@@ -3691,3 +3691,108 @@ extension ChatStoreSurfacingTests {
             .init(name: "testStoreUnreadableMessageIsEnglishAndNamesTheRecovery") { $0.testStoreUnreadableMessageIsEnglishAndNamesTheRecovery() },
         ])
 }
+
+/// Census W8 App-group secret + hash conversions (T2-2 chunk A): a
+/// present-but-unreadable secret is surfaced, never silently read as "no
+/// key", and FileHash fails closed — any I/O failure yields nil, never a
+/// well-formed digest of a truncated prefix.
+final class SecretHashSurfacingTests: CheckCase {
+    private func makeTempDir(_ name: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("secret-hash-surfacing-\(name)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// The secrets directory must exist for a direct cold-file write below;
+    /// create it exactly as the store invariant declares (0700).
+    private func ensureSecretsDir() throws {
+        let dir = LocalSecretStore.url("probe").deletingLastPathComponent()
+        try FileManager.default.createDirectory(atPath: dir.path,
+                                                withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+    }
+
+    func testAbsentSecretIsBenignOnEveryPath() {
+        let name = "kestrel-check-absent-\(UUID().uuidString)"
+        XCTAssertNil(LocalSecretStore.value(name), "an absent secret is no key set — benign")
+        XCTAssertNil(LocalSecretStore.unreadableReason(name),
+                     "an absent secret is not an unreadability failure")
+        LocalSecretStore.delete(name)  // must not log, throw, or leave state behind
+    }
+
+    func testUnreadableSecretIsSurfacedNotConflated() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX read bits are not enforced for root") }
+        try ensureSecretsDir()
+        // A cold name written directly (store() would warm the in-process
+        // cache and short-circuit the file read under test).
+        let name = "kestrel-check-unreadable-\(UUID().uuidString)"
+        let fileURL = LocalSecretStore.url(name)
+        try Data("cold-secret".utf8).write(to: fileURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: fileURL.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        XCTAssertNil(LocalSecretStore.value(name),
+                     "an unreadable secret must not be returned as a value")
+        let reason = LocalSecretStore.unreadableReason(name)
+        XCTAssertNotNil(reason, "an unreadable secret must be surfaced, not conflated with absent")
+        XCTAssertTrue(try XCTUnwrap(reason).contains(name), "the surfacing names the secret")
+        XCTAssertTrue(try XCTUnwrap(reason).contains("unreadable"))
+        XCTAssertTrue(try XCTUnwrap(reason).allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+    }
+
+    func testReadableSecretCarriesNoUnreadabilityReason() throws {
+        try ensureSecretsDir()
+        let name = "kestrel-check-readable-\(UUID().uuidString)"
+        let fileURL = LocalSecretStore.url(name)
+        try Data("known\n".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        XCTAssertEqual(LocalSecretStore.value(name), "known", "a healthy secret still reads, trailing newlines trimmed")
+        XCTAssertNil(LocalSecretStore.unreadableReason(name),
+                     "a readable secret carries no unreadability reason")
+    }
+
+    func testFileHashMatchesTheKnownSha256Vector() throws {
+        let url = try makeTempDir("vector").appendingPathComponent("abc.txt")
+        try Data("abc".utf8).write(to: url)
+        XCTAssertEqual(FileHash.sha256(of: url),
+                       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    func testFileHashOnAMissingFileFailsClosed() throws {
+        let url = try makeTempDir("missing").appendingPathComponent("not-there.bin")
+        XCTAssertNil(FileHash.sha256(of: url), "a missing file yields nil, never a digest")
+    }
+
+    func testFileHashOnAnUnreadableFileFailsClosed() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX read bits are not enforced for root") }
+        let url = try makeTempDir("locked").appendingPathComponent("locked.bin")
+        try Data("locked content".utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path) }
+        XCTAssertNil(FileHash.sha256(of: url), "an unreadable file yields nil, never a digest")
+    }
+
+    func testFileHashOfANonFileInputFailsClosed() throws {
+        let dir = try makeTempDir("directory")
+        XCTAssertNil(FileHash.sha256(of: dir), "a non-file input yields nil, never a digest")
+    }
+}
+
+extension SecretHashSurfacingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SecretHashSurfacingTests",
+        instance: { SecretHashSurfacingTests() },
+        checks: [
+            .init(name: "testAbsentSecretIsBenignOnEveryPath") { $0.testAbsentSecretIsBenignOnEveryPath() },
+            .init(name: "testUnreadableSecretIsSurfacedNotConflated") { try $0.testUnreadableSecretIsSurfacedNotConflated() },
+            .init(name: "testReadableSecretCarriesNoUnreadabilityReason") { try $0.testReadableSecretCarriesNoUnreadabilityReason() },
+            .init(name: "testFileHashMatchesTheKnownSha256Vector") { try $0.testFileHashMatchesTheKnownSha256Vector() },
+            .init(name: "testFileHashOnAMissingFileFailsClosed") { try $0.testFileHashOnAMissingFileFailsClosed() },
+            .init(name: "testFileHashOnAnUnreadableFileFailsClosed") { try $0.testFileHashOnAnUnreadableFileFailsClosed() },
+            .init(name: "testFileHashOfANonFileInputFailsClosed") { try $0.testFileHashOfANonFileInputFailsClosed() },
+        ])
+}

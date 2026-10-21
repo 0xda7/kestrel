@@ -57,6 +57,7 @@ enum CheckRegistry {
         ("InlineMathDetectionTests", InlineMathDetectionTests.__checkSet),
         ("ModelDetectionTests", ModelDetectionTests.__checkSet),
         ("ModelUpdateTests", ModelUpdateTests.__checkSet),
+        ("SecretHashSurfacingTests", SecretHashSurfacingTests.__checkSet),
         ("SecretRedactionTests", SecretRedactionTests.__checkSet),
         ("ServerModelSelectionTests", ServerModelSelectionTests.__checkSet),
         ("ServerNavigationTests", ServerNavigationTests.__checkSet),

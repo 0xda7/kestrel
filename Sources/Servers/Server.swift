@@ -581,6 +581,12 @@ struct ServerSettings {
             // lifetime; this engine reads keys from a file just as well, and
             // the 0600 local secret store is where the key already lives.
             _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+            // Census W8 (T2-2): a present-but-unreadable key file used to
+            // surface only as engine auth failures far from the cause. Log it
+            // typed at launch — surfacing only; the launch itself is unchanged.
+            if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
+                AppLog.server.error("\(reason)")
+            }
             args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         }
         // A compatible downloaded DFlash draft takes precedence over embedded MTP.
@@ -708,6 +714,9 @@ struct ServerSettings {
         if apiKeyEnabled {
             // KES-04, router path: same file-backed key as the main launch path.
             _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+            if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
+                AppLog.server.error("\(reason)")
+            }
             args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         }
         if let ui = Self.chatUIPath { args += ["--path", ui] }

@@ -606,13 +606,36 @@ enum EngineLock {
 // MARK: - File hashing
 
 enum FileHash {
-    /// Streaming SHA-256 suitable for multi-gigabyte files.
+    /// Streaming SHA-256 suitable for multi-gigabyte files. Any I/O failure
+    /// (open, read, mid-stream) yields nil — never a digest of a truncated
+    /// prefix — so integrity consumers (KES-09 update verification, download
+    /// checksums, share artifacts) fail closed, and the failure is surfaced.
     static func sha256(of url: URL) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? handle.close() }
+        let handle: FileHandle
+        do {
+            handle = try FileHandle(forReadingFrom: url)
+        } catch {
+            AppLog.app.error("could not open \(url.lastPathComponent) for hashing: \(error.localizedDescription) — integrity verification fails closed")
+            return nil
+        }
+        defer {
+            // A failed close after a complete read cannot invalidate the
+            // bytes already hashed; surface it without discarding the digest.
+            do { try handle.close() } catch {
+                AppLog.app.warning("could not close \(url.lastPathComponent) after hashing: \(error.localizedDescription)")
+            }
+        }
         var hasher = SHA256()
-        while let chunk = try? handle.read(upToCount: 8 * 1024 * 1024), !chunk.isEmpty {
-            hasher.update(data: chunk)
+        do {
+            while let chunk = try handle.read(upToCount: 8 * 1024 * 1024), !chunk.isEmpty {
+                hasher.update(data: chunk)
+            }
+        } catch {
+            // The pre-conversion swallow ended the loop on error and still
+            // finalized: a well-formed digest of a file PREFIX — silently
+            // wrong where it is not fail-closed by luck. Discard instead.
+            AppLog.app.error("read failed partway through \(url.lastPathComponent): \(error.localizedDescription) — digest discarded; integrity verification fails closed")
+            return nil
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
@@ -792,14 +815,44 @@ enum LocalSecretStore {
     static func value(_ name: String) -> String? {
         if let cached = cache.withLock({ $0[name] }) { return cached }
         let path = url(name).path
-        guard FileManager.default.fileExists(atPath: path),
-              var contents = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        while contents.hasSuffix("\n") { contents.removeLast() }
-        let value = contents.isEmpty ? nil : contents
-        if let value {
-            cache.withLock { $0[name] = value }
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        do {
+            var contents = try String(contentsOfFile: path, encoding: .utf8)
+            while contents.hasSuffix("\n") { contents.removeLast() }
+            let value = contents.isEmpty ? nil : contents
+            if let value {
+                cache.withLock { $0[name] = value }
+            }
+            return value
+        } catch {
+            // A present-but-unreadable secret must not read as "no key set":
+            // that conflation surfaces as auth failures far from the cause.
+            AppLog.app.error("secret \(name) exists but cannot be read: \(error.localizedDescription) — auth fails until the file is fixed or the secret re-entered")
+            return nil
         }
-        return value
+    }
+
+    /// Typed readability probe for launch-time surfacing: nil when the
+    /// secret is absent or readable; an English reason when it exists but
+    /// cannot be read. Engine launch logs the reason and carries on —
+    /// surfacing never changes launch behavior.
+    static func unreadableReason(_ name: String) -> String? {
+        let path = url(name).path
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        do {
+            _ = try String(contentsOfFile: path, encoding: .utf8)
+            return nil
+        } catch {
+            // Foundation's English error strings carry typographic quotes;
+            // the typed reason must stay ASCII (product doctrine), so the
+            // embedded detail is normalized before it is surfaced.
+            let detail = error.localizedDescription
+                .replacingOccurrences(of: "\u{201C}", with: "\"")
+                .replacingOccurrences(of: "\u{201D}", with: "\"")
+                .replacingOccurrences(of: "\u{2019}", with: "'")
+            let ascii = String(detail.unicodeScalars.filter { $0.isASCII })
+            return "secret \(name) is present but unreadable: \(ascii); engine authentication will fail until the file is fixed or the secret is re-entered"
+        }
     }
 
     @discardableResult
@@ -807,9 +860,13 @@ enum LocalSecretStore {
         let fileURL = url(name)
         let dirURL = fileURL.deletingLastPathComponent()
         let fm = FileManager.default
-        try? fm.createDirectory(atPath: dirURL.path,
-                                withIntermediateDirectories: true,
-                                attributes: [.posixPermissions: 0o700])
+        do {
+            try fm.createDirectory(atPath: dirURL.path,
+                                   withIntermediateDirectories: true,
+                                   attributes: [.posixPermissions: 0o700])
+        } catch {
+            AppLog.app.error("could not create the secrets directory at \(dirURL.path): \(error.localizedDescription) — the secret cannot be stored")
+        }
         // Idempotent tighten on every write, not only at creation: a directory
         // that already existed (0755 from an older build or a restored backup)
         // must not keep the 0600-files-in-a-0700-folder invariant broken.
@@ -825,7 +882,14 @@ enum LocalSecretStore {
     }
 
     static func delete(_ name: String) {
-        try? FileManager.default.removeItem(at: url(name))
+        let target = url(name)
+        if FileManager.default.fileExists(atPath: target.path) {
+            do {
+                try FileManager.default.removeItem(at: target)
+            } catch {
+                AppLog.app.error("could not delete secret \(name): \(error.localizedDescription) — the secret is left on disk after remove")
+            }
+        }
         _ = cache.withLock { $0.removeValue(forKey: name) }
     }
 }
