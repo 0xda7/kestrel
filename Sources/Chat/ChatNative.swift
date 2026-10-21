@@ -1617,10 +1617,22 @@ final class ChatStore: ObservableObject {
 
     nonisolated private static func slotFile(_ id: UUID) -> String { "\(id.uuidString).bin" }
 
-    /// POST /slots/0?action=save|restore (best-effort; a missing file on restore
-    /// just means a cold prefill, which is harmless). Same shared request the
-    /// server controller issues, with the same 30 s bound.
-    nonisolated private func slotAction(_ action: String, convID: UUID, port: Int) async {
+    /// POST /slots/0?action=save|restore. BUG-SHIELD doctrine (census W8
+    /// ChatNative:1524): llama.cpp cannot save or restore slots while a
+    /// mmproj projector is loaded, and the engine flakes on slot actions
+    /// even under the launcher's gates (SettingsTab disables the controls
+    /// for multimodal models; Server.slotAction carries the same
+    /// best-effort rationale). The request is therefore deliberately
+    /// best-effort with NO surfaced error: a missing file on restore just
+    /// means a cold prefill, which is harmless, and a failed save only
+    /// means the next engine start falls back to a cold prefill too.
+    /// Surfacing here would turn a harmless degradation into a chat error
+    /// card for a request the engine may refuse for reasons outside this
+    /// conversation's control. The swallow is bounded (30 s) and pinned by
+    /// ChatToolPathDoctrineTests ("no error surfaced on slot-action
+    /// failure"). Same shared request the server controller issues.
+    /// Internal (not private) so the doctrine pin can call it directly.
+    nonisolated func slotAction(_ action: String, convID: UUID, port: Int) async {
         guard let req = EngineHTTP.slotRequest(port: port, action: action,
                                                filename: Self.slotFile(convID), timeout: 30) else { return }
         _ = try? await EngineHTTP.session.data(for: req)

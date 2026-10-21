@@ -16,6 +16,7 @@ enum CheckRegistry {
         ("BenchmarkShareReviewTests", BenchmarkShareReviewTests.__checkSet),
         ("ChatStoreSurfacingTests", ChatStoreSurfacingTests.__checkSet),
         ("ChatImportSurfacingTests", ChatImportSurfacingTests.__checkSet),
+        ("ChatToolPathDoctrineTests", ChatToolPathDoctrineTests.__checkSet),
         ("ContextTrapTests", ContextTrapTests.__checkSet),
         ("ImportSafetyTests", ImportSafetyTests.__checkSet),
         ("WhisperTranscriptTests", WhisperTranscriptTests.__checkSet),

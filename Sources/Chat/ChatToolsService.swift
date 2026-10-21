@@ -17,6 +17,12 @@ struct BuiltinToolInfo: Identifiable, Sendable {
 
     var id: String { name }
 
+    /// BUG-SHIELD naming comment (census W8 ChatToolsService:21): registration
+    /// already validates every definition — `init?(json:)` checks
+    /// `isValidJSONObject` before serializing, the throwing init propagates
+    /// the serialize error, and the literal init traps — so `definitionData`
+    /// is exactly valid JSON and this decode cannot fail for a registered
+    /// tool. A nil here would mean a registration bug, not bad input.
     var openAIDefinition: [String: Any]? {
         try? JSONSerialization.jsonObject(with: definitionData) as? [String: Any]
     }
@@ -82,12 +88,18 @@ struct ToolExecutionResult: Sendable, Equatable {
 
 enum ChatToolsError: LocalizedError {
     case invalidResponse
+    /// A `data:` line of the tool-exec stream that failed to decode (census
+    /// W8 ChatToolsService:237): a dropped event is lost stream content, so
+    /// it surfaces as a typed error carrying the offending fragment.
+    case invalidStreamEvent(payload: String)
     case server(status: Int, message: String)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "llama.cpp returned an invalid tools response."
+        case let .invalidStreamEvent(payload):
+            return "llama.cpp sent a malformed tool-stream event: \(payload)"
         case let .server(status, message):
             return "HTTP \(status): \(message)"
         }
@@ -143,7 +155,29 @@ enum ChatToolsService {
         guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw ChatToolsError.invalidResponse
         }
-        return rows.compactMap(BuiltinToolInfo.init(json:))
+        return decodeToolRows(rows)
+    }
+
+    /// Decodes /tools rows, surfacing rows that fail registration instead of
+    /// dropping them silently (census W8 ChatToolsService:31): a tool absent
+    /// from the engine's tool list is a silent capability loss — the model
+    /// cannot call what it was never offered. Healthy rows still load; each
+    /// dropped row is reported with its best-available identifier.
+    /// (The listing's network failures are surfaced by the caller.)
+    static func decodeToolRows(
+        _ rows: [[String: Any]],
+        reportDrop: (String) -> Void = { AppLog.chat.warning("tool listing dropped a malformed tool row: \($0)") }
+    ) -> [BuiltinToolInfo] {
+        var tools: [BuiltinToolInfo] = []
+        for row in rows {
+            if let tool = BuiltinToolInfo(json: row) {
+                tools.append(tool)
+            } else {
+                let identifier = (row["tool"] as? String) ?? (row["display_name"] as? String) ?? "unknown"
+                reportDrop(identifier)
+            }
+        }
+        return tools
     }
 
     /// Transient-failure retry, read-only tools only. A write/exec tool whose
@@ -232,10 +266,15 @@ enum ChatToolsService {
         var output = ""
         for try await line in bytes.lines {
             try Task.checkCancellation()
-            guard line.hasPrefix("data: "),
-                  let data = String(line.dropFirst(6)).data(using: .utf8),
-                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { continue }
+            // Census W8 ChatToolsService:237 (DEBT → typed): this endpoint
+            // has NO non-JSON sentinel — the loop terminates on the JSON
+            // "done" event ([DONE] belongs to the /v1/chat protocol, not
+            // here) — so a `data:` payload that fails to decode is lost
+            // stream content, not a skippable line, and surfaces as a
+            // typed invalidStreamEvent. Prefix-less lines (SSE comments,
+            // keepalives) are the protocol skipping itself, not lost
+            // content, and still continue.
+            guard let event = try Self.toolStreamEvent(from: line) else { continue }
             if let chunk = event["chunk"] as? String {
                 output += chunk
                 await onUpdate(output)
@@ -251,6 +290,21 @@ enum ChatToolsService {
             }
         }
         throw ChatToolsError.invalidResponse
+    }
+
+    /// Parses one SSE line of the tool-exec stream. Returns nil for lines
+    /// without the `data: ` prefix (comments/keepalives — skipping them is
+    /// the protocol), the decoded event object for a `data:` payload, and
+    /// throws `.invalidStreamEvent` (fragment truncated to 120 characters)
+    /// for a `data:` payload that fails UTF-8/JSON/object decode.
+    static func toolStreamEvent(from line: String) throws -> [String: Any]? {
+        guard line.hasPrefix("data: ") else { return nil }
+        let payload = String(line.dropFirst(6))
+        guard let data = payload.data(using: .utf8),
+              let event = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw ChatToolsError.invalidStreamEvent(payload: String(payload.prefix(120)))
+        }
+        return event
     }
 
     /// Doctrine (mission C1, W1-2): small models emit tool arguments with
@@ -274,6 +328,14 @@ enum ChatToolsService {
             if text.hasSuffix("```") { text = String(text.dropLast(3)) }
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        // Census W8 :272 — BUG-SHIELD, interim doctrine. The strict pass is
+        // where models that emit well-formed arguments succeed. The repair
+        // tiers after it exist for a real UPSTREAM producer failure — small
+        // models emit BOM-prefixed, fenced, trailing-comma, or single-quoted
+        // JSON — never for a Kestrel defect; they stay until W9
+        // grammar-constrained tool calls retire them on the last
+        // unconstrained paths (the constrained local path never reaches
+        // them). Every tier is pinned in ToolArgumentsRepairTests.
         if let data = text.data(using: .utf8),
            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return value
@@ -299,6 +361,11 @@ enum ChatToolsService {
     static func repairedJSONObject(from text: String) -> String? {
         // No `?? [:]` here: coalescing an unrepairable blob into an empty
         // object would turn every invalid arguments payload into "no
+        // Census W8 :297 — BUG-SHIELD, interim doctrine (same upstream
+        // producer failure as the ladder above): re-serializing the relaxed
+        // parse hands the repaired text back in exactly valid JSON. The
+        // try? cannot fail for JSONSerialization output; the genuine
+        // failure mode (nothing repairable) is the nil return below.
         // arguments" and the invalidResponse throw below would be dead code.
         guard let relaxed = relaxedParse(text),
               let trimmed = try? JSONSerialization.data(withJSONObject: relaxed) else { return nil }
@@ -340,6 +407,10 @@ enum ChatToolsService {
             out.append(ch)
             i = text.index(after: i)
         }
+        // Census W8 :337 — BUG-SHIELD, interim doctrine: blobs with
+        // trailing commas (a common small-model emission) only parse after
+        // this string-aware strip; the re-parse fails for genuinely
+        // unrepairable text and falls through to the quote tier below.
         if let data = out.data(using: .utf8),
            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return value
@@ -369,6 +440,10 @@ enum ChatToolsService {
             }
             fixed.append(ch)
         }
+        // Census W8 :366 — BUG-SHIELD, interim doctrine: single-quoted
+        // keys/values (another small-model emission shape) survive only
+        // after this normalization; a nil here ends the ladder and the
+        // caller throws the typed invalidResponse.
         if let data = fixed.data(using: .utf8),
            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return value
@@ -487,6 +562,14 @@ enum ToolCallRescue {
         guard !text.isEmpty else { return [] }
         var calls: [ChatToolCall] = []
         for blob in candidateBlobs(in: text) {
+            // Census W8 :475 — BUG-SHIELD, interim doctrine: candidate
+            // blobs fail to parse when the model emitted prose around a
+            // broken object — the upstream producer failure documented
+            // above (models emitting tool calls outside the wire format on
+            // unconstrained paths), not a Kestrel defect. The blob is
+            // skipped and the scan continues; W9 grammar enforcement
+            // retires this on the constrained path, which already returns
+            // [] before reaching here.
             guard calls.count < maxPerTurn else { break }
             guard let data = blob.data(using: .utf8),
                   let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -500,6 +583,12 @@ enum ToolCallRescue {
             } else {
                 arguments = [:]
             }
+            // Census W8 :486 — BUG-SHIELD, interim doctrine: this
+            // re-serialize cannot fail for arguments taken from a
+            // successfully parsed JSON object (JSONSerialization output is
+            // exactly valid JSON, and the non-dict case degrades to [:]
+            // above, pinned in ToolCallRescueTests) — the skip guards a
+            // future non-JSON-producing arguments source, never today's.
             guard let argumentsData = try? JSONSerialization.data(withJSONObject: arguments)
             else { continue }
             calls.append(ChatToolCall(serverID: nil, name: rawName,

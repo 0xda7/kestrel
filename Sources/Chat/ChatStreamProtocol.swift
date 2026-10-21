@@ -29,9 +29,18 @@ struct ChatStreamAccumulator {
         guard line.hasPrefix("data: ") else { return nil }
         let payload = String(line.dropFirst(6))
         if payload == "[DONE]" { return ChatStreamEvent(completed: true) }
-        guard let data = payload.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
+        // Census W8 ChatStreamProtocol:33 (DEBT → typed): a `data:` payload
+        // that fails to decode is lost stream content — continuing without
+        // it would silently reshape the transcript — so it surfaces as a
+        // StreamError the UI already renders as a stream error card.
+        // [DONE] above and prefix-less lines (SSE comments/keepalives)
+        // stay legal input.
+        guard let data = payload.data(using: .utf8) else {
+            throw StreamError(message: Self.malformedEventMessage(payload))
+        }
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw StreamError(message: Self.malformedEventMessage(payload))
+        }
 
         if let message = ChatStore.streamedError(from: object) {
             throw StreamError(message: message)
@@ -109,6 +118,13 @@ struct ChatStreamAccumulator {
             if let arguments = function["arguments"] as? String { toolCalls[index].arguments += arguments }
         }
     }
+
+    /// Error text for a stream `data:` payload that is neither [DONE] nor
+    /// parseable JSON: names the malformed event with a truncated fragment.
+    private static func malformedEventMessage(_ payload: String) -> String {
+        "The model stream carried a malformed event: \(String(payload.prefix(120)))"
+    }
+
 
     // MARK: Anthropic SSE translation
 
