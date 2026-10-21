@@ -66,6 +66,11 @@ public struct KestrelApp: App {
         // @AppStorage(Double/Int) silently replaces with the declared default:
         // rewrite them typed so tuned values actually apply.
         SettingsNumericCoercion.migrateMistypedNumerics()
+        // Census W6-6/W7-3 (T4-2): the legacy per-model DFlash "disabled"
+        // list becomes "off" entries in the live dflashModes map, then the
+        // key retires. Runs after the numeric coercion so a string-typed
+        // legacy list is already clean when the migration reads it.
+        DflashLegacyMigration.run(in: UserDefaults.standard)
         // A "lang" stored by the removed Settings picker must not leak Spanish
         // into an English-only product; nothing reads it anymore, so clear it.
         SettingsKeys.clearStaleLanguage()

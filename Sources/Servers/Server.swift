@@ -114,6 +114,11 @@ struct ServerSettings {
     var localNetworkDiscovery: Bool = false
     /// Legacy profile field kept for decoding older saved settings. MTP is now
     /// selected automatically from model capability and expert offload.
+    /// T4-2 H3 decision: KEPT as A2-documented-excluded — profile-format
+    /// versioning does not exist (Profiles.swift decodes per-field optionals),
+    /// so dropping the field breaks importing older saved profiles. Sunset
+    /// condition (census W6-5): drop only when profile-format versioning
+    /// exists; decode pinned by LegacyKeyMigrationTests before any removal.
     var specMTP: Bool = false
     /// Route attention through the AMD Metal Flash-Attention kernel (KESTREL_FA_AMD).
     var faAmd: Bool = true
@@ -2033,6 +2038,31 @@ struct ServerSettings {
         // Default to the first model when the chat hasn't picked one yet (its
         // picker's default-selection task lives in a lazily-built popover).
         return LocalModel.scan(in: modelsDirectory).first.map { routerAlias(for: $0.url.path) }
+    }
+}
+
+/// One-shot migration (census W6-6/W7-3, T4-2): the legacy per-model
+/// DFlash "disabled" list becomes "off" entries in the live `dflashModes`
+/// map — only for models the map does not already carry (the live map
+/// wins) — and the legacy key is then removed: a retirement window, never
+/// a bare deletion. Without it, a legacy "off" choice would silently
+/// become "auto" once the fallback read retires.
+enum DflashLegacyMigration {
+    @discardableResult
+    static func run(in defaults: UserDefaults) -> Bool {
+        guard defaults.object(forKey: SettingsKeys.dflashDisabled) != nil else { return false }
+        var modes = SettingsNumericCoercion.dictionary(SettingsKeys.dflashModes, in: defaults) as? [String: String] ?? [:]
+        var touched = false
+        for path in SettingsNumericCoercion.stringArray(SettingsKeys.dflashDisabled, in: defaults)
+        where modes[path] == nil {
+            modes[path] = DflashMode.off.rawValue
+            touched = true
+        }
+        if touched {
+            defaults.set(modes, forKey: SettingsKeys.dflashModes)
+        }
+        defaults.removeObject(forKey: SettingsKeys.dflashDisabled)
+        return true
     }
 }
 

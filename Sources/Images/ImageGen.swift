@@ -1128,6 +1128,85 @@ struct GeneratedImage: Identifiable {
     let instanceLabel: String?
 }
 
+/// One-shot migration (census W7-2 + W6-12, T4-2): the pre-multi-instance
+/// per-key image settings become instance 1 of the `imagenInstances` store,
+/// values preserved verbatim, and the legacy keys are then removed — a
+/// retirement window, never a bare deletion. Runs before the pool reads the
+/// store; a present store (even an empty one) means the user already lives in
+/// the multi-instance world and the migration no-ops.
+enum ImageGenLegacyMigration {
+    /// The 16 legacy per-key settings (census W7-2), held here so the window
+    /// survives the retirement of their typed declarations.
+    static let legacyKeys = [
+        SettingsKeys.imagenPrompt, SettingsKeys.imagenAspect, SettingsKeys.imagenBaseSize,
+        SettingsKeys.imagenSteps, SettingsKeys.imagenSeed, SettingsKeys.imagenFormat,
+        SettingsKeys.imagenOffloadCPU, SettingsKeys.imagenGPU, SettingsKeys.imagenModel,
+        SettingsKeys.imagenCustomModel, SettingsKeys.imagenCustomVAE,
+        SettingsKeys.imagenCustomTextEncoder, SettingsKeys.imagenCustomIsDiffusion,
+        SettingsKeys.imagenCustomCfg, SettingsKeys.imagenInitImage, SettingsKeys.imagenStrength,
+    ]
+
+    /// True when at least one legacy per-key setting is still stored.
+    static func legacyPresent(in defaults: UserDefaults) -> Bool {
+        legacyKeys.contains { defaults.object(forKey: $0) != nil }
+    }
+
+    /// Seeds instance 1 exactly as the old read-time synthesis did — registry-
+    /// typed, present-only overrides; the declared defaults live once, in
+    /// ImageInstanceConfig's member defaults (the old inline literals
+    /// duplicated them; drift read a silent 0/0.0 — W4-3) — stores it, then
+    /// removes the legacy keys. Returns false, touching nothing, when a store
+    /// already exists or no legacy key is present. An encode failure leaves
+    /// the legacy keys in place so the window stays open.
+    @discardableResult
+    static func run(in defaults: UserDefaults) -> Bool {
+        guard defaults.data(forKey: SettingsKeys.imagenInstances) == nil,
+              legacyPresent(in: defaults) else { return false }
+
+        var c = ImageInstanceConfig()
+        c.modelID = defaults.string(forKey: SettingsKeys.imagenModel) ?? ""
+        c.customModelPath = defaults.string(forKey: SettingsKeys.imagenCustomModel) ?? ""
+        c.customVAEPath = defaults.string(forKey: SettingsKeys.imagenCustomVAE) ?? ""
+        c.customTextEncoderPath = defaults.string(forKey: SettingsKeys.imagenCustomTextEncoder) ?? ""
+        if let diffusion = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenCustomIsDiffusion, in: defaults) {
+            c.customIsDiffusion = diffusion
+        }
+        if let cfg = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenCustomCfg, in: defaults) {
+            c.customCfg = cfg
+        }
+        c.prompt = defaults.string(forKey: SettingsKeys.imagenPrompt) ?? ""
+        c.initImagePath = defaults.string(forKey: SettingsKeys.imagenInitImage) ?? ""
+        if let strength = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenStrength, in: defaults) {
+            c.strength = strength
+        }
+        c.aspect = defaults.string(forKey: SettingsKeys.imagenAspect) ?? ImageAspect.square.rawValue
+        if let baseSize = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenBaseSize, in: defaults) {
+            c.baseSize = baseSize
+        }
+        if let gpu = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenGPU, in: defaults) {
+            c.gpuIndex = gpu
+        }
+        if let steps = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: defaults) {
+            c.steps = steps
+        }
+        if let seed = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSeed, in: defaults) {
+            c.seed = seed
+        }
+        c.format = defaults.string(forKey: SettingsKeys.imagenFormat) ?? ImageFormat.png.rawValue
+        if let offload = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenOffloadCPU, in: defaults) {
+            c.offloadCPU = offload
+        }
+
+        do {
+            defaults.set(try JSONEncoder().encode([c]), forKey: SettingsKeys.imagenInstances)
+        } catch {
+            AppLog.app.error("Could not encode the migrated image studio configuration; keeping the legacy keys so the migration window stays open: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+        for key in legacyKeys { defaults.removeObject(forKey: key) }
+        return true
+    }
+}
 /// Owns the generation instances and one generator per slot; the sidebar
 /// (controls) and the canvas (tiles) share it so both see the same state.
 /// There is always at least one instance.
@@ -1146,6 +1225,10 @@ final class ImageGenPool: ObservableObject {
     private var forwards: [UUID: AnyCancellable] = [:]
 
     init() {
+        // The legacy per-key settings migrate into the instance store first
+        // (census W7-2/W6-12): one window, then this init only ever reads the
+        // store. No store and no legacy keys means a fresh install.
+        ImageGenLegacyMigration.run(in: UserDefaults.standard)
         if let data = UserDefaults.standard.data(forKey: SettingsKeys.imagenInstances) {
             let (c, unreadable) = ImageInstanceConfig.decodeConfigs(from: data)
             if let unreadable {
@@ -1161,50 +1244,7 @@ final class ImageGenPool: ObservableObject {
                 return
             }
         }
-        configs = [Self.legacyConfig()]
-    }
-
-    /// Seed instance 1 from the pre-multi-instance per-key settings, so an
-    /// updated app keeps the user's prompt and choices.
-    private static func legacyConfig() -> ImageInstanceConfig {
-        let d = UserDefaults.standard
-        // Registry-typed, present-only overrides: the declared defaults live
-        // once, in ImageInstanceConfig's member defaults (the old inline
-        // literals duplicated them; drift read a silent 0/0.0 — W4-3).
-        var c = ImageInstanceConfig()
-        c.modelID = d.string(forKey: SettingsKeys.imagenModel) ?? ""
-        c.customModelPath = d.string(forKey: SettingsKeys.imagenCustomModel) ?? ""
-        c.customVAEPath = d.string(forKey: SettingsKeys.imagenCustomVAE) ?? ""
-        c.customTextEncoderPath = d.string(forKey: SettingsKeys.imagenCustomTextEncoder) ?? ""
-        if let diffusion = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenCustomIsDiffusion, in: d) {
-            c.customIsDiffusion = diffusion
-        }
-        if let cfg = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenCustomCfg, in: d) {
-            c.customCfg = cfg
-        }
-        c.prompt = d.string(forKey: SettingsKeys.imagenPrompt) ?? ""
-        c.initImagePath = d.string(forKey: SettingsKeys.imagenInitImage) ?? ""
-        if let strength = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenStrength, in: d) {
-            c.strength = strength
-        }
-        c.aspect = d.string(forKey: SettingsKeys.imagenAspect) ?? ImageAspect.square.rawValue
-        if let baseSize = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenBaseSize, in: d) {
-            c.baseSize = baseSize
-        }
-        if let gpu = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenGPU, in: d) {
-            c.gpuIndex = gpu
-        }
-        if let steps = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: d) {
-            c.steps = steps
-        }
-        if let seed = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSeed, in: d) {
-            c.seed = seed
-        }
-        c.format = d.string(forKey: SettingsKeys.imagenFormat) ?? ImageFormat.png.rawValue
-        if let offload = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenOffloadCPU, in: d) {
-            c.offloadCPU = offload
-        }
-        return c
+        configs = [ImageInstanceConfig()]
     }
 
     /// Stable generator per slot, created lazily. Its changes are forwarded so

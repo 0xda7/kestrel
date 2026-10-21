@@ -24,6 +24,8 @@ struct Profile: Codable, Identifiable {
     var cacheTypeV: String
     var mlock: Bool
     var port: Int
+    /// Legacy field old profiles still carry; decode-compat only (T4-2 H3:
+    /// A2-documented-excluded — see ServerSettings.specMTP).
     var specMTP: Bool? = nil
     // "bundled" | "turbo" | absolute path. Optional for backward compatibility.
     var engine: String?
