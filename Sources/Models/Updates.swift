@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
 import AppKit
 import SwiftUI
 
@@ -53,11 +54,46 @@ final class UpdateChecker: ObservableObject {
         checking = true
         defer { checking = false }
 
-        guard let url = URL(string: Self.releasesAPI),
-              let (data, response) = try? await URLSession.shared.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = obj["tag_name"] as? String else { return }
+        // Census W8 Updates:57/:59 (T2-3 chunk F): a failed fetch or an
+        // unreadable response used to return here indistinguishable from a
+        // quiet "no newer release". The nil/no-update result stays (callers
+        // have no failure surface — the badge only lights on success), but
+        // the skip is named; a successful check that finds nothing newer
+        // still emits nothing.
+        guard let url = URL(string: Self.releasesAPI) else { return }
+        let data: Data
+        do {
+            let (fetched, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                let status = (response as? HTTPURLResponse)?.statusCode
+                let notice = Self.updateCheckFetchFailureNotice(
+                    reason: status.map { "HTTP \($0)" } ?? "not an HTTP response")
+                AppLog.app.error("\(notice, privacy: .public)")
+                return
+            }
+            data = fetched
+        } catch {
+            let notice = Self.updateCheckFetchFailureNotice(reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return
+        }
+        let obj: [String: Any]
+        let tag: String
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let parsedTag = parsed["tag_name"] as? String else {
+                let notice = Self.updateCheckParseFailureNotice(
+                    reason: "the response was not a release object with a version tag")
+                AppLog.app.error("\(notice, privacy: .public)")
+                return
+            }
+            obj = parsed
+            tag = parsedTag
+        } catch {
+            let notice = Self.updateCheckParseFailureNotice(reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return
+        }
 
         let remote = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
         if Self.isVersion(remote, newerThan: AppInfo.version) {
@@ -99,7 +135,14 @@ final class UpdateChecker: ObservableObject {
             let (temp, _) = try await URLSession.shared.download(from: dmgURL)
             let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
             let dest = downloads.appendingPathComponent(dmgURL.lastPathComponent)
-            try? FileManager.default.removeItem(at: dest)
+            do {
+                try FileManager.default.removeItem(at: dest)
+            } catch {
+                // Census W8 Updates:102 (T2-3 chunk F): the pre-clean keeps
+                // its fail-closed follow-up (the typed move below decides),
+                // but the step is no longer silent.
+                AppLog.app.error("Could not remove the previous \(dest.lastPathComponent, privacy: .public) from Downloads before replacing it: \(error.localizedDescription, privacy: .public)")
+            }
             try FileManager.default.moveItem(at: temp, to: dest)
 
             // KES-09: fail closed. A missing checksums listing, an entry that
@@ -111,15 +154,34 @@ final class UpdateChecker: ObservableObject {
                 installError = "La release no publica checksums; descarga descartada / release publishes no checksums; download discarded"
                 return
             }
-            guard let (data, _) = try? await URLSession.shared.data(from: checksumsURL),
+            let checksumsData: Data?
+            do {
+                let (fetched, _) = try await URLSession.shared.data(from: checksumsURL)
+                checksumsData = fetched
+            } catch {
+                // Census W8 Updates:114 (T2-3 chunk F): KES-09 stays
+                // fail-closed — the discard below and its installError are
+                // the surfaced outcome — but the failed step is named.
+                AppLog.app.error("Could not fetch the checksums listing; the download is discarded (KES-09 fail-closed): \(error.localizedDescription, privacy: .public)")
+                checksumsData = nil
+            }
+            guard let data = checksumsData,
                   let listing = String(data: data, encoding: .utf8),
                   let expected = listing.split(separator: "\n")
                       .first { $0.contains(dmgURL.lastPathComponent) }?
                       .split(separator: " ").first.map(String.init),
                   let actual = await Task.detached { FileHash.sha256(of: dest) }.value,
                   expected.lowercased() == actual.lowercased() else {
-                try? FileManager.default.removeItem(at: dest)
+                // Census W8 Updates:121 (T2-3 chunk F): a download that
+                // failed verification and could not be discarded stays on
+                // disk — security-relevant. The installError is the primary
+                // surface; the leftover is named by the discard attempt.
                 installError = "Verificación de integridad no disponible o fallida: descarga descartada / integrity verification unavailable or failed: download discarded"
+                do {
+                    try FileManager.default.removeItem(at: dest)
+                } catch {
+                    AppLog.app.error("Could not discard the unverified download \(dest.lastPathComponent, privacy: .public); remove it manually: \(error.localizedDescription, privacy: .public)")
+                }
                 return
             }
 
@@ -139,6 +201,9 @@ final class UpdateChecker: ObservableObject {
     /// never half-overwritten, and restored if the copy fails.
     nonisolated private static func install(dmgAt dmg: URL) throws -> URL {
         let plist = try run("/usr/bin/hdiutil", ["attach", dmg.path, "-nobrowse", "-readonly", "-plist"])
+        // Census W8 Updates:143 (T2-3 chunk F): compliant — the parse miss
+        // cannot hide: a nil here falls to the typed UpdateError("could not
+        // mount the DMG") below.
         guard let data = plist.data(using: .utf8),
               let obj = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let entities = obj["system-entities"] as? [[String: Any]],
@@ -165,16 +230,51 @@ final class UpdateChecker: ObservableObject {
 
         if fm.fileExists(atPath: target.path) {
             let aside = target.deletingPathExtension().appendingPathExtension("old.app")
-            try? fm.removeItem(at: aside)   // pre-clean only; a stale aside must not block
+            // Census W8 Updates:168 (T2-3 chunk F): pre-clean only — a stale
+            // aside must not block the swap (the set-aside move replaces
+            // whatever is there). The failed pre-clean is named so a
+            // leftover old aside is traceable.
+            do {
+                try fm.removeItem(at: aside)
+            } catch {
+                AppLog.app.error("Could not remove the stale \(aside.lastPathComponent, privacy: .public) before setting the current app aside: \(error.localizedDescription, privacy: .public)")
+            }
             try Self.performAppSwap(
                 setAside: { try fm.moveItem(at: target, to: aside) },
                 copy: { try copyApp(source: source, target: target) },
                 restore: {
-                    try? fm.removeItem(at: target)
+                    // Census W8 Updates:173 (T2-3 chunk F): a half-installed
+                    // target that cannot be removed used to fall through
+                    // silently to the move's own failure. A genuinely blocked
+                    // removal (failed AND still present) throws here — the
+                    // typed escalation in performAppSwap names the aside —
+                    // while an absent target (the copy never landed) stays
+                    // benign and lets the move below restore.
+                    var removalError: Error?
+                    do { try fm.removeItem(at: target) } catch { removalError = error }
+                    if let removalError,
+                       Self.swapRestoreBlocked(by: removalError,
+                                               targetStillPresent: fm.fileExists(atPath: target.path)) {
+                        let notice = Self.swapRestoreBlockerMessage(
+                            target: target.lastPathComponent,
+                            reason: removalError.localizedDescription)
+                        AppLog.app.error("\(notice, privacy: .public)")
+                        throw removalError
+                    }
+                    // Census W8 Updates:174 (T2-3 chunk F): the restore move
+                    // itself is typed; a failure escalates through
+                    // performAppSwap naming the aside's exact location.
                     try fm.moveItem(at: aside, to: target)
                 },
                 asidePath: aside.path)
-            try? fm.removeItem(at: aside)
+            do {
+                try fm.removeItem(at: aside)
+            } catch {
+                // Census W8 Updates:177 (T2-3 chunk F): the swap itself
+                // succeeded — only the replaced version's cleanup failed.
+                // The leftover aside is named, not swallowed.
+                AppLog.app.error("Could not remove the replaced app set aside at \(aside.path, privacy: .public); delete it manually: \(error.localizedDescription, privacy: .public)")
+            }
         } else {
             try copyApp(source: source, target: target)
         }
@@ -266,18 +366,27 @@ final class UpdateChecker: ObservableObject {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
             p.arguments = [url.path]
+            let launchError: Error?
             do {
                 try p.run()
+                launchError = nil
             } catch {
-                // Terminating with the relaunch dead would leave no app
-                // running at all: surface it and stay alive instead.
-                Task { @MainActor in
-                    self.installError = "La nueva versión está instalada pero no arrancó: ábrela desde /Applications (\(error.localizedDescription)) / the new version is installed but did not launch: open it from /Applications"
-                }
-                return
+                launchError = error
             }
-            Task { @MainActor in
-                NSApp.terminate(nil)
+            // Census W8 Updates:243 (T2-3 chunk F; the no-quit abort landed
+            // in 422ef5a, here census-citing and pinned): terminating with
+            // the relaunch dead would leave no app running at all. The seam
+            // decides: .launched terminates exactly as before; .launchFailed
+            // surfaces on installError and returns WITHOUT terminating.
+            switch Self.relaunchOutcome(runError: launchError) {
+            case .launched:
+                Task { @MainActor in
+                    NSApp.terminate(nil)
+                }
+            case .launchFailed(let message):
+                Task { @MainActor in
+                    self.installError = message
+                }
             }
         }
     }
@@ -293,10 +402,42 @@ final class UpdateChecker: ObservableObject {
         guard !loadingNotes else { return }
         loadingNotes = true
         defer { loadingNotes = false }
-        guard let url = URL(string: "https://api.github.com/repos/0xda7/kestrel/releases?per_page=30"),
-              let (data, response) = try? await URLSession.shared.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+        // Census W8 Updates:260/:262 (T2-3 chunk F): a failed fetch or an
+        // unreadable response left notes nil — the popover already answers
+        // that with its could-not-load line, which stays the user surface —
+        // but the skip was invisible in the log. Same nil result, now named;
+        // a successful fetch keeps its existing display untouched.
+        guard let url = URL(string: "https://api.github.com/repos/0xda7/kestrel/releases?per_page=30") else { return }
+        let data: Data
+        do {
+            let (fetched, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                let status = (response as? HTTPURLResponse)?.statusCode
+                let notice = Self.notesFetchFailureNotice(
+                    reason: status.map { "HTTP \($0)" } ?? "not an HTTP response")
+                AppLog.app.error("\(notice, privacy: .public)")
+                return
+            }
+            data = fetched
+        } catch {
+            let notice = Self.notesFetchFailureNotice(reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return
+        }
+        let list: [[String: Any]]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                let notice = Self.notesParseFailureNotice(
+                    reason: "the response was not a list of releases")
+                AppLog.app.error("\(notice, privacy: .public)")
+                return
+            }
+            list = parsed
+        } catch {
+            let notice = Self.notesParseFailureNotice(reason: error.localizedDescription)
+            AppLog.app.error("\(notice, privacy: .public)")
+            return
+        }
         let all = list.compactMap { obj -> (String, String)? in
             guard let tag = obj["tag_name"] as? String else { return nil }
             let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
@@ -323,6 +464,73 @@ final class UpdateChecker: ObservableObject {
             if x != y { return x > y }
         }
         return false
+    }
+
+    // MARK: Surfacing seams (census W8, T2-3 chunk F)
+
+    /// Census W8 Updates:57 (T2-3 chunk F): the English line naming an
+    /// update check skipped because the releases list could not be fetched —
+    /// distinct from a parse failure and from a quiet real no-update. The
+    /// check flow has no failure surface in the UI (the badge only lights on
+    /// success), so this log is the surfaced status. Pure so checks can pin
+    /// it (D3).
+    nonisolated static func updateCheckFetchFailureNotice(reason: String) -> String {
+        "Could not fetch the releases list to check for updates; the check is skipped: \(reason)"
+    }
+
+    /// Census W8 Updates:59 (T2-3 chunk F): the line for a fetched but
+    /// unreadable releases response — a different skip than a fetch failure.
+    /// Pure so checks can pin it (D3).
+    nonisolated static func updateCheckParseFailureNotice(reason: String) -> String {
+        "Could not read the releases response to check for updates; the check is skipped: \(reason)"
+    }
+
+    /// Census W8 Updates:260 (T2-3 chunk F): the line for release notes that
+    /// could not be fetched; the popover's could-not-load note is the user
+    /// surface, this names the skip in the log. Pure so checks can pin it (D3).
+    nonisolated static func notesFetchFailureNotice(reason: String) -> String {
+        "Could not fetch the release notes; the popover shows its could-not-load note: \(reason)"
+    }
+
+    /// Census W8 Updates:262 (T2-3 chunk F): the line for a releases
+    /// response the notes reader could not parse. Pure so checks can pin it (D3).
+    nonisolated static func notesParseFailureNotice(reason: String) -> String {
+        "Could not read the releases response for the release notes; the popover shows its could-not-load note: \(reason)"
+    }
+
+    /// Census W8 Updates:173 (T2-3 chunk F): whether a failed removal of the
+    /// half-installed target blocks the restore. It blocks only when the
+    /// target is actually still present (the removal genuinely failed); an
+    /// absent target (the copy never landed) is benign and lets the restore
+    /// move proceed — mirroring the finalize gate's blocked/benign split.
+    /// Pure so checks can pin the safe direction (D3).
+    nonisolated static func swapRestoreBlocked(by removalError: Error?, targetStillPresent: Bool) -> Bool {
+        removalError != nil && targetStillPresent
+    }
+
+    /// Census W8 Updates:173 (T2-3 chunk F): the English line naming a
+    /// half-installed app that could not be removed to make room for the
+    /// restore. The typed escalation in performAppSwap stays the user
+    /// surface; this names the exact failing step. Pure so checks can pin
+    /// the wording (D3).
+    nonisolated static func swapRestoreBlockerMessage(target: String, reason: String) -> String {
+        "Could not remove the half-installed \(target) to restore the previous app: \(reason)"
+    }
+
+    /// Census W8 Updates:243 (T2-3 chunk F; the abort itself landed in
+    /// 422ef5a, here census-citing and pinned): what the app does after
+    /// trying to launch the installed copy. `.launched` quits this app
+    /// exactly as before; `.launchFailed` surfaces the message on
+    /// installError and the app STAYS ALIVE — quitting then would leave no
+    /// app running at all. Pure so checks can pin both directions (D3).
+    enum RelaunchOutcome: Equatable {
+        case launched
+        case launchFailed(message: String)
+    }
+
+    nonisolated static func relaunchOutcome(runError: Error?) -> RelaunchOutcome {
+        guard let runError else { return .launched }
+        return .launchFailed(message: "La nueva versión está instalada pero no arrancó: ábrela desde /Applications (\(runError.localizedDescription)) / the new version is installed but did not launch: open it from /Applications")
     }
 }
 
