@@ -1135,15 +1135,15 @@ struct GeneratedImage: Identifiable {
 /// store; a present store (even an empty one) means the user already lives in
 /// the multi-instance world and the migration no-ops.
 enum ImageGenLegacyMigration {
-    /// The 16 legacy per-key settings (census W7-2), held here so the window
-    /// survives the retirement of their typed declarations.
+    /// The 16 legacy per-key settings (census W7-2) as raw strings: their
+    /// typed declarations retired behind this green migration (T4-2 chunk B),
+    /// and the window outlives them — the InferenceRoutes.legacyKeychainAccount
+    /// shape. The per-migration checks seed these exact strings.
     static let legacyKeys = [
-        SettingsKeys.imagenPrompt, SettingsKeys.imagenAspect, SettingsKeys.imagenBaseSize,
-        SettingsKeys.imagenSteps, SettingsKeys.imagenSeed, SettingsKeys.imagenFormat,
-        SettingsKeys.imagenOffloadCPU, SettingsKeys.imagenGPU, SettingsKeys.imagenModel,
-        SettingsKeys.imagenCustomModel, SettingsKeys.imagenCustomVAE,
-        SettingsKeys.imagenCustomTextEncoder, SettingsKeys.imagenCustomIsDiffusion,
-        SettingsKeys.imagenCustomCfg, SettingsKeys.imagenInitImage, SettingsKeys.imagenStrength,
+        "imagenPrompt", "imagenAspect", "imagenBaseSize", "imagenSteps", "imagenSeed",
+        "imagenFormat", "imagenOffloadCPU", "imagenGPU", "imagenModel", "imagenCustomModel",
+        "imagenCustomVAE", "imagenCustomTextEncoder", "imagenCustomIsDiffusion",
+        "imagenCustomCfg", "imagenInitImage", "imagenStrength",
     ]
 
     /// True when at least one legacy per-key setting is still stored.
@@ -1164,36 +1164,36 @@ enum ImageGenLegacyMigration {
               legacyPresent(in: defaults) else { return false }
 
         var c = ImageInstanceConfig()
-        c.modelID = defaults.string(forKey: SettingsKeys.imagenModel) ?? ""
-        c.customModelPath = defaults.string(forKey: SettingsKeys.imagenCustomModel) ?? ""
-        c.customVAEPath = defaults.string(forKey: SettingsKeys.imagenCustomVAE) ?? ""
-        c.customTextEncoderPath = defaults.string(forKey: SettingsKeys.imagenCustomTextEncoder) ?? ""
-        if let diffusion = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenCustomIsDiffusion, in: defaults) {
+        c.modelID = defaults.string(forKey: "imagenModel") ?? ""
+        c.customModelPath = defaults.string(forKey: "imagenCustomModel") ?? ""
+        c.customVAEPath = defaults.string(forKey: "imagenCustomVAE") ?? ""
+        c.customTextEncoderPath = defaults.string(forKey: "imagenCustomTextEncoder") ?? ""
+        if let diffusion = SettingsNumericCoercion.boolIfPresent("imagenCustomIsDiffusion", in: defaults) {
             c.customIsDiffusion = diffusion
         }
-        if let cfg = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenCustomCfg, in: defaults) {
+        if let cfg = SettingsNumericCoercion.doubleIfPresent("imagenCustomCfg", in: defaults) {
             c.customCfg = cfg
         }
-        c.prompt = defaults.string(forKey: SettingsKeys.imagenPrompt) ?? ""
-        c.initImagePath = defaults.string(forKey: SettingsKeys.imagenInitImage) ?? ""
-        if let strength = SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenStrength, in: defaults) {
+        c.prompt = defaults.string(forKey: "imagenPrompt") ?? ""
+        c.initImagePath = defaults.string(forKey: "imagenInitImage") ?? ""
+        if let strength = SettingsNumericCoercion.doubleIfPresent("imagenStrength", in: defaults) {
             c.strength = strength
         }
-        c.aspect = defaults.string(forKey: SettingsKeys.imagenAspect) ?? ImageAspect.square.rawValue
-        if let baseSize = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenBaseSize, in: defaults) {
+        c.aspect = defaults.string(forKey: "imagenAspect") ?? ImageAspect.square.rawValue
+        if let baseSize = SettingsNumericCoercion.intIfPresent("imagenBaseSize", in: defaults) {
             c.baseSize = baseSize
         }
-        if let gpu = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenGPU, in: defaults) {
+        if let gpu = SettingsNumericCoercion.intIfPresent("imagenGPU", in: defaults) {
             c.gpuIndex = gpu
         }
-        if let steps = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: defaults) {
+        if let steps = SettingsNumericCoercion.intIfPresent("imagenSteps", in: defaults) {
             c.steps = steps
         }
-        if let seed = SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSeed, in: defaults) {
+        if let seed = SettingsNumericCoercion.intIfPresent("imagenSeed", in: defaults) {
             c.seed = seed
         }
-        c.format = defaults.string(forKey: SettingsKeys.imagenFormat) ?? ImageFormat.png.rawValue
-        if let offload = SettingsNumericCoercion.boolIfPresent(SettingsKeys.imagenOffloadCPU, in: defaults) {
+        c.format = defaults.string(forKey: "imagenFormat") ?? ImageFormat.png.rawValue
+        if let offload = SettingsNumericCoercion.boolIfPresent("imagenOffloadCPU", in: defaults) {
             c.offloadCPU = offload
         }
 

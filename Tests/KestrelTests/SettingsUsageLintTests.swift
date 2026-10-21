@@ -96,7 +96,10 @@ final class SettingsUsageLintTests: CheckCase {
     /// this chunk deletes — the census's named discrimination.
     func testEveryDeclaredSettingsKeyIsUsedSomewhere() {
         let declarations = settingsKeyDeclarations()
-        XCTAssertGreaterThan(declarations.count, 180,
+        // Floor tracks the live count: 188 at T3-2, minus benchAdvanced
+        // (T4-1) and the 18 legacy keys retired behind their green
+        // migrations (T4-2 chunk B) → 169.
+        XCTAssertGreaterThan(declarations.count, 160,
                              "the Support.swift parse went dry — the usage lint is reading the wrong slice")
         let text = sourcesText()
         XCTAssertGreaterThan(text.count, 100_000,

@@ -1898,14 +1898,16 @@ struct ServerSettings {
         return path
     }
 
+    /// Per-model DFlash policy. The legacy `dflashDisabled` fallback read
+    /// retired behind its one-shot migration (census W6-6, T4-2): the map
+    /// carries the entry, and an absent model means auto.
     nonisolated static func dflashMode(forModel modelPath: String) -> DflashMode {
         let defaults = UserDefaults.standard
         if let raw = (SettingsNumericCoercion.dictionary(SettingsKeys.dflashModes, in: defaults) as? [String: String])?[modelPath],
            let mode = DflashMode(rawValue: raw) {
             return mode
         }
-        let disabled = SettingsNumericCoercion.stringArray(SettingsKeys.dflashDisabled, in: defaults)
-        return disabled.contains(modelPath) ? .off : .auto
+        return .auto
     }
 
     nonisolated static func setDflashMode(_ mode: DflashMode, forModel modelPath: String) {
@@ -2048,12 +2050,18 @@ struct ServerSettings {
 /// a bare deletion. Without it, a legacy "off" choice would silently
 /// become "auto" once the fallback read retires.
 enum DflashLegacyMigration {
+    /// The legacy key as a raw string: its typed declaration retired behind
+    /// this green migration (T4-2 chunk B), and the window outlives it — the
+    /// InferenceRoutes.legacyKeychainAccount shape. The per-migration check
+    /// seeds this exact string.
+    static let legacyKey = "dflashDisabled"
+
     @discardableResult
     static func run(in defaults: UserDefaults) -> Bool {
-        guard defaults.object(forKey: SettingsKeys.dflashDisabled) != nil else { return false }
+        guard defaults.object(forKey: legacyKey) != nil else { return false }
         var modes = SettingsNumericCoercion.dictionary(SettingsKeys.dflashModes, in: defaults) as? [String: String] ?? [:]
         var touched = false
-        for path in SettingsNumericCoercion.stringArray(SettingsKeys.dflashDisabled, in: defaults)
+        for path in SettingsNumericCoercion.stringArray(legacyKey, in: defaults)
         where modes[path] == nil {
             modes[path] = DflashMode.off.rawValue
             touched = true
@@ -2061,7 +2069,7 @@ enum DflashLegacyMigration {
         if touched {
             defaults.set(modes, forKey: SettingsKeys.dflashModes)
         }
-        defaults.removeObject(forKey: SettingsKeys.dflashDisabled)
+        defaults.removeObject(forKey: legacyKey)
         return true
     }
 }

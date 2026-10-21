@@ -100,17 +100,20 @@ final class TypedSettingsRegistryTests: CheckCase {
         SettingsKeys.gpuIndex,
         SettingsKeys.gpusCardCollapsed,
         SettingsKeys.imageMaxTokens,
-        SettingsKeys.imagenBaseSize,
+        // Legacy-window raw keys (census W7-2/W7-3, T4-2): the typed
+        // declarations retired behind their green migrations; the registry
+        // keeps coercing string-typed legacy values during the window.
+        "imagenBaseSize",
         SettingsKeys.imagenCanvasGrid,
         SettingsKeys.imagenCleanupOnClose,
-        SettingsKeys.imagenCustomCfg,
-        SettingsKeys.imagenCustomIsDiffusion,
-        SettingsKeys.imagenGPU,
-        SettingsKeys.imagenOffloadCPU,
+        "imagenCustomCfg",
+        "imagenCustomIsDiffusion",
+        "imagenGPU",
+        "imagenOffloadCPU",
         SettingsKeys.imagenQueueGrid,
-        SettingsKeys.imagenSeed,
-        SettingsKeys.imagenSteps,
-        SettingsKeys.imagenStrength,
+        "imagenSeed",
+        "imagenSteps",
+        "imagenStrength",
         SettingsKeys.jinja,
         SettingsKeys.jsSandboxEnabled,
         SettingsKeys.jsSandboxDefaultTimeoutMS,
@@ -153,7 +156,7 @@ final class TypedSettingsRegistryTests: CheckCase {
         SettingsKeys.videoSteps,
         SettingsKeys.videoVAETiling,
         SettingsKeys.vramReserve,
-        SettingsKeys.dflashDisabled,
+        "dflashDisabled",   // legacy window (census W7-3, T4-2)
         SettingsKeys.dflashWarningAcknowledged,
         SettingsKeys.incompatibleMmproj,
         SettingsKeys.mtpDisabledModels,
@@ -208,15 +211,15 @@ final class TypedSettingsRegistryTests: CheckCase {
     /// IfPresent semantics: absent -> nil (caller keeps its own default),
     /// typed -> the value, drift -> nil + reported.
     func testIfPresentSemantics() {
-        XCTAssertNil(SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: suite))
-        suite.set(12, forKey: SettingsKeys.imagenSteps)
-        XCTAssertEqual(SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: suite), 12)
-        suite.set("eight", forKey: SettingsKeys.imagenSteps)
-        XCTAssertNil(SettingsNumericCoercion.intIfPresent(SettingsKeys.imagenSteps, in: suite),
+        XCTAssertNil(SettingsNumericCoercion.intIfPresent("imagenSteps", in: suite))
+        suite.set(12, forKey: "imagenSteps")
+        XCTAssertEqual(SettingsNumericCoercion.intIfPresent("imagenSteps", in: suite), 12)
+        suite.set("eight", forKey: "imagenSteps")
+        XCTAssertNil(SettingsNumericCoercion.intIfPresent("imagenSteps", in: suite),
                      "drift reads as absent so ImageInstanceConfig's member default survives")
-        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains(SettingsKeys.imagenSteps))
-        suite.set("7.0", forKey: SettingsKeys.imagenCustomCfg)
-        XCTAssertNil(SettingsNumericCoercion.doubleIfPresent(SettingsKeys.imagenCustomCfg, in: suite))
+        XCTAssertTrue(SettingsNumericCoercion.reportedDriftKeys.contains("imagenSteps"))
+        suite.set("7.0", forKey: "imagenCustomCfg")
+        XCTAssertNil(SettingsNumericCoercion.doubleIfPresent("imagenCustomCfg", in: suite))
     }
 
     /// W4-5: the tri-state absent-means-true keys keep their semantics —

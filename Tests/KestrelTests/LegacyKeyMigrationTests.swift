@@ -32,22 +32,22 @@ final class LegacyKeyMigrationTests: CheckCase {
     /// verbatim while all 16 legacy keys are gone. A second run is a no-op.
     func testImagenLegacyKeysMigrateIntoTheInstanceStorePreservingValues() throws {
         // The distinct legacy values, one per key.
-        suite.set("zimage-turbo", forKey: SettingsKeys.imagenModel)
-        suite.set("/models/diT.gguf", forKey: SettingsKeys.imagenCustomModel)
-        suite.set("/models/vae.safetensors", forKey: SettingsKeys.imagenCustomVAE)
-        suite.set("/models/text-encoder.gguf", forKey: SettingsKeys.imagenCustomTextEncoder)
-        suite.set(true, forKey: SettingsKeys.imagenCustomIsDiffusion)
-        suite.set(3.5, forKey: SettingsKeys.imagenCustomCfg)
-        suite.set("a red fox on snow", forKey: SettingsKeys.imagenPrompt)
-        suite.set("/img/init.png", forKey: SettingsKeys.imagenInitImage)
-        suite.set(0.75, forKey: SettingsKeys.imagenStrength)
-        suite.set("9:16", forKey: SettingsKeys.imagenAspect)
-        suite.set(1536, forKey: SettingsKeys.imagenBaseSize)
-        suite.set(1, forKey: SettingsKeys.imagenGPU)
-        suite.set(20, forKey: SettingsKeys.imagenSteps)
-        suite.set(42, forKey: SettingsKeys.imagenSeed)
-        suite.set("jpg", forKey: SettingsKeys.imagenFormat)
-        suite.set(true, forKey: SettingsKeys.imagenOffloadCPU)
+        suite.set("zimage-turbo", forKey: "imagenModel")
+        suite.set("/models/diT.gguf", forKey: "imagenCustomModel")
+        suite.set("/models/vae.safetensors", forKey: "imagenCustomVAE")
+        suite.set("/models/text-encoder.gguf", forKey: "imagenCustomTextEncoder")
+        suite.set(true, forKey: "imagenCustomIsDiffusion")
+        suite.set(3.5, forKey: "imagenCustomCfg")
+        suite.set("a red fox on snow", forKey: "imagenPrompt")
+        suite.set("/img/init.png", forKey: "imagenInitImage")
+        suite.set(0.75, forKey: "imagenStrength")
+        suite.set("9:16", forKey: "imagenAspect")
+        suite.set(1536, forKey: "imagenBaseSize")
+        suite.set(1, forKey: "imagenGPU")
+        suite.set(20, forKey: "imagenSteps")
+        suite.set(42, forKey: "imagenSeed")
+        suite.set("jpg", forKey: "imagenFormat")
+        suite.set(true, forKey: "imagenOffloadCPU")
 
         XCTAssertTrue(ImageGenLegacyMigration.run(in: suite), "legacy keys present → the migration runs")
 
@@ -89,11 +89,11 @@ final class LegacyKeyMigrationTests: CheckCase {
     func testImageGenMigrationDoesNotClobberAnExistingStore() throws {
         let existing = try JSONEncoder().encode([ImageInstanceConfig()])
         suite.set(existing, forKey: SettingsKeys.imagenInstances)
-        suite.set("stale prompt", forKey: SettingsKeys.imagenPrompt)
+        suite.set("stale prompt", forKey: "imagenPrompt")
 
         XCTAssertFalse(ImageGenLegacyMigration.run(in: suite), "a present store must block the migration")
         XCTAssertEqual(suite.data(forKey: SettingsKeys.imagenInstances), existing, "the existing store is untouched")
-        XCTAssertEqual(suite.string(forKey: SettingsKeys.imagenPrompt), "stale prompt",
+        XCTAssertEqual(suite.string(forKey: "imagenPrompt"), "stale prompt",
                        "legacy keys stay put when the window does not apply")
     }
 
@@ -103,7 +103,7 @@ final class LegacyKeyMigrationTests: CheckCase {
     /// dflashModes map; entries the live map already carries are preserved
     /// untouched; the legacy key is gone after the window runs.
     func testDflashDisabledListMigratesIntoDflashModesMap() {
-        suite.set(["/m/first.gguf", "/m/second.gguf"], forKey: SettingsKeys.dflashDisabled)
+        suite.set(["/m/first.gguf", "/m/second.gguf"], forKey: DflashLegacyMigration.legacyKey)
         suite.set(["/m/live.gguf": DflashMode.forced.rawValue], forKey: SettingsKeys.dflashModes)
 
         XCTAssertTrue(DflashLegacyMigration.run(in: suite), "legacy list present → the migration runs")
@@ -114,7 +114,7 @@ final class LegacyKeyMigrationTests: CheckCase {
         XCTAssertEqual(modes?["/m/live.gguf"], DflashMode.forced.rawValue,
                        "an entry the live map already carries is preserved, not overwritten")
         XCTAssertEqual(modes?.count, 3)
-        XCTAssertNil(suite.object(forKey: SettingsKeys.dflashDisabled), "the legacy key must be gone after migrating")
+        XCTAssertNil(suite.object(forKey: DflashLegacyMigration.legacyKey), "the legacy key must be gone after migrating")
 
         XCTAssertFalse(DflashLegacyMigration.run(in: suite), "a second run with no legacy key is a no-op")
     }
@@ -128,14 +128,14 @@ final class LegacyKeyMigrationTests: CheckCase {
     func testMemoryArchiveHookSecretSelfRetiresIntoTheLocalSecretStore() {
         let storeName = "memory-archive-token"
         let priorSecret = LocalSecretStore.value(storeName)
-        let priorLegacy = UserDefaults.standard.object(forKey: SettingsKeys.memoryArchiveHookSecret)
+        let priorLegacy = UserDefaults.standard.object(forKey: MemoryArchiveHook.legacySecretKey)
         let sentinel = "t4-2-migration-sentinel-\(UUID().uuidString)"
-        UserDefaults.standard.set(sentinel, forKey: SettingsKeys.memoryArchiveHookSecret)
+        UserDefaults.standard.set(sentinel, forKey: MemoryArchiveHook.legacySecretKey)
         defer {
             if let priorLegacy {
-                UserDefaults.standard.set(priorLegacy, forKey: SettingsKeys.memoryArchiveHookSecret)
+                UserDefaults.standard.set(priorLegacy, forKey: MemoryArchiveHook.legacySecretKey)
             } else {
-                UserDefaults.standard.removeObject(forKey: SettingsKeys.memoryArchiveHookSecret)
+                UserDefaults.standard.removeObject(forKey: MemoryArchiveHook.legacySecretKey)
             }
             if let priorSecret {
                 _ = LocalSecretStore.store(storeName, priorSecret)
@@ -147,7 +147,7 @@ final class LegacyKeyMigrationTests: CheckCase {
         let token = MemoryArchiveHook.receiverToken()
         XCTAssertEqual(token, sentinel, "the legacy value is returned, not dropped in transit")
         XCTAssertEqual(LocalSecretStore.value(storeName), sentinel, "the secret landed in the local store")
-        XCTAssertNil(UserDefaults.standard.object(forKey: SettingsKeys.memoryArchiveHookSecret),
+        XCTAssertNil(UserDefaults.standard.object(forKey: MemoryArchiveHook.legacySecretKey),
                      "the legacy key self-retired on first read")
     }
 

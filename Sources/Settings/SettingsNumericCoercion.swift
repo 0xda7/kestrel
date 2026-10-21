@@ -66,10 +66,16 @@ enum SettingsNumericCoercion {
         SettingsKeys.gpuIndex: .int,
         SettingsKeys.gpusCardCollapsed: .int,
         SettingsKeys.imageMaxTokens: .int,
-        SettingsKeys.imagenBaseSize: .int,
-        SettingsKeys.imagenGPU: .int,
-        SettingsKeys.imagenSeed: .int,
-        SettingsKeys.imagenSteps: .int,
+        // Legacy-window keys (census W7-2/W7-3, T4-2): the typed
+        // declarations retired behind their green one-shot migrations
+        // (ImageGenLegacyMigration / DflashLegacyMigration), but the
+        // registry keeps coercing a legacy string-typed value at launch so
+        // the migrations read it typed — raw strings, same shape as the
+        // migrations themselves. The window dies with them.
+        "imagenBaseSize": .int,
+        "imagenGPU": .int,
+        "imagenSeed": .int,
+        "imagenSteps": .int,
         SettingsKeys.multiGPUCount: .int,
         SettingsKeys.ncmoe: .int,
         SettingsKeys.ngl: .int,
@@ -92,8 +98,8 @@ enum SettingsNumericCoercion {
         SettingsKeys.audioVADThreshold: .double,
         SettingsKeys.chatFontScale: .double,
         SettingsKeys.chatMaxImageMegapixels: .double,
-        SettingsKeys.imagenCustomCfg: .double,
-        SettingsKeys.imagenStrength: .double,
+        "imagenCustomCfg": .double,
+        "imagenStrength": .double,
         // The engine's secret-run constants become settings (T3-1, census
         // W3-1/W3-2): the compaction trigger and keep-tail fraction.
         SettingsKeys.chatCompactionKeepTailFraction: .double,
@@ -159,8 +165,8 @@ enum SettingsNumericCoercion {
         SettingsKeys.forcePrivateBuffers: .bool,
         SettingsKeys.imagenCanvasGrid: .bool,
         SettingsKeys.imagenCleanupOnClose: .bool,
-        SettingsKeys.imagenCustomIsDiffusion: .bool,
-        SettingsKeys.imagenOffloadCPU: .bool,
+        "imagenCustomIsDiffusion": .bool,
+        "imagenOffloadCPU": .bool,
         SettingsKeys.imagenQueueGrid: .bool,
         SettingsKeys.jinja: .bool,
         SettingsKeys.jsSandboxEnabled: .bool,
@@ -190,7 +196,7 @@ enum SettingsNumericCoercion {
         // String collections (W4-11): per-model maps and model lists read
         // via stringArray/dictionary; drift surfaces instead of silently
         // reading empty.
-        SettingsKeys.dflashDisabled: .stringArray,
+        "dflashDisabled": .stringArray,   // legacy window (see the int block)
         SettingsKeys.dflashWarningAcknowledged: .stringArray,
         SettingsKeys.incompatibleMmproj: .stringArray,
         SettingsKeys.mtpDisabledModels: .stringArray,

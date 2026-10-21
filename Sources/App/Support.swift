@@ -66,10 +66,6 @@ enum SettingsKeys {
     /// Excluded from resettableOptionKeys: per-model verification record,
     /// preserved across resets.
     static let modelDigest = "modelDigest"
-    /// Legacy model paths whose downloaded DFlash draft was turned off.
-    /// Excluded from resettableOptionKeys: read-never-written legacy
-    /// (census W7-3); the one-shot migration (Tier 4 H2) retires it.
-    static let dflashDisabled = "dflashDisabled"
     static let dflashModes = "dflashModes"
     static let mtpDisabledModels = "mtpDisabledModels"
     /// One-time operator acknowledgment of the DFlash warning — a consent
@@ -122,11 +118,9 @@ enum SettingsKeys {
 
     /// Where to POST the turns memory_archive sets aside. Empty disables the hook.
     static let memoryArchiveHookURL = "memoryArchiveHookURL"
-
     /// Sent as a bearer token with each delivery, for receivers that want one.
-    /// Excluded from resettableOptionKeys: read-once legacy (census W7-4)
-    /// migrated into the local secret store; Tier 4 H2 retires it.
-    static let memoryArchiveHookSecret = "memoryArchiveHookSecret"
+    /// Lives in the local secret store; the legacy UserDefaults copy self-
+    /// retires on first read (MemoryArchiveHook, census W7-4/W6-9).
     /// Delivery policy for the memory-archive hook (census W3-14): the queue
     /// drops its oldest past this many pending files, and each delivery
     /// attempt gets this many seconds before it is treated as failed.
@@ -279,43 +273,9 @@ enum SettingsKeys {
     /// so it's excluded from resettableOptionKeys like its pair above.
     static let benchmarkKeyFingerprint = "benchmarkKeyFingerprint"
 
-    // Image generation (text-to-image)
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenPrompt = "imagenPrompt"
-    static let imagenAspect = "imagenAspect"
-    static let imagenBaseSize = "imagenBaseSize"
-    static let imagenSteps = "imagenSteps"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenSeed = "imagenSeed"
-    static let imagenFormat = "imagenFormat"
-    static let imagenOffloadCPU = "imagenOffloadCPU"
-    static let imagenGPU = "imagenGPU"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenModel = "imagenModel"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenCustomModel = "imagenCustomModel"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenCustomVAE = "imagenCustomVAE"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenCustomTextEncoder = "imagenCustomTextEncoder"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenCustomIsDiffusion = "imagenCustomIsDiffusion"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenCustomCfg = "imagenCustomCfg"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenInitImage = "imagenInitImage"
-    /// Legacy single-instance key (census W7-2, Tier 4 H2 retires); excluded
-    /// from resettableOptionKeys: read-never-written, nothing to reset.
-    static let imagenStrength = "imagenStrength"
+    // Image generation (text-to-image). The 16 legacy single-instance keys
+    // (census W7-2) retired behind their green one-shot migration
+    // (ImageGenLegacyMigration, T4-2); the raw names live there now.
     /// Extra parallel generation instances (JSON: [ImageInstanceConfig]).
     static let imagenInstances = "imagenInstances"
     /// Delete generated output images (kestrel_*) when the app quits.
@@ -395,7 +355,6 @@ enum SettingsKeys {
         chatResponseMarginTokens, chatCompactionSummaryMaxTokens, chatCompactionSummarizeTemp,
         chatCompactionMinTailMessages, chatRecallMaxResults, chatRecallMaxCharacters,
         chatToolResultMaxTokens, chatToolResultMinTokens, chatShowSystemMessage, smoothTyping,
-        imagenAspect, imagenBaseSize, imagenSteps, imagenFormat, imagenOffloadCPU, imagenGPU,
         // Census W7-5/W7-6 + the A2 law (T3-2): the video/upscaler/bench
         // tunables and the remaining functional keys join reset+archive —
         // imagenInstances rides along so the multi-instance config is

@@ -86,15 +86,20 @@ actor MemoryArchiveHook {
         return url
     }
 
+    /// The legacy UserDefaults key as a raw string: its typed declaration
+    /// retired behind this green self-retiring migration (census W7-4, T4-2
+    /// chunk B) — the InferenceRoutes.legacyKeychainAccount shape. The
+    /// per-migration check seeds this exact string.
+    nonisolated static let legacySecretKey = "memoryArchiveHookSecret"
     /// KES-08: the receiver token rode plaintext UserDefaults — a ready-made
     /// exfiltration credential next to the endpoint it authorizes. It lives
     /// in the local secret store now; the legacy copy migrates once and is
     /// then deleted so nothing plaintext remains.
     nonisolated static func receiverToken() -> String? {
-        if let legacy = UserDefaults.standard.string(forKey: SettingsKeys.memoryArchiveHookSecret)?
+        if let legacy = UserDefaults.standard.string(forKey: legacySecretKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines), !legacy.isEmpty {
             _ = LocalSecretStore.store("memory-archive-token", legacy)
-            UserDefaults.standard.removeObject(forKey: SettingsKeys.memoryArchiveHookSecret)
+            UserDefaults.standard.removeObject(forKey: legacySecretKey)
             return legacy
         }
         let s = LocalSecretStore.value("memory-archive-token")
