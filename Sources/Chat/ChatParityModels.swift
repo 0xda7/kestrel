@@ -122,6 +122,10 @@ struct PendingToolPermission: Identifiable, Equatable {
     let conversationID: UUID
     let messageID: UUID
     let callID: UUID
+    /// The conversation run's engine port, frozen when the card is created
+    /// (census W5-4): the tool-result cap follows the engine this
+    /// conversation actually targets, never a fromDefaults().port guess.
+    let port: Int
     let name: String
     let displayName: String
     let arguments: String

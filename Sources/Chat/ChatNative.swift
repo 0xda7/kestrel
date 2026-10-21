@@ -1379,6 +1379,11 @@ final class ChatStore: ObservableObject {
             let info = agentContext?.tools.first(where: { $0.name == call.name })
             let request = PendingToolPermission(
                 conversationID: id, messageID: message.id, callID: call.id,
+                // Census W5-4: the run's port rides on the request. The
+                // degenerate no-context case cannot execute a tool anyway
+                // (the execute path guards on agentContext); the fallback
+                // only keeps the deny path honest.
+                port: agentContext?.port ?? ServerSettings.fromDefaults().port,
                 name: call.name, displayName: info?.displayName ?? call.name,
                 arguments: call.arguments, writesData: info?.writesData ?? true,
                 serverID: info?.mcpServerID,
@@ -1578,15 +1583,30 @@ final class ChatStore: ObservableObject {
         let serverID = conversations[i].messages[j].toolCalls?[k].serverID ?? request.callID.uuidString
         // Cap what re-enters the context: a giant dump starves small models
         // and eats the KV budget the rest of the run still needs. The cap
-        // scales with the window's remaining headroom, not a fixed number.
-        let window = ServerSettings.liveResolvedCtx(port: ServerSettings.fromDefaults().port)
-        let used = conversations[i].contextUsed ?? 0
-        let contextResult = ChatToolsService.clampedToolResult(
-            result, cap: ChatToolsService.dynamicToolResultCap(windowTokens: window,
-                                                               usedTokens: used))
+        // scales with the window's remaining headroom, not a fixed number —
+        // and the window is the one the request's own engine serves
+        // (census W5-4), not a defaults-port guess.
+        let contextResult = Self.toolResultContext(
+            result, port: request.port,
+            usedTokens: conversations[i].contextUsed ?? 0)
         conversations[i].messages.append(ChatMessage(role: "tool", content: contextResult, toolCallID: serverID))
         conversations[i].updated = Date()
         save()
+    }
+
+    /// The tool-result text that re-enters the conversation: the result
+    /// clamped to the window's remaining headroom, where the window is the
+    /// one published by the engine the request's own run targets (census
+    /// W5-4 — the old code probed ServerSettings.fromDefaults().port, so an
+    /// engine serving on a non-default port was capped against the wrong
+    /// window). Static and pure so LiveWindowTruthTests can pin the
+    /// threading (testToolResultCapFollowsTheConversationsPortNotTheDefaultsPort).
+    nonisolated static func toolResultContext(_ result: String, port: Int,
+                                              usedTokens: Int) -> String {
+        let window = ServerSettings.liveResolvedCtx(port: port)
+        return ChatToolsService.clampedToolResult(
+            result, cap: ChatToolsService.dynamicToolResultCap(windowTokens: window,
+                                                               usedTokens: usedTokens))
     }
 
     private func updateToolCallResult(_ request: PendingToolPermission, result: String) {

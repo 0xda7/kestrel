@@ -394,7 +394,7 @@ struct ServerSettings {
                                           ncmoe: ncmoe,
                                           kvScale: Self.kvScale(k: kv.k, v: kv.v),
                                           reserveMB: vramReserveMB,
-                                          ubatch: effectiveUbatch ?? 512)
+                                          ubatch: effectiveUbatch ?? Self.engineDefaultUbatch)
     }
 
     // MARK: Live engine window
@@ -690,7 +690,7 @@ struct ServerSettings {
         let weightsGB = Double(size) / 1_073_741_824 * (ncmoe > 0 ? 0.45 : 1.0)
         // Judge the micro-batch the engine would actually launch: the chosen
         // one when it applies, the engine's 512 default otherwise.
-        let launched = effectiveUbatch ?? 512
+        let launched = effectiveUbatch ?? Self.engineDefaultUbatch
         let window = contextAutomatic
             ? Self.solveCtx(requested: ctx, vramGB: vramGB, weightsGB: weightsGB,
                             kvPerToken: kvPerToken, reserveGB: Double(vramReserveMB) / 1024,
@@ -782,7 +782,7 @@ struct ServerSettings {
             let modelCtx = Self.routerCtx(forModel: path, requested: ctx, ncmoe: ncmoeByPath[path] ?? 0,
                                           kvScale: Self.kvScale(k: kv.k, v: kv.v),
                                           reserveMB: vramReserveMB,
-                                          ubatch: effectiveUbatch ?? 512)
+                                          ubatch: effectiveUbatch ?? Self.engineDefaultUbatch)
             var lines = ["[\(alias)]", "model = \(path)", "n-gpu-layers = \(ngl)",
                          "ctx-size = \(modelCtx)", "threads = \(threads)", "flash-attn = \(faValue)"]
             if !effectiveDynamicMoe, let ncmoe = ncmoeByPath[path], ncmoe > 0 { lines.append("n-cpu-moe = \(ncmoe)") }
@@ -1263,6 +1263,16 @@ struct ServerSettings {
         guard dynamicMoeSlotPlan(prefetch: 4) != nil else { return .normalInsufficientVRAM }
         return .cache
     }
+    /// The bundled engine's default physical batch when no --ubatch-size is
+    /// passed (census W5-5): mirrored by the launch solver wherever
+    /// effectiveUbatch is nil — resolvedCtx, ubatchOverflow, the router
+    /// preset writer, dynamicMoeSlotPlan. Pinned against the binary's own
+    /// --help by LiveWindowTruthTests
+    /// .testEngineDefaultUbatchIsPinnedAgainstTheEngineBinary: if a bundled
+    /// engine ever changes its default, that check goes RED and this
+    /// constant must move with it.
+    static let engineDefaultUbatch = 512
+
     /// MoE only: measured up to twice the prefill with experts on CPU (one expert
     /// upload per batch instead of per 512 tokens) and ~10% with the model whole on
     /// the card. A dense model measures slower with it, so it stays gated.
@@ -1354,7 +1364,7 @@ struct ServerSettings {
         return Self.resolveDynamicMoeSlots(
             modelBytes: size, model: info, gpuVRAMMB: gpu.vramMB,
             reserveMB: vramReserveMB, prefetch: prefetch ?? effectiveDynamicMoePrefetch,
-            ubatch: effectiveUbatch ?? 512)
+            ubatch: effectiveUbatch ?? Self.engineDefaultUbatch)
     }
 
     static func resolveDynamicMoeSlots(
