@@ -3575,3 +3575,119 @@ extension EnterpriseHardeningTests {
             .init(name: "testDeclinedContinuationDeliversQueuedSteeringMessage") { try await $0.testDeclinedContinuationDeliversQueuedSteeringMessage() },
         ])
 }
+
+/// Census W8 ChatNative store-layer conversions (T2-1 chunk A): a store file
+/// that exists but cannot be read or decoded is surfaced and preserved, never
+/// silently dropped or overwritten, and store write failures surface instead
+/// of being swallowed.
+final class ChatStoreSurfacingTests: CheckCase {
+    private func makeStoreDir(_ name: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chat-store-surfacing-\(name)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func testMissingStoreFileIsABenignFreshStart() throws {
+        let url = try makeStoreDir("absent").appendingPathComponent("conversations.json")
+        guard case .absent = ChatStore.readStoreFile(url, as: [Conversation].self) else {
+            XCTFail("a missing store file must stay a benign fresh start")
+            return
+        }
+    }
+
+    func testHealthyStoreDecodesItsValue() throws {
+        let url = try makeStoreDir("healthy").appendingPathComponent("conversations.json")
+        try JSONEncoder().encode([Conversation(title: "stored")]).write(to: url)
+        guard case .value(let conversations) = ChatStore.readStoreFile(url, as: [Conversation].self) else {
+            XCTFail("a healthy store must decode to its value")
+            return
+        }
+        XCTAssertEqual(conversations.first?.title, "stored")
+    }
+
+    func testUnreadableStoreIsMovedAsideAndPreserved() throws {
+        let url = try makeStoreDir("unreadable").appendingPathComponent("conversations.json")
+        let garbage = Data("this is not conversations json {{".utf8)
+        try garbage.write(to: url)
+        guard case .unreadable(let errorText, let preservedAt) =
+                  ChatStore.readStoreFile(url, as: [Conversation].self) else {
+            XCTFail("an unreadable store must be surfaced, not silently dropped")
+            return
+        }
+        XCTAssertFalse(errorText.isEmpty, "the surfacing carries the underlying decode error")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path),
+                       "the original path must be free so the fresh store can start")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: preservedAt.path),
+                      "the unreadable file must be preserved for recovery")
+        XCTAssertEqual(try Data(contentsOf: preservedAt), garbage,
+                       "the preserved file keeps the original bytes")
+    }
+
+    func testUnmovableStoreStaysInPlaceAndShieldsWrites() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX write bits are not enforced for root") }
+        let dir = try makeStoreDir("shielded")
+        let url = dir.appendingPathComponent("conversations.json")
+        let garbage = Data("unreadable store {".utf8)
+        try garbage.write(to: url)
+        // Make the directory read-only so the move-aside rename cannot happen.
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        guard case .unreadableUnpreserved(_, let at) = ChatStore.readStoreFile(url, as: [Conversation].self) else {
+            XCTFail("a store that cannot be moved aside must be reported as unpreserved")
+            return
+        }
+        XCTAssertEqual(at.path, url.path)
+        XCTAssertEqual(try Data(contentsOf: url), garbage, "the unreadable file stays in place")
+        XCTAssertEqual(ChatStore.writeStore([Conversation(title: "new")], to: url, shielded: true),
+                       .skippedShielded, "a shielded store is skipped, never overwritten")
+        XCTAssertEqual(try Data(contentsOf: url), garbage)
+        XCTAssertEqual(ChatStore.writeStore([Conversation(title: "new")], to: url, shielded: false),
+                       .writeFailed, "a failed write is reported, not swallowed")
+        XCTAssertEqual(try Data(contentsOf: url), garbage)
+    }
+
+    func testWriteFailureIsReportedNotSwallowed() throws {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("no-such-store-dir-\(UUID().uuidString)")
+            .appendingPathComponent("conversations.json")
+        XCTAssertEqual(ChatStore.writeStore([Conversation(title: "x")], to: missing, shielded: false),
+                       .writeFailed)
+    }
+
+    func testHealthyWriteLandsAndRoundTrips() throws {
+        let url = try makeStoreDir("write").appendingPathComponent("conversations.json")
+        XCTAssertEqual(ChatStore.writeStore([Conversation(title: "kept")], to: url, shielded: false),
+                       .written)
+        let loaded = try JSONDecoder().decode([Conversation].self, from: Data(contentsOf: url))
+        XCTAssertEqual(loaded.first?.title, "kept")
+    }
+
+    func testStoreUnreadableMessageIsEnglishAndNamesTheRecovery() {
+        for (preserved, fragment) in [(true, "moved aside"), (false, "kept in place")] {
+            let message = ChatStore.storeUnreadableMessage(fileName: "conversations.json",
+                                                           preserved: preserved)
+            XCTAssertFalse(message.isEmpty)
+            XCTAssertTrue(message.allSatisfy { $0.isASCII },
+                          "product doctrine: new user-facing strings are English-only")
+            XCTAssertTrue(message.contains("conversations.json"), "the message names the file")
+            XCTAssertTrue(message.contains("unreadable"))
+            XCTAssertTrue(message.contains(fragment), "the message states the recovery option")
+        }
+    }
+}
+
+extension ChatStoreSurfacingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ChatStoreSurfacingTests",
+        instance: { ChatStoreSurfacingTests() },
+        checks: [
+            .init(name: "testMissingStoreFileIsABenignFreshStart") { try $0.testMissingStoreFileIsABenignFreshStart() },
+            .init(name: "testHealthyStoreDecodesItsValue") { try $0.testHealthyStoreDecodesItsValue() },
+            .init(name: "testUnreadableStoreIsMovedAsideAndPreserved") { try $0.testUnreadableStoreIsMovedAsideAndPreserved() },
+            .init(name: "testUnmovableStoreStaysInPlaceAndShieldsWrites") { try $0.testUnmovableStoreStaysInPlaceAndShieldsWrites() },
+            .init(name: "testWriteFailureIsReportedNotSwallowed") { try $0.testWriteFailureIsReportedNotSwallowed() },
+            .init(name: "testHealthyWriteLandsAndRoundTrips") { try $0.testHealthyWriteLandsAndRoundTrips() },
+            .init(name: "testStoreUnreadableMessageIsEnglishAndNamesTheRecovery") { $0.testStoreUnreadableMessageIsEnglishAndNamesTheRecovery() },
+        ])
+}

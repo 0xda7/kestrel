@@ -422,7 +422,14 @@ final class ChatStore: ObservableObject {
     private var fileURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Census W8 ChatNative:425 — the persistence bootstrap must not be
+        // silent: every conversation save lands inside this directory, so a
+        // failed creation is logged here and re-checked once at launch below.
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            AppLog.app.error("could not create the chat store directory at \(dir.path): \(error.localizedDescription) — conversations will fail to save")
+        }
         return dir.appendingPathComponent("conversations.json")
     }
 
@@ -434,6 +441,14 @@ final class ChatStore: ObservableObject {
 
     init() {
         load()
+        // Launch-time store check (census W8 ChatNative:425): a store
+        // directory that cannot be created or written would fail every save
+        // silently from here on, so it surfaces immediately.
+        let storeDir = fileURL.deletingLastPathComponent()
+        if !FileManager.default.isWritableFile(atPath: storeDir.path) {
+            AppLog.app.error("chat store directory is not writable at launch: \(storeDir.path)")
+            lastError = "The chat store directory is not writable (\(storeDir.path)). Conversations will not be saved until this is fixed."
+        }
         Self.live = self
         // Open ready to type a new message: reuse the most recent empty
         // conversation or start a fresh one. Earlier chats stay one click away.
@@ -483,8 +498,15 @@ final class ChatStore: ObservableObject {
         if currentID == c.id { currentID = conversations.first?.id }
         if conversations.isEmpty { newConversation() }
         // Drop its persisted KV slot file too, and forget it if it was loaded.
-        try? FileManager.default.removeItem(
-            at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+        // Census W8 ChatNative:486 — a slot file that outlives its conversation
+        // would be restored into another conversation's context on a later
+        // turn, so a failed delete is logged, never swallowed.
+        do {
+            try FileManager.default.removeItem(
+                at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+        } catch {
+            AppLog.chat.warning("failed to delete KV slot file \(Self.slotFile(c.id)): \(error.localizedDescription) — the stale slot could be restored into the wrong conversation")
+        }
         if slotConvID == c.id { slotConvID = nil }
         save()
     }
@@ -498,14 +520,32 @@ final class ChatStore: ObservableObject {
     static func eraseStoredConversations() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel")
-        try? FileManager.default.removeItem(at: dir.appendingPathComponent("conversations.json"))
+        // Census W8 ChatNative:501 — a store file the wipe failed to delete is
+        // logged, not swallowed: a surviving conversations.json resurrects the
+        // erased history on the next launch.
+        do {
+            try FileManager.default.removeItem(at: dir.appendingPathComponent("conversations.json"))
+        } catch {
+            AppLog.app.error("failed to delete conversations.json during erase: \(error.localizedDescription) — the store file survives the wipe")
+        }
         let slots = ServerSettings.primarySlotCacheDir
+        // Census W8 ChatNative:503 — an unscannable slot directory leaves stale
+        // slots behind; the erase must say so instead of ending silently.
         guard let files = try? FileManager.default.contentsOfDirectory(at: slots,
                                                                       includingPropertiesForKeys: nil)
-        else { return }
+        else {
+            AppLog.chat.warning("could not scan \(slots.path) for KV slot files — the erase leaves stale slots behind that could be restored into the wrong conversation")
+            return
+        }
         for f in files where f.pathExtension == "bin"
             && UUID(uuidString: f.deletingPathExtension().lastPathComponent) != nil {
-            try? FileManager.default.removeItem(at: f)
+            // Census W8 ChatNative:508 — a slot file that survives its erase
+            // could be restored into the wrong conversation; log the failure.
+            do {
+                try FileManager.default.removeItem(at: f)
+            } catch {
+                AppLog.chat.warning("failed to delete KV slot file \(f.lastPathComponent): \(error.localizedDescription) — the stale slot survives the erase")
+            }
         }
     }
 
@@ -519,8 +559,15 @@ final class ChatStore: ObservableObject {
         queuedMessage = nil
         task?.cancel()
         for c in conversations {
-            try? FileManager.default.removeItem(
-                at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+            // Census W8 ChatNative:522 — a slot file that survives its
+            // conversation wipe could be restored into the wrong conversation
+            // after the reset; log the failure instead of swallowing it.
+            do {
+                try FileManager.default.removeItem(
+                    at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+            } catch {
+                AppLog.chat.warning("failed to delete KV slot file \(Self.slotFile(c.id)): \(error.localizedDescription) — the stale slot survives the reset")
+            }
         }
         conversations.removeAll()
         slotConvID = nil
@@ -1599,14 +1646,28 @@ final class ChatStore: ObservableObject {
     /// left over). Bounds disk use to the conversations that still exist.
     private func pruneOrphanSlots() {
         let dir = ServerSettings.primarySlotCacheDir
-        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        // Census W8 ChatNative:1548 — an unscannable slot directory leaves
+        // orphaned slots in place; the prune must say so instead of ending
+        // silently.
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
+            AppLog.chat.warning("could not scan \(dir.path) for orphaned KV slot files — stale slots keep their disk space and could be restored into the wrong conversation")
+            return
+        }
         let ids = Set(conversations.map { $0.id.uuidString })
         for f in files where f.pathExtension == "bin" {
             let base = f.deletingPathExtension().lastPathComponent
             // Only prune per-conversation slot files (named by UUID); leave other
             // files like the external-client prefix (external.bin) untouched.
             guard UUID(uuidString: base) != nil else { continue }
-            if !ids.contains(base) { try? FileManager.default.removeItem(at: f) }
+            if !ids.contains(base) {
+                // Census W8 ChatNative:1555 — a failed prune leaves the orphan
+                // behind; it is retried on the next launch, so surface it.
+                do {
+                    try FileManager.default.removeItem(at: f)
+                } catch {
+                    AppLog.chat.warning("failed to delete orphaned KV slot file \(f.lastPathComponent): \(error.localizedDescription) — it will be retried on the next launch")
+                }
+            }
         }
     }
 
@@ -2264,20 +2325,111 @@ final class ChatStore: ObservableObject {
 
     // MARK: persistence
 
+    /// How one store-file read ended. Census W8 ChatNative:2213/2217 — a
+    /// missing file is a benign fresh start, but a file that exists and cannot
+    /// be read or decoded is never silently dropped: it is moved aside to
+    /// `<name>.unreadable` (the recovery path) so the next save cannot destroy
+    /// the user's data, and the failure is surfaced. When even the move fails,
+    /// the unreadable file stays in place and writes to that path are skipped.
+    enum StoreReadOutcome<Value: Decodable> {
+        case absent
+        case value(Value)
+        /// The unreadable file was moved aside to `preservedAt`.
+        case unreadable(errorText: String, preservedAt: URL)
+        /// The unreadable file could not be moved aside and still sits at the
+        /// store path; writes to that path must be skipped.
+        case unreadableUnpreserved(errorText: String, at: URL)
+    }
+
+    /// Reads and decodes one store file. Internal (not private) so
+    /// ChatStoreSurfacingTests can pin the behavior against temp directories.
+    nonisolated static func readStoreFile<Value: Decodable>(_ url: URL,
+                                                            as type: Value.Type) -> StoreReadOutcome<Value> {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .absent }
+        do {
+            let data = try Data(contentsOf: url)
+            return .value(try JSONDecoder().decode(Value.self, from: data))
+        } catch {
+            let decodeText = error.localizedDescription
+            let aside = url.appendingPathExtension("unreadable")
+            let fm = FileManager.default
+            do {
+                if fm.fileExists(atPath: aside.path) { try fm.removeItem(at: aside) }
+                try fm.moveItem(at: url, to: aside)
+                return .unreadable(errorText: decodeText, preservedAt: aside)
+            } catch {
+                AppLog.app.error("could not move the unreadable store file \(url.lastPathComponent) aside: \(error.localizedDescription) — writes to it are skipped so the file is preserved")
+                return .unreadableUnpreserved(errorText: decodeText, at: url)
+            }
+        }
+    }
+
+    /// User-facing surfacing for an unreadable store file (English-only per
+    /// product doctrine): names the file and the recovery option.
+    nonisolated static func storeUnreadableMessage(fileName: String, preserved: Bool) -> String {
+        preserved
+            ? "The \(fileName) file could not be read and was moved aside to \(fileName).unreadable. Your previous chats are preserved in that file; new conversations start fresh."
+            : "The \(fileName) file could not be read and was kept in place unreadable. Your previous chats are preserved in that file; writing new history is paused so nothing is deleted."
+    }
+
+    /// Store paths whose on-disk file is unreadable and could not be moved
+    /// aside; the next save must skip them so the user's data is never
+    /// destroyed by an overwrite (census W8 ChatNative:2213 recovery path).
+    private var storePathsShieldedFromOverwrite: Set<String> = []
+
+    private func loadAndSurface<Value: Decodable>(_ url: URL, as type: Value.Type,
+                                                  into assign: (Value) -> Void) {
+        switch Self.readStoreFile(url, as: type) {
+        case .absent:
+            break
+        case .value(let decoded):
+            assign(decoded)
+        case .unreadable(let errorText, let preservedAt):
+            AppLog.app.error("chat store \(url.lastPathComponent) is unreadable (\(errorText)) — moved aside to \(preservedAt.lastPathComponent); the previous history is preserved there")
+            lastError = Self.storeUnreadableMessage(fileName: url.lastPathComponent, preserved: true)
+        case .unreadableUnpreserved(let errorText, _):
+            AppLog.app.error("chat store \(url.lastPathComponent) is unreadable (\(errorText)) and could not be moved aside — writes to it are skipped so the file is preserved")
+            lastError = Self.storeUnreadableMessage(fileName: url.lastPathComponent, preserved: false)
+            storePathsShieldedFromOverwrite.insert(url.path)
+        }
+    }
+
     private func load() {
-        if let data = try? Data(contentsOf: fileURL),
-           let list = try? JSONDecoder().decode([Conversation].self, from: data) {
-            conversations = list
-        }
-        if let data = try? Data(contentsOf: projectsURL),
-           let list = try? JSONDecoder().decode([ChatProject].self, from: data) {
-            projects = list
-        }
+        loadAndSurface(fileURL, as: [Conversation].self) { conversations = $0 }
+        loadAndSurface(projectsURL, as: [ChatProject].self) { projects = $0 }
     }
 
     // Serial queue: keeps writes ordered while encoding off the main thread,
     // since the full history JSON grows with use and would cause hitches.
     private static let saveQueue = DispatchQueue(label: "com.northlatchlabs.kestrel.chat-save", qos: .utility)
+
+    /// How one store write ended (census W8 ChatNative:2245/2248 — both the
+    /// encode and the write result are checked and surfaced, never swallowed).
+    enum StoreWriteOutcome: Equatable {
+        case written
+        case encodeFailed
+        case writeFailed
+        case skippedShielded
+    }
+
+    /// Writes one store snapshot owner-only. Internal (not private) so
+    /// ChatStoreSurfacingTests can pin the surfacing behavior.
+    nonisolated static func writeStore<Value: Encodable>(_ value: Value, to url: URL,
+                                                         shielded: Bool) -> StoreWriteOutcome {
+        if shielded {
+            AppLog.app.error("skipped overwriting \(url.lastPathComponent): the unreadable store file is preserved in place for recovery")
+            return .skippedShielded
+        }
+        guard let data = try? JSONEncoder().encode(value) else {
+            AppLog.app.error("failed to encode the \(url.lastPathComponent) snapshot — this cycle's snapshot is not on disk")
+            return .encodeFailed
+        }
+        if OwnerOnlyFile.write(data, to: url) {
+            return .written
+        }
+        AppLog.app.error("failed to write \(url.lastPathComponent) — the previous store file is untouched")
+        return .writeFailed
+    }
 
     func save() {
         for i in conversations.indices {
@@ -2289,6 +2441,7 @@ final class ChatStore: ObservableObject {
         let projectsSnapshot = projects
         let url = fileURL
         let pURL = projectsURL
+        let shielded = storePathsShieldedFromOverwrite
         Self.saveQueue.async {
             // conversations.json holds the full chat history; projects.json the
             // project config. Both are written owner-only (0600) via the one
@@ -2297,12 +2450,10 @@ final class ChatStore: ObservableObject {
             // the history sat world-readable. The enclosing Application
             // Support folder is already 0700; this keeps the store unreadable
             // to other local accounts even if the folder permission drifts.
-            if let data = try? JSONEncoder().encode(snapshot) {
-                _ = OwnerOnlyFile.write(data, to: url)
-            }
-            if let data = try? JSONEncoder().encode(projectsSnapshot) {
-                _ = OwnerOnlyFile.write(data, to: pURL)
-            }
+            // Failures surface inside writeStore (census W8 2245/2248); a
+            // shielded path is skipped so an unreadable original is preserved.
+            _ = Self.writeStore(snapshot, to: url, shielded: shielded.contains(url.path))
+            _ = Self.writeStore(projectsSnapshot, to: pURL, shielded: shielded.contains(pURL.path))
         }
     }
 
