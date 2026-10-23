@@ -140,6 +140,132 @@ final class ChatStoreIsolationTests: CheckCase {
                        "an audio recovery round-trip must not change the live AudioRecovery.json by one byte")
     }
 
+    /// Same doctrine for the AppSupport-rooted stores: with
+    /// AppSupport.directoryOverride set, a full ServerController()
+    /// create/prune cycle (the RotatingFileLog retention prune that used
+    /// to delete the operator's live server logs on every construction)
+    /// plus direct queue, profile, prompt-library, and PID-lockfile
+    /// writes must land entirely inside the per-run directory and leave
+    /// the live tree byte-identical.
+    @MainActor func testServerCycleAndSupportStoresNeverTouchTheLiveTree() throws {
+        guard let override = AppSupport.directoryOverride else {
+            return XCTFail("ChecksMain must set AppSupport.directoryOverride before any check runs — without it every ServerController() prunes the operator's live logs and rewrites the live PID lockfile")
+        }
+        let fm = FileManager.default
+        let liveLogsBefore = Self.slotFileInventory(under: CheckLivePaths.logsDirectory)
+        let liveQueueBefore = Self.slotFileInventory(under: CheckLivePaths.memoryArchiveQueueDirectory)
+        let liveProfilesBefore = Self.slotFileInventory(under: CheckLivePaths.dynamicMoeDirectory)
+        let livePromptLibraryBefore = try? Data(contentsOf: CheckLivePaths.promptLibraryJSON)
+        let liveEnginePIDBefore = try? Data(contentsOf: CheckLivePaths.enginePID)
+
+        // A stale session log planted inside the per-run override gives
+        // the retention prune something real to delete — proving the
+        // exact code path that deleted live server logs now prunes only
+        // the override.
+        let overrideLogs = override.appendingPathComponent("logs", isDirectory: true)
+        try fm.createDirectory(at: overrideLogs, withIntermediateDirectories: true)
+        let staleLog = overrideLogs.appendingPathComponent("server-2020-01-01_00-00-00.log")
+        try Data("stale".utf8).write(to: staleLog)
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -10 * 86_400)],
+                             ofItemAtPath: staleLog.path)
+
+        let server = ServerController()
+        XCTAssertEqual(server.logsDirectory.path, overrideLogs.path,
+                       "a check-suite ServerController's rotating log must honor the harness override")
+        _ = server.logFileURL   // sync point: the init-time retention prune has run
+        XCTAssertFalse(fm.fileExists(atPath: staleLog.path),
+                       "the retention prune must delete the stale session log inside the per-run override")
+
+        // Memory-archive queue: a genuine send() through the actor writes
+        // its durable delivery file via the resolver. The hook points at
+        // an unbound loopback port (plain-http loopback carries no
+        // network exposure); the prior UserDefaults value is restored at
+        // the end, and a drain pass that wakes mid-backoff re-checks the
+        // key, finds it gone, and returns — no receiver is ever polled.
+        let hookKey = SettingsKeys.memoryArchiveHookURL
+        let priorHook = UserDefaults.standard.string(forKey: hookKey)
+        UserDefaults.standard.set("http://127.0.0.1:1/hook", forKey: hookKey)
+        defer {
+            if let priorHook {
+                UserDefaults.standard.set(priorHook, forKey: hookKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: hookKey)
+            }
+        }
+        let overrideQueue = override.appendingPathComponent("memory-archive-hook", isDirectory: true)
+        MemoryArchiveHook.send(conversationID: "isolation", title: "isolation",
+                               from: 0, to: 1, note: "isolation pin",
+                               messages: [(index: 0, role: "user", content: "fixture")])
+        var queuedUnderOverride = false
+        let queueDeadline = Date().addingTimeInterval(3)
+        while !queuedUnderOverride && Date() < queueDeadline {
+            queuedUnderOverride = !MemoryArchiveHook.pending(in: overrideQueue).isEmpty
+            if !queuedUnderOverride { Thread.sleep(forTimeInterval: 0.005) }
+        }
+        XCTAssertTrue(queuedUnderOverride,
+                      "the durable queue write must land inside the per-run override")
+
+        // Dynamic-MoE profile store: a real save through the resolver.
+        let gpu = GPUDevice(index: 0, name: "isolation-fixture-gpu", vramMB: 8_192)
+        let profile = DynamicMoeOptimizationProfile(
+            version: DynamicMoeOptimizationProfile.currentVersion,
+            modelFingerprint: "isolation-fingerprint",
+            modelName: "isolation-model",
+            gpuName: gpu.name,
+            gpuVRAMMB: gpu.vramMB,
+            route: .direct,
+            slots: 1,
+            ringSlots: 1,
+            prefetch: 1,
+            hotMapPath: nil,
+            promptTokensPerSecond: 1,
+            generationTokensPerSecond: 1,
+            baselinePromptTokensPerSecond: 1,
+            baselineGenerationTokensPerSecond: 1,
+            estimatedVRAMFraction: nil,
+            createdAt: Date())
+        try DynamicMoeProfileStore.save(profile, gpu: gpu)
+        let overrideProfiles = override.appendingPathComponent("dynamic-moe", isDirectory: true)
+        XCTAssertEqual(DynamicMoeProfileStore.directory.path, overrideProfiles.path,
+                       "the dynamic-MoE profile store must honor the harness override")
+        XCTAssertFalse(Self.slotFileInventory(under: overrideProfiles).isEmpty,
+                       "the profile save must land inside the per-run override")
+
+        // Prompt library: a first-run load seeds and persists through the
+        // resolver.
+        XCTAssertEqual(PromptLibrary.fileURL.path,
+                       override.appendingPathComponent("prompt-library.json").path,
+                       "the prompt library must honor the harness override")
+        XCTAssertFalse(PromptLibrary.load().isEmpty)
+        XCTAssertTrue(fm.fileExists(atPath: override.appendingPathComponent("prompt-library.json").path),
+                      "the seeded prompt library must land inside the per-run override")
+
+        // PID lockfile: a real add/remove cycle through the resolver. The
+        // sentinel is recorded only — nothing reaps inside a check.
+        let overridePID = override.appendingPathComponent("engine.pid")
+        let sentinelPID = Int32.max
+        EngineLock.add(pid: sentinelPID)
+        XCTAssertTrue(fm.fileExists(atPath: overridePID.path),
+                      "the PID lockfile write must land inside the per-run override")
+        EngineLock.remove(pid: sentinelPID)
+        XCTAssertFalse(fm.fileExists(atPath: overridePID.path),
+                       "removing the last recorded PID clears the per-run lockfile")
+
+        XCTAssertEqual(Self.slotFileInventory(under: CheckLivePaths.logsDirectory),
+                       liveLogsBefore,
+                       "a check-suite ServerController lifecycle must not add, remove, or touch live session logs")
+        XCTAssertEqual(Self.slotFileInventory(under: CheckLivePaths.memoryArchiveQueueDirectory),
+                       liveQueueBefore,
+                       "a queued memory-archive delivery must never land in the operator's live queue")
+        XCTAssertEqual(Self.slotFileInventory(under: CheckLivePaths.dynamicMoeDirectory),
+                       liveProfilesBefore,
+                       "a dynamic-MoE profile save must never land in the operator's live store")
+        XCTAssertEqual(try? Data(contentsOf: CheckLivePaths.promptLibraryJSON), livePromptLibraryBefore,
+                       "the live prompt library must not change by one byte")
+        XCTAssertEqual(try? Data(contentsOf: CheckLivePaths.enginePID), liveEnginePIDBefore,
+                       "the live engine PID lockfile must not change by one byte")
+    }
+
     /// Stable inventory of every file under the slot tree: relative path plus
     /// byte count, so an add, a delete, or an in-place rewrite all show.
     private static func slotFileInventory(under root: URL) -> [String] {
@@ -165,5 +291,6 @@ extension ChatStoreIsolationTests {
             .init(name: "testChatStoreLifecycleNeverTouchesTheLiveStore") { try $0.testChatStoreLifecycleNeverTouchesTheLiveStore() },
             .init(name: "testLocalSecretStoreCycleNeverTouchesTheLiveSecrets") { try $0.testLocalSecretStoreCycleNeverTouchesTheLiveSecrets() },
             .init(name: "testAudioRecoveryRoundTripNeverTouchesTheLiveFile") { try $0.testAudioRecoveryRoundTripNeverTouchesTheLiveFile() },
+            .init(name: "testServerCycleAndSupportStoresNeverTouchTheLiveTree") { try $0.testServerCycleAndSupportStoresNeverTouchTheLiveTree() },
         ])
 }

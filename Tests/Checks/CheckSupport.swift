@@ -348,6 +348,11 @@ enum CheckLivePaths {
     static var toolTemplatesDirectory: URL { kestrelDirectory.appendingPathComponent("tool-templates", isDirectory: true) }
     static var secretsDirectory: URL { kestrelDirectory.appendingPathComponent("secrets", isDirectory: true) }
     static var audioRecoveryJSON: URL { kestrelDirectory.appendingPathComponent("AudioRecovery.json") }
+    static var logsDirectory: URL { kestrelDirectory.appendingPathComponent("logs", isDirectory: true) }
+    static var memoryArchiveQueueDirectory: URL { kestrelDirectory.appendingPathComponent("memory-archive-hook", isDirectory: true) }
+    static var dynamicMoeDirectory: URL { kestrelDirectory.appendingPathComponent("dynamic-moe", isDirectory: true) }
+    static var promptLibraryJSON: URL { kestrelDirectory.appendingPathComponent("prompt-library.json") }
+    static var enginePID: URL { kestrelDirectory.appendingPathComponent("engine.pid") }
 }
 
 @MainActor @main
@@ -365,14 +370,18 @@ struct ChecksMain {
         EngineToolTemplate.directoryOverride = ChatStore.storeDirectoryOverride
         // Same doctrine for the remaining live-data writers: the local
         // secret store (engine/provider keys, archive token), the
-        // audio-studio recovery project, and the router preset folder (a
-        // check building router argv resolves and creates it) ride the
-        // per-run directory too, so no sentinel or restore dance can ever
-        // reach the live files.
+        // audio-studio recovery project, the router preset folder (a
+        // check building router argv resolves and creates it), and every
+        // AppSupport-rooted store — the rotating server logs and their
+        // retention prune, the engine PID lockfile, the memory-archive
+        // delivery queue, the dynamic-MoE profiles, and the prompt
+        // library — ride the per-run directory too, so no sentinel,
+        // restore dance, or prune can ever reach the live files.
         LocalSecretStore.directoryOverride = ChatStore.storeDirectoryOverride
         ServerSettings.routerDirectoryOverride = ChatStore.storeDirectoryOverride
         AudioStudioController.recoveryURLOverride = ChatStore.storeDirectoryOverride?
             .appendingPathComponent("AudioRecovery.json")
+        AppSupport.directoryOverride = ChatStore.storeDirectoryOverride
         let registry: [(String, CheckSet)] = Self.generatedRegistry()
         let watchdog = Watchdog()
         var failed = 0

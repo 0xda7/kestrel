@@ -445,8 +445,18 @@ enum AppLog {
 
 /// App support directory for persistent state (logs, lockfiles, chats).
 enum AppSupport {
+    /// Set once by the check harness before any check runs (nil in
+    /// production): every AppSupport-rooted path — the rotating server
+    /// log (whose retention prune DELETES files), the benchmark log,
+    /// the engine PID lockfile, the memory-archive delivery queue, and
+    /// the dynamic-MoE profile store — resolves inside the per-run
+    /// directory instead of the operator's live tree. Same contract as
+    /// ChatStore.storeDirectoryOverride; unsafe-by-contract because it
+    /// is written only at startup, single-threaded.
+    nonisolated(unsafe) static var directoryOverride: URL?
+
     static var directory: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = directoryOverride ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel")
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

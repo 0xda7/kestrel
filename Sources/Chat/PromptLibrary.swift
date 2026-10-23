@@ -75,11 +75,11 @@ struct PromptTemplate: Identifiable, Codable, Equatable {
 /// mirrored into Kestrel): named, versioned templates with variables, stored
 /// as JSON under Application Support — user data, never code constants.
 enum PromptLibrary {
+    /// Resolved through AppSupport so the harness override covers the
+    /// library exactly like every other live-data store; the production
+    /// path (Application Support/Kestrel) is unchanged.
     static var fileURL: URL {
-        let base = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory,
-                                                       .userDomainMask, true).first
-            ?? NSHomeDirectory() + "/Library/Application Support"
-        return URL(fileURLWithPath: base + "/Kestrel/prompt-library.json")
+        AppSupport.directory.appendingPathComponent("prompt-library.json")
     }
 
     /// Loads the library, seeding first-run defaults so the space is never
