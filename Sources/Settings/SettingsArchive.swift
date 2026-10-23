@@ -76,10 +76,12 @@ enum SettingsArchive {
 
     /// KES-06: everything an import would restore that can spawn a process
     /// or change what gets spawned — engine and sidecar binary paths, MCP
-    /// server commands, and extra engine arguments. The import UI shows this
-    /// list and requires explicit approval before any of it is applied: a
-    /// settings file handed to the user is otherwise one-click arbitrary
-    /// process execution.
+    /// server commands, extra engine arguments, the memory-archive delivery
+    /// endpoint (KES-08/M-1: it exfiltrates turn content to wherever it
+    /// points), and the agent-tool switches that arm the engine's tool
+    /// endpoints. The import UI shows this list and requires explicit
+    /// approval before any of it is applied: a settings file handed to the
+    /// user is otherwise one-click arbitrary process execution.
     static func processSpawningSummary(for data: Data, defaults: UserDefaults = .standard) -> ProcessSpawnSummary {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let config = root["config"] as? [String: Any] else {
@@ -98,6 +100,32 @@ enum SettingsArchive {
         if let raw = config[SettingsKeys.extraArgs], let extra = restoredValue(raw) as? String,
            !extra.isEmpty, extra != (defaults.string(forKey: SettingsKeys.extraArgs) ?? "") {
             rows.append("engine extraArgs: \(extra)")
+        }
+        // M-1 (KES-06/KES-08): the memory-archive delivery endpoint and the
+        // tool-spawning switches ride resettableOptionKeys, so an import
+        // could restore them silently — repointing the exfiltration hook or
+        // arming POST /tools with no consent round-trip. They surface like
+        // the binary rows: only a value the import would actually change.
+        let changedStringKeys: [(String, String)] = [
+            (SettingsKeys.memoryArchiveHookURL, "memory archive hook"),
+            (SettingsKeys.toolsRuntime, "tools runtime"),
+        ]
+        for (key, label) in changedStringKeys {
+            if let raw = config[key], let value = restoredValue(raw) as? String,
+               !value.isEmpty, value != (defaults.string(forKey: key) ?? "") {
+                rows.append("\(label): \(value)")
+            }
+        }
+        let toolSwitches: [(String, String)] = [
+            (SettingsKeys.agentToolsEnabled, "agent tools"),
+            (SettingsKeys.uiMcpProxy, "web MCP proxy"),
+        ]
+        for (key, label) in toolSwitches {
+            guard let raw = config[key] else { continue }
+            let imported = importedToolSwitchValue(restoredValue(raw)) ?? false
+            if imported != SettingsNumericCoercion.bool(key, default: false, in: defaults) {
+                rows.append("\(label): \(imported ? "on" : "off")")
+            }
         }
         if let raw = config[SettingsKeys.mcpServers], let blob = restoredValue(raw) as? Data {
             do {
@@ -141,5 +169,16 @@ enum SettingsArchive {
             return dictionary.mapValues(restoredValue)
         }
         return value
+    }
+
+    /// What a Bool tool switch becomes after import: a typed Bool or number
+    /// reads as itself, a String only through the registry's parseBool
+    /// spellings (the import never stores a String for a registered key),
+    /// and anything else (NSNull, garbage) is the declared off state the
+    /// import leaves behind.
+    private static func importedToolSwitchValue(_ value: Any) -> Bool? {
+        if let bool = value as? Bool { return bool }
+        if let text = value as? String { return SettingsNumericCoercion.parseBool(text) }
+        return nil
     }
 }
