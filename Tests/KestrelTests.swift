@@ -4314,3 +4314,122 @@ extension ChatFailureSurfacingTests {
             .init(name: "testMarkdownExportWiringCatchesTheWriteError") { try $0.testMarkdownExportWiringCatchesTheWriteError() },
         ])
 }
+
+/// Guardian slice (2026-10-23): remote MCP credential traffic requires
+/// https/wss — the InferenceRoute.insecureHosts doctrine — so the
+/// Keychain-stored headers applyHeaders attaches can never ride a
+/// cleartext transport off this machine. Loopback keeps http/ws.
+final class MCPCredentialTransportTests: CheckCase {
+
+    /// The rule: remote http/ws URLs (LAN hosts included — they are not
+    /// loopback) are refused with the typed error naming host and scheme.
+    func testRemoteCleartextMCPURLsThrowTheTypedError() throws {
+        for raw in ["http://mcp.example.com/mcp", "ws://mcp.example.com/mcp",
+                    "http://192.168.1.50:3000/mcp", "ws://10.0.0.4/mcp"] {
+            let url = try XCTUnwrap(URL(string: raw), raw)
+            do {
+                try MCPTransportSecurity.requireTLSCredentialTransport(url)
+                XCTFail("\(raw): a remote cleartext MCP URL must be refused")
+            } catch MCPError.cleartextCredentials(let host, let scheme) {
+                XCTAssertEqual(host, url.host, "\(raw): the error names the offending host")
+                XCTAssertEqual(scheme, url.scheme?.lowercased(), "\(raw): the error names the offending scheme")
+            }
+        }
+    }
+
+    /// The exemption: 127.0.0.1/localhost/::1 http and ws URLs pass the
+    /// guard exactly as before, and so do https/wss to any host.
+    func testLoopbackAndTLSMCPURLsStillPassTheGuard() throws {
+        for raw in ["http://127.0.0.1:3000/mcp", "http://localhost:3000/mcp",
+                    "http://[::1]:3000/mcp", "ws://localhost:3000",
+                    "https://mcp.example.com/mcp", "wss://mcp.example.com/mcp"] {
+            let url = try XCTUnwrap(URL(string: raw), raw)
+            do {
+                try MCPTransportSecurity.requireTLSCredentialTransport(url)
+            } catch {
+                XCTFail("\(raw) must keep connecting exactly as today: \(error)")
+            }
+        }
+    }
+
+    /// The typed error names the rule — https/wss required, loopback
+    /// exempt — in English-only ASCII, the product doctrine.
+    func testTheTypedErrorNamesTheTLSRule() {
+        let text = MCPError.cleartextCredentials(host: "mcp.example.com", scheme: "ws")
+            .localizedDescription
+        XCTAssertTrue(text.contains("https"), "the error names the required scheme")
+        XCTAssertTrue(text.contains("wss"), "the error names the websocket form too")
+        XCTAssertTrue(text.contains("127.0.0.1"), "the error names the loopback exemption")
+        XCTAssertTrue(text.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+    }
+
+    private func serviceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MCP/MCPService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Slices one member out of the service source, from its marker to the
+    /// next member — the ChatFailureSurfacingTests doctrine: the harness
+    /// never opens sockets or reads the Keychain, so transport wiring is
+    /// pinned by reading source.
+    private func member(_ source: String, from marker: String) -> Substring {
+        guard let start = source.range(of: marker) else { return Substring() }
+        let rest = source[start.lowerBound...]
+        var end = rest.endIndex
+        for closer in ["\n    private func ", "\n    private static func ",
+                       "\n    static func ", "\n    // MARK"] {
+            if let r = rest.range(of: closer), r.lowerBound < end { end = r.lowerBound }
+        }
+        return rest[..<end]
+    }
+
+    /// The wiring: on every transport that attaches Keychain headers —
+    /// sendHTTP, startWebSocket, listenLegacySSE, and postLegacy (the SSE
+    /// endpoint host is pinned to the stream's, but its scheme was not) —
+    /// the guard runs before any request is built and before applyHeaders
+    /// can put credentials on the wire.
+    func testEveryCredentialTransportGuardsBeforeTheRequestIsBuilt() throws {
+        let source = try serviceSource()
+        for marker in ["private func sendHTTP", "private func startWebSocket",
+                       "private func listenLegacySSE", "private func postLegacy"] {
+            let body = member(source, from: marker)
+            XCTAssertFalse(body.isEmpty, "\(marker) must exist in MCPService.swift")
+            guard let guardAt = body.range(of: "requireTLSCredentialTransport"),
+                  let requestAt = body.range(of: "URLRequest(url"),
+                  let headersAt = body.range(of: "applyHeaders") else {
+                return XCTFail("\(marker): the TLS guard must run before the request is built and before applyHeaders")
+            }
+            XCTAssertTrue(guardAt.lowerBound < requestAt.lowerBound,
+                          "\(marker): the guard throws before any request is built")
+            XCTAssertTrue(requestAt.lowerBound < headersAt.lowerBound,
+                          "\(marker): the guard throws before applyHeaders puts credentials on the wire")
+        }
+    }
+
+    /// The default settings row stays loopback http — the exemption is
+    /// what keeps first-run MCP connectable without TLS setup.
+    func testDefaultMCPSettingsRowStaysLoopbackHTTP() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MCP/MCPSettingsView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains(#"url: "http://127.0.0.1:3000/mcp""#),
+                      "the default MCP row must stay loopback http")
+    }
+}
+
+extension MCPCredentialTransportTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "MCPCredentialTransportTests",
+        instance: { MCPCredentialTransportTests() },
+        checks: [
+            .init(name: "testRemoteCleartextMCPURLsThrowTheTypedError") { try $0.testRemoteCleartextMCPURLsThrowTheTypedError() },
+            .init(name: "testLoopbackAndTLSMCPURLsStillPassTheGuard") { try $0.testLoopbackAndTLSMCPURLsStillPassTheGuard() },
+            .init(name: "testTheTypedErrorNamesTheTLSRule") { $0.testTheTypedErrorNamesTheTLSRule() },
+            .init(name: "testEveryCredentialTransportGuardsBeforeTheRequestIsBuilt") { try $0.testEveryCredentialTransportGuardsBeforeTheRequestIsBuilt() },
+            .init(name: "testDefaultMCPSettingsRowStaysLoopbackHTTP") { try $0.testDefaultMCPSettingsRowStaysLoopbackHTTP() },
+        ])
+}

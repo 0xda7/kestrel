@@ -20,6 +20,7 @@ enum CheckRegistry {
         ("ChatStoreSurfacingTests", ChatStoreSurfacingTests.__checkSet),
         ("ChatImportSurfacingTests", ChatImportSurfacingTests.__checkSet),
         ("ChatFailureSurfacingTests", ChatFailureSurfacingTests.__checkSet),
+        ("MCPCredentialTransportTests", MCPCredentialTransportTests.__checkSet),
         ("ChatToolPathDoctrineTests", ChatToolPathDoctrineTests.__checkSet),
         ("ChatStoreIsolationTests", ChatStoreIsolationTests.__checkSet),
         ("InlineThoughtSplitTests", InlineThoughtSplitTests.__checkSet),

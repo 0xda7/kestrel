@@ -299,6 +299,7 @@ actor KestrelMCPService {
                           payload: [String: Any]) async throws -> WireResponse {
         guard let url = URL(string: server.url), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { throw MCPError.invalidURL }
+        try MCPTransportSecurity.requireTLSCredentialTransport(url)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = TimeInterval(max(5, server.timeoutSeconds))
@@ -341,6 +342,7 @@ actor KestrelMCPService {
 
     private func startWebSocket(_ server: MCPServer) async throws {
         guard let url = URL(string: server.url) else { throw MCPError.invalidURL }
+        try MCPTransportSecurity.requireTLSCredentialTransport(url)
         var request = URLRequest(url: url)
         request.timeoutInterval = TimeInterval(max(5, server.timeoutSeconds))
         request.setValue("mcp", forHTTPHeaderField: "Sec-WebSocket-Protocol")
@@ -380,6 +382,7 @@ actor KestrelMCPService {
     private func listenLegacySSE(_ server: MCPServer) async {
         do {
             guard let url = URL(string: server.url) else { throw MCPError.invalidURL }
+            try MCPTransportSecurity.requireTLSCredentialTransport(url)
             var request = URLRequest(url: url)
             request.timeoutInterval = 3_600
             request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -435,6 +438,7 @@ actor KestrelMCPService {
         guard let session = sessions[serverID], let endpoint = session.legacyEndpoint else {
             throw MCPError.invalidResponse
         }
+        try MCPTransportSecurity.requireTLSCredentialTransport(endpoint)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

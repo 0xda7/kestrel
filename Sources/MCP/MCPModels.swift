@@ -119,6 +119,9 @@ enum MCPError: LocalizedError {
     case invalidConfig(String)
     case launchFailed(String)
     case remote(String)
+    /// Guardian slice (2026-10-23): stored credential headers were about to
+    /// ride a cleartext transport to a remote host.
+    case cleartextCredentials(host: String, scheme: String)
 
     var errorDescription: String? {
         switch self {
@@ -127,6 +130,31 @@ enum MCPError: LocalizedError {
         case .launchFailed(let reason): return reason
         case .invalidResponse: return "The MCP server returned an invalid JSON-RPC response."
         case let .remote(message): return message
+        case let .cleartextCredentials(host, scheme):
+            return "Refusing to send MCP credentials to \(host) over \(scheme): remote MCP servers must use https or wss; loopback hosts (127.0.0.1, localhost, ::1) may keep http or ws."
+        }
+    }
+}
+
+/// Guardian slice (2026-10-23): the InferenceRoute.insecureHosts TLS
+/// doctrine applied to MCP transports. Stored credential headers ride
+/// every network request applyHeaders builds, so a remote MCP server
+/// must speak https/wss; loopback keeps plain http/ws, which is what
+/// keeps the default settings row (http://127.0.0.1:3000/mcp)
+/// connecting unchanged.
+enum MCPTransportSecurity {
+    /// Throws the typed cleartextCredentials error for a non-TLS scheme on
+    /// a non-loopback host. Called on every network transport BEFORE any
+    /// request is built, so credentials can never reach the wire in
+    /// cleartext. Internal so the check suite can pin the rule.
+    static func requireTLSCredentialTransport(_ url: URL) throws {
+        guard let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased(), !host.isEmpty else {
+            throw MCPError.invalidURL
+        }
+        if scheme == "https" || scheme == "wss" { return }
+        if !InferenceRoute.insecureHosts.contains(host) {
+            throw MCPError.cleartextCredentials(host: host, scheme: scheme)
         }
     }
 }
