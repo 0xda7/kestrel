@@ -4064,3 +4064,126 @@ extension SettingsArchiveConsentTests {
             .init(name: "testImportDecisionFailsSafeOnUnsummarizableArchives") { try $0.testImportDecisionFailsSafeOnUnsummarizableArchives() },
         ])
 }
+
+/// Guardian slice (2026-10-23): the two swallowed chat failure paths —
+/// local file transcription and per-conversation Markdown export — must
+/// surface instead of silently deleting or losing the user's data.
+final class ChatFailureSurfacingTests: CheckCase {
+    private func chatNativeSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Chat/ChatNative.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Slices one member out of the view source, from its marker to the
+    /// next member. The harness renders no SwiftUI, so view wiring is
+    /// pinned by reading the source — the doctrine of
+    /// testChatErrorTextIsCopyable above.
+    private func member(_ source: String, from marker: String) -> Substring {
+        guard let start = source.range(of: marker) else { return Substring() }
+        let rest = source[start.lowerBound...]
+        var end = rest.endIndex
+        for closer in ["\n    private func ", "\n    private static func ",
+                       "\n    @ViewBuilder ", "\n    // MARK"] {
+            if let r = rest.range(of: closer), r.lowerBound < end { end = r.lowerBound }
+        }
+        return rest[..<end]
+    }
+
+    /// A failed local file transcription keeps the attachment — the chip's
+    /// placeholder becomes a visible failure note — and the surfaced error
+    /// is non-empty, English, and names the file.
+    func testFailedTranscriptionKeepsTheAttachmentAndNamesTheFile() {
+        let loc = Localizer()
+        let id = UUID()
+        let attachments = FailedTranscriptionDisposition.settle(
+            [ChatAttachment(id: id, name: "meeting.m4a",
+                            content: "(transcribing locally with Whisper.cpp…)")],
+            attachmentID: id, loc: loc)
+        let errorLine = FailedTranscriptionDisposition.errorLine(naming: "meeting.m4a",
+                                                                 after: nil, loc: loc)
+
+        XCTAssertEqual(attachments.count, 1, "a failed transcription must keep the attachment")
+        XCTAssertEqual(attachments.first?.id, id, "the kept chip is the user's file")
+        XCTAssertEqual(attachments.first?.content, "(couldn't transcribe it locally)",
+                       "the transcribing placeholder becomes a visible failure note")
+        XCTAssertFalse(errorLine.isEmpty, "the localized error is non-empty")
+        XCTAssertTrue(errorLine.contains("meeting.m4a"), "the error names the file")
+        XCTAssertTrue(errorLine.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+    }
+
+    /// A second failure appends to the surfaced error — the OCR branch's
+    /// join shape — never replaces what the operator was already told.
+    func testFailedTranscriptionErrorJoinsPriorAttachErrors() {
+        let joined = FailedTranscriptionDisposition.errorLine(
+            naming: "clip.mov", after: "demo.wav: local transcription failed", loc: Localizer())
+        XCTAssertTrue(joined.hasPrefix("demo.wav: local transcription failed\n"))
+        XCTAssertTrue(joined.contains("clip.mov"))
+    }
+
+    /// The view wiring: failFileTranscription settles the attachment
+    /// instead of removing it, and routes through the disposition.
+    func testFailFileTranscriptionWiringNeverDeletesTheAttachment() throws {
+        let body = member(try chatNativeSource(), from: "private func failFileTranscription")
+        XCTAssertFalse(body.isEmpty, "failFileTranscription must exist in ChatNative.swift")
+        XCTAssertFalse(body.contains("attachments.removeAll"),
+                       "a failed transcription must not silently delete the attachment")
+        XCTAssertTrue(body.contains("attachments = FailedTranscriptionDisposition.settle(attachments"),
+                      "the failure path keeps the attachment with its note")
+        XCTAssertTrue(body.contains("attachError = FailedTranscriptionDisposition.errorLine"),
+                      "the failure path surfaces a typed error naming the file")
+    }
+
+    /// The behavioral half of the export pin: a write that cannot land
+    /// throws, and its localizedDescription — exactly what the alert
+    /// shows — is non-empty rather than silence.
+    func testFailingMarkdownWriteSurfacesItsLocalizedDescription() {
+        let doomed = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kestrel-checks-missing-\(UUID().uuidString)")
+            .appendingPathComponent("conversation.md")
+        var surfaced = ""
+        do {
+            try "# Kestrel".write(to: doomed, atomically: true, encoding: .utf8)
+            XCTFail("writing into a missing directory must throw")
+        } catch {
+            surfaced = error.localizedDescription
+        }
+        XCTAssertFalse(surfaced.isEmpty,
+                       "a failed exportText write must surface localizedDescription, not silence")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: doomed.path))
+    }
+
+    /// The wiring half of the export pin: the Markdown export routes
+    /// through exportMarkdown, whose write is wrapped in do/catch and
+    /// surfaces through the existing archiveMessage alert.
+    func testMarkdownExportWiringCatchesTheWriteError() throws {
+        let source = try chatNativeSource()
+        XCTAssertFalse(source.contains("try? chat.exportText"),
+                       "the Markdown export must not swallow its write error")
+        let body = member(source, from: "private func exportMarkdown")
+        XCTAssertFalse(body.isEmpty, "exportMarkdown must exist in ChatNative.swift")
+        XCTAssertTrue(body.contains("try chat.exportText"))
+        XCTAssertTrue(body.contains("catch {"), "the write is wrapped in do/catch")
+        XCTAssertTrue(body.contains("archiveMessage = error.localizedDescription"),
+                      "a failed write reaches the existing archiveMessage alert")
+        let button = source.range(of: "Export to Markdown").map { source[$0.lowerBound...].prefix(200) }
+            ?? Substring()
+        XCTAssertTrue(button.contains("exportMarkdown(c)"),
+                      "the conversation row's export button routes through exportMarkdown")
+    }
+}
+
+extension ChatFailureSurfacingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "ChatFailureSurfacingTests",
+        instance: { ChatFailureSurfacingTests() },
+        checks: [
+            .init(name: "testFailedTranscriptionKeepsTheAttachmentAndNamesTheFile") { $0.testFailedTranscriptionKeepsTheAttachmentAndNamesTheFile() },
+            .init(name: "testFailedTranscriptionErrorJoinsPriorAttachErrors") { $0.testFailedTranscriptionErrorJoinsPriorAttachErrors() },
+            .init(name: "testFailFileTranscriptionWiringNeverDeletesTheAttachment") { try $0.testFailFileTranscriptionWiringNeverDeletesTheAttachment() },
+            .init(name: "testFailingMarkdownWriteSurfacesItsLocalizedDescription") { $0.testFailingMarkdownWriteSurfacesItsLocalizedDescription() },
+            .init(name: "testMarkdownExportWiringCatchesTheWriteError") { try $0.testMarkdownExportWiringCatchesTheWriteError() },
+        ])
+}

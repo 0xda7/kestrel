@@ -4967,7 +4967,8 @@ struct NativeChatView: View {
     private func failFileTranscription(_ pending: PendingSpeechTranscription) {
         transcriptionQueue.removeAll { $0.id == pending.id }
         transcriptionPending = max(0, transcriptionPending - 1)
-        attachments.removeAll { $0.id == pending.attachmentID }
+        attachments = FailedTranscriptionDisposition.settle(attachments, attachmentID: pending.attachmentID, loc: loc)
+        attachError = FailedTranscriptionDisposition.errorLine(naming: pending.name, after: attachError, loc: loc)
         startNextFileTranscription()
     }
 
@@ -5574,6 +5575,20 @@ struct ConversationListView: View {
         }
     }
 
+    private func exportMarkdown(_ c: Conversation) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = chat.displayTitle(c)
+            .replacingOccurrences(of: "/", with: "-") + ".md"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try chat.exportText(c, loc).write(to: url, atomically: true, encoding: .utf8)
+            archiveMessage = loc.t("Conversación exportada correctamente.",
+                                   "Conversation exported successfully.")
+        } catch {
+            archiveMessage = error.localizedDescription
+        }
+    }
+
     // MARK: rows
 
     @ViewBuilder private func projectRow(_ p: ChatProject) -> some View {
@@ -5770,12 +5785,7 @@ struct ConversationListView: View {
                 NSPasteboard.general.setString(chat.exportText(c, loc), forType: .string)
             }
             Button(loc.t("Exportar a Markdown…", "Export to Markdown…")) {
-                let panel = NSSavePanel()
-                panel.nameFieldStringValue = chat.displayTitle(c)
-                    .replacingOccurrences(of: "/", with: "-") + ".md"
-                if panel.runModal() == .OK, let url = panel.url {
-                    try? chat.exportText(c, loc).write(to: url, atomically: true, encoding: .utf8)
-                }
+                exportMarkdown(c)
             }
             Button(loc.t("Eliminar", "Delete"), role: .destructive) { chat.delete(c) }
         }
