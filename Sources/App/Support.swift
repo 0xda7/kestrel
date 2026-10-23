@@ -460,6 +460,49 @@ enum AppSupport {
     }
 }
 
+/// Surfaced support-layer failures: silent catches that used to leave a
+/// degraded channel indistinguishable from a healthy one (a secrets dir
+/// that would not tighten to 0700, a log file that would not open, a
+/// rotation whose move failed) record a typed reason here. Same doctrine
+/// as EngineLock.reapFailures: stamped, capped at 8, logged, and rendered
+/// into the exported diagnostics report; empty means healthy.
+enum SupportDiagnostics {
+    private static let failures = OSAllocatedUnfairLock<[String]>(initialState: [])
+    private static let stamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    nonisolated static func record(_ reason: String) {
+        let entry = failures.withLock { list -> String in
+            let stamped = "\(stamp.string(from: Date())): \(asciiDetail(reason))"
+            list.append(stamped)
+            if list.count > 8 { list.removeFirst(list.count - 8) }
+            return stamped
+        }
+        AppLog.app.error("support: \(entry)")
+    }
+
+    /// Snapshot for the diagnostics report; ordering oldest to newest.
+    nonisolated static func failureReport() -> [String] {
+        failures.withLock { $0 }
+    }
+
+    /// Foundation's English error strings carry typographic quotes; typed
+    /// reasons surfaced by this layer are product strings and must stay
+    /// ASCII (product doctrine). The one normalization, shared with
+    /// LocalSecretStore.unreadableReason.
+    nonisolated static func asciiDetail(_ detail: String) -> String {
+        let replaced = detail
+            .replacingOccurrences(of: "\u{201C}", with: "\"")
+            .replacingOccurrences(of: "\u{201D}", with: "\"")
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+        return String(replaced.unicodeScalars.filter { $0.isASCII })
+    }
+}
+
 /// Rotating plain-text log for the engine output, so crashes can be diagnosed
 /// after the fact and exported from Settings.
 /// Per-session log files kept under Application Support/logs, named with the start
@@ -474,12 +517,17 @@ final class RotatingFileLog: @unchecked Sendable {
     private let queue = DispatchQueue(label: "kestrel.filelog")
     private var handle: FileHandle?
     private var currentURL: URL
+    /// Sticky reason the channel is dead: nil until the first failed open,
+    /// then latched for the life of the channel — a later open that
+    /// succeeds does not erase the record (the ring entry stays either way).
+    private var openFailure: String?
 
-    init(name: String, maxBytes: UInt64 = 10 * 1024 * 1024, retentionDays: Int = 3) {
+    init(name: String, maxBytes: UInt64 = 10 * 1024 * 1024, retentionDays: Int = 3,
+         directory: URL? = nil) {
         self.prefix = (name as NSString).deletingPathExtension   // "server.log" -> "server"
         self.maxBytes = maxBytes
         self.retentionDays = retentionDays
-        self.dir = AppSupport.directory.appendingPathComponent("logs", isDirectory: true)
+        self.dir = directory ?? AppSupport.directory.appendingPathComponent("logs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.currentURL = dir.appendingPathComponent("\(prefix).log")   // until a session starts
         queue.async { [self] in cleanup() }   // prune stale logs at launch too
@@ -487,6 +535,10 @@ final class RotatingFileLog: @unchecked Sendable {
 
     var fileURL: URL { queue.sync { currentURL } }
     var directory: URL { dir }
+
+    /// The typed open failure for diagnostics, or nil while every open has
+    /// succeeded. Reads on the log's queue.
+    var openFailureReason: String? { queue.sync { openFailure } }
 
     /// Begins a new timestamped per-session file and prunes files past the retention
     /// window. Call once per server start so each run is isolated and crash-safe.
@@ -505,8 +557,21 @@ final class RotatingFileLog: @unchecked Sendable {
                 if !FileManager.default.fileExists(atPath: currentURL.path) {
                     FileManager.default.createFile(atPath: currentURL.path, contents: nil)
                 }
-                handle = try? FileHandle(forWritingTo: currentURL)
-                _ = try? handle?.seekToEnd()
+                do {
+                    handle = try FileHandle(forWritingTo: currentURL)
+                    _ = try handle?.seekToEnd()
+                } catch {
+                    // A channel that cannot open used to be indistinguishable
+                    // from a quiet one: latch the typed reason once, surface it
+                    // for the diagnostics report, and skip the write exactly as
+                    // the old silent path did.
+                    if openFailure == nil {
+                        let reason = "log channel \(prefix) cannot open \(currentURL.lastPathComponent): \(SupportDiagnostics.asciiDetail(error.localizedDescription)); its output is not being recorded"
+                        openFailure = reason
+                        SupportDiagnostics.record(reason)
+                    }
+                    return
+                }
             }
             guard let handle else { return }
             try? handle.write(contentsOf: Data(text.utf8))
@@ -522,13 +587,28 @@ final class RotatingFileLog: @unchecked Sendable {
     }
 
     /// Within a single session, cap growth: move the current file aside once and
-    /// keep writing, so one runaway run can't fill the disk.
+    /// keep writing, so one runaway run can't fill the disk. A move that fails
+    /// (read-only directory, held file) falls back to truncating in place — the
+    /// cap must hold even when the aside-file cannot be written, and the
+    /// fallback is surfaced, never swallowed.
     private func rotate() {
         try? handle?.close()
         handle = nil
         let prev = currentURL.deletingPathExtension().appendingPathExtension("prev.log")
         try? FileManager.default.removeItem(at: prev)
-        try? FileManager.default.moveItem(at: currentURL, to: prev)
+        do {
+            try FileManager.default.moveItem(at: currentURL, to: prev)
+        } catch {
+            let moveDetail = error.localizedDescription
+            do {
+                let fresh = try FileHandle(forWritingTo: currentURL)
+                try fresh.truncate(atOffset: 0)
+                handle = fresh
+                SupportDiagnostics.record("log channel \(prefix) could not move \(currentURL.lastPathComponent) aside (\(moveDetail)); truncated in place so the \(maxBytes)-byte cap still holds")
+            } catch {
+                SupportDiagnostics.record("log channel \(prefix) could not move \(currentURL.lastPathComponent) aside (\(moveDetail)) and could not truncate it (\(error.localizedDescription)); the log file can grow past its \(maxBytes)-byte cap")
+            }
+        }
     }
 
     /// Deletes session log files older than the retention window.
@@ -1070,11 +1150,7 @@ enum LocalSecretStore {
             // Foundation's English error strings carry typographic quotes;
             // the typed reason must stay ASCII (product doctrine), so the
             // embedded detail is normalized before it is surfaced.
-            let detail = error.localizedDescription
-                .replacingOccurrences(of: "\u{201C}", with: "\"")
-                .replacingOccurrences(of: "\u{201D}", with: "\"")
-                .replacingOccurrences(of: "\u{2019}", with: "'")
-            let ascii = String(detail.unicodeScalars.filter { $0.isASCII })
+            let ascii = SupportDiagnostics.asciiDetail(error.localizedDescription)
             return "secret \(name) is present but unreadable: \(ascii); engine authentication will fail until the file is fixed or the secret is re-entered"
         }
     }
@@ -1094,7 +1170,14 @@ enum LocalSecretStore {
         // Idempotent tighten on every write, not only at creation: a directory
         // that already existed (0755 from an older build or a restored backup)
         // must not keep the 0600-files-in-a-0700-folder invariant broken.
-        try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dirURL.path)
+        do {
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dirURL.path)
+        } catch {
+            // The naked try? left a loose secrets dir silent beside the typed
+            // unreadable-key reason launched a few lines above; record it so
+            // the diagnostics channel carries both.
+            SupportDiagnostics.record("secrets dir not 0700: \(dirURL.path) could not be tightened (\(error.localizedDescription)); the 0600 secret files sit in a loose folder until it is fixed")
+        }
         // OwnerOnlyFile: 0600 with no write-then-chmod window on ANY path —
         // fresh creation and legacy-loose overwrite alike (see its doc).
         let wrote = OwnerOnlyFile.write(Data(value.utf8), to: fileURL)

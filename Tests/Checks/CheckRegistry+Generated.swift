@@ -71,6 +71,7 @@ enum CheckRegistry {
         ("ModelScanSurfacingTests", ModelScanSurfacingTests.__checkSet),
         ("ModelUpdateTests", ModelUpdateTests.__checkSet),
         ("SecretHashSurfacingTests", SecretHashSurfacingTests.__checkSet),
+        ("SupportFailureSurfacingTests", SupportFailureSurfacingTests.__checkSet),
         ("SecretRedactionTests", SecretRedactionTests.__checkSet),
         ("ServerModelSelectionTests", ServerModelSelectionTests.__checkSet),
         ("ServerSurfacingTests", ServerSurfacingTests.__checkSet),

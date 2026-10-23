@@ -483,7 +483,7 @@ enum DiagnosticsExport {
         model: \(URL(fileURLWithPath: settings.modelPath).lastPathComponent)
         engine: \(settings.serverBinary)
         args: \(SecretRedactor.arguments(settings.arguments).joined(separator: " "))
-        \(extra.map { "\n\($0)\n" } ?? "")\(Self.reapSection(EngineLock.reapFailureReport()))
+        \(extra.map { "\n\($0)\n" } ?? "")\(Self.reapSection(EngineLock.reapFailureReport()))\(Self.supportSection(SupportDiagnostics.failureReport()))
         ## Recent log
         \(logText)
         """
@@ -495,6 +495,14 @@ enum DiagnosticsExport {
     /// the pre-T2-2 format.
     static func reapSection(_ failures: [String]) -> String {
         failures.isEmpty ? "" : "\n## Engine reap\n" + failures.joined(separator: "\n") + "\n"
+    }
+
+    /// Support-layer failures (secrets-dir tightening, dead log channels)
+    /// ride the exported report beside the reap entries. Empty input
+    /// renders exactly nothing, so a healthy system's report keeps its
+    /// shape.
+    static func supportSection(_ failures: [String]) -> String {
+        failures.isEmpty ? "" : "\n## Support failures\n" + failures.joined(separator: "\n") + "\n"
     }
 }
 

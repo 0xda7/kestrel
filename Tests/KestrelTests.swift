@@ -3873,6 +3873,133 @@ extension ReapDiagnosticsTests {
         ])
 }
 
+/// Guardian slice (Support.swift): the two silent failures become visible.
+/// A secrets dir that will not tighten to 0700 records a typed reason that
+/// rides the exported diagnostics report beside the unreadable-key reason,
+/// a dead log channel keeps a sticky open failure recorded once (a dead
+/// channel is no longer indistinguishable from a quiet one), and a rotation
+/// whose move fails truncates in place so the maxBytes cap still holds.
+final class SupportFailureSurfacingTests: CheckCase {
+    private func makeTempDir(_ name: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("support-surfacing-\(name)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func makeReport() -> String {
+        DiagnosticsExport.report(
+            settings: ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf",
+                                     port: 8080, ngl: 99, ncmoe: 24, ctx: 16384, threads: 6,
+                                     flashAttn: "auto", noMmap: true, jinja: true,
+                                     vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                                     cacheTypeK: "f16", cacheTypeV: "f16", mlock: false),
+            hardware: HardwareInfo(cpuBrand: "Test CPU", physicalCores: 8, logicalCores: 16,
+                                   ramGB: 32, arch: "x86_64", model: "Test Mac",
+                                   osVersion: "macOS 26", gpus: []),
+            logText: "sample log", extra: nil)
+    }
+
+    func testSupportSectionIsEmptyWhenThereAreNoFailures() {
+        XCTAssertEqual(DiagnosticsExport.supportSection([]), "",
+                       "a healthy support layer must add no section to the report")
+    }
+
+    func testSupportSectionRendersEachFailureOnItsOwnLine() {
+        XCTAssertEqual(DiagnosticsExport.supportSection(["first failure", "second failure"]),
+                       "\n## Support failures\nfirst failure\nsecond failure\n")
+    }
+
+    func testUnwritableLogDirectoryRecordsAStickyOpenFailureOnce() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX write bits are not enforced for root") }
+        let dir = try makeTempDir("dead-channel")
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        let log = RotatingFileLog(name: "dead-channel", maxBytes: 4096, retentionDays: 3, directory: dir)
+        let ringBefore = SupportDiagnostics.failureReport().count
+        log.append("first line\n")
+        _ = log.fileURL   // sync point: the append block ran on the log's queue
+        log.append("second line\n")
+        _ = log.fileURL
+        let reason = try XCTUnwrap(log.openFailureReason,
+                                   "an unwritable log directory must surface an open failure")
+        XCTAssertTrue(reason.contains("dead-channel"), "the surfacing names the channel")
+        XCTAssertTrue(reason.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+        XCTAssertEqual(SupportDiagnostics.failureReport().count, ringBefore + 1,
+                       "the dead channel is surfaced once, not once per append")
+        XCTAssertTrue(makeReport().contains("dead-channel"),
+                      "the open failure rides the exported diagnostics report")
+    }
+
+    func testMoveFailingRotationStillTruncatesSoTheCapHolds() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX write bits are not enforced for root") }
+        let dir = try makeTempDir("rotate-fallback")
+        let log = RotatingFileLog(name: "capped", maxBytes: 64, retentionDays: 3, directory: dir)
+        log.append("seed\n")   // opens the file while the directory is still writable
+        _ = log.fileURL
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        log.append(String(repeating: "x", count: 200) + "\n")   // over cap: rotate must fire
+        _ = log.fileURL
+        log.append("tail after rotate\n")
+        _ = log.fileURL
+        let prev = dir.appendingPathComponent("capped.prev.log")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: prev.path),
+                       "the pin must exercise the failed move, not a healthy rotation")
+        let size = (try FileManager.default.attributesOfItem(atPath: log.fileURL.path)[.size] as? Int) ?? .max
+        XCTAssertLessThanOrEqual(size, 64,
+                                 "a move-failing rotation still truncates so the cap holds")
+        XCTAssertTrue(SupportDiagnostics.failureReport().contains { $0.contains("truncated in place") },
+                      "the truncate fallback is surfaced, never swallowed")
+    }
+
+    func testFailedSecretsDirTightenProducesADiagnosticsString() throws {
+        if geteuid() == 0 { throw XCTSkip("POSIX write bits are not enforced for root") }
+        let dir = try makeTempDir("tighten")   // empty: secrets/ can neither be created nor tightened
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        let priorOverride = LocalSecretStore.directoryOverride
+        LocalSecretStore.directoryOverride = dir
+        defer { LocalSecretStore.directoryOverride = priorOverride }
+        let name = "kestrel-check-tighten-\(UUID().uuidString)"
+        let ringBefore = SupportDiagnostics.failureReport().count
+        XCTAssertFalse(LocalSecretStore.store(name, "value"),
+                       "with an uncreatable secrets dir the write still fails; surfacing only")
+        let entries = SupportDiagnostics.failureReport()
+        XCTAssertEqual(entries.count, ringBefore + 1, "the failed tighten lands in the ring")
+        let entry = try XCTUnwrap(entries.last)
+        XCTAssertTrue(entry.contains("secrets dir not 0700"),
+                      "the typed reason names the broken invariant")
+        XCTAssertTrue(entry.allSatisfy { $0.isASCII },
+                      "product doctrine: new user-facing strings are English-only")
+        XCTAssertTrue(makeReport().contains("secrets dir not 0700"),
+                      "the failed tighten rides the exported diagnostics report")
+    }
+}
+
+extension SupportFailureSurfacingTests {
+    @MainActor static let __checkSet = CheckSet(
+        suite: "SupportFailureSurfacingTests",
+        instance: { SupportFailureSurfacingTests() },
+        checks: [
+            .init(name: "testSupportSectionIsEmptyWhenThereAreNoFailures") { $0.testSupportSectionIsEmptyWhenThereAreNoFailures() },
+            .init(name: "testSupportSectionRendersEachFailureOnItsOwnLine") { $0.testSupportSectionRendersEachFailureOnItsOwnLine() },
+            .init(name: "testUnwritableLogDirectoryRecordsAStickyOpenFailureOnce") { try $0.testUnwritableLogDirectoryRecordsAStickyOpenFailureOnce() },
+            .init(name: "testMoveFailingRotationStillTruncatesSoTheCapHolds") { try $0.testMoveFailingRotationStillTruncatesSoTheCapHolds() },
+            .init(name: "testFailedSecretsDirTightenProducesADiagnosticsString") { try $0.testFailedSecretsDirTightenProducesADiagnosticsString() },
+        ])
+}
+
 /// Census W8 Servers-group conversions (T2-2 chunk C): engine-adjacent
 /// silent catches surface while launch-path behavior is unchanged — an
 /// unreadable dir still pairs no draft and no projector, an unreadable
