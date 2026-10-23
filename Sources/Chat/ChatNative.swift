@@ -1104,15 +1104,19 @@ final class ChatStore: ObservableObject {
                     // emitters. The envelope grammar overrides the engine's
                     // native tool-call handlers, so it stands down for
                     // templates that speak a native call syntax (see
-                    // ToolTurnEnvelope — the 2026-10-23 LFM2.5 finding). A
-                    // custom binary may predate json_schema support and
-                    // keeps the legacy unconstrained path.
+                    // ToolTurnEnvelope — the 2026-10-23 LFM2.5 finding). The
+                    // toolGrammarMode setting overrides the auto decision:
+                    // "on" for models that need the decode discipline, "off"
+                    // for models whose native channel is reliable.
                     let nativeToolCalls = EngineToolTemplate.activeModelSpeaksNativeToolCalls(
                         ToolSupport.currentModelIdentity ?? "")
+                    let grammarMode = UserDefaults.standard.string(
+                        forKey: SettingsKeys.toolGrammarMode) ?? "auto"
                     if ToolTurnEnvelope.shouldConstrain(remote: remote,
                                                         engineKind: ServerSettings.engineKind,
                                                         toolCount: toolDefinitions.count,
-                                                        nativeToolCalls: nativeToolCalls),
+                                                        nativeToolCalls: nativeToolCalls,
+                                                        mode: grammarMode),
                        let format = ToolTurnEnvelope.responseFormat(definitions: toolDefinitions) {
                         body["response_format"] = format
                         grammarConstrained = true

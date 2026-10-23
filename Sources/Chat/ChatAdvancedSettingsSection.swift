@@ -12,6 +12,7 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.smoothTyping) private var smoothTyping = true
     @AppStorage(SettingsKeys.agentToolsEnabled) private var agentToolsEnabled = false
     @AppStorage(SettingsKeys.toolsRuntime) private var toolsRuntime = ""
+    @AppStorage(SettingsKeys.toolGrammarMode) private var toolGrammarMode = "auto"
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
@@ -293,6 +294,18 @@ struct ChatAdvancedSettingsSection: View {
                             }
                         }
                     }
+                        SettingsRow(icon: "arrow.triangle.branch",
+                                    title: loc.t("Gramática de llamadas a herramientas", "Tool-call grammar"),
+                                    help: loc.t("Auto: la plantilla del modelo decide; la envoltura gramática solo se aplica a modelos sin sintaxis nativa de herramientas. Activada: fuerza la envoltura para modelos que necesitan la disciplina. Desactivada: confía en el canal nativo del modelo.",
+                                                "Auto: the model's template decides — the grammar envelope binds only for models without native tool-call syntax. On: force the envelope for models that need the discipline. Off: trust the model's native channel.")) {
+                            Picker("", selection: $toolGrammarMode) {
+                                Text(loc.t("Auto", "Auto")).tag("auto")
+                                Text(loc.t("Sí", "On")).tag("on")
+                                Text(loc.t("No", "Off")).tag("off")
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 200)
+                        }
                     integerStepper("Tool result ceiling (characters)", value: $toolResultMaxTokens, range: 2_000...100_000, step: 1_000,
                                    help: "Most of a tool result that may re-enter the model's context. Giant outputs are truncated to this with a marker telling the model more existed.")
                     integerStepper("Tool result floor (characters)", value: $toolResultMinTokens, range: 0...20_000, step: 500,
@@ -542,6 +555,7 @@ struct ChatAdvancedSettingsSection: View {
         archiveHookTimeout = MemoryArchiveHook.declaredAttemptTimeout
         maxImageMegapixels = 1; pdfAsImages = false
         autoCompact = true; smoothTyping = true; agentToolsEnabled = false; jsSandboxEnabled = false
+        toolGrammarMode = "auto"
         memoryToolsEnabled = true; toolsRuntime = ""
         archiveHookURL = ""; MemoryArchiveHook.setReceiverToken("")
     }

@@ -129,6 +129,11 @@ enum SettingsKeys {
     static let embeddings = "embeddings"
     static let agentToolsEnabled = "agentToolsEnabled"
     static let toolsRuntime = "toolsRuntime"
+    /// Tool-call grammar envelope (C1): "auto" binds it only for models whose
+    /// template has no native tool-call syntax; "on" forces it for models that
+    /// need the decode discipline; "off" stands it down for models whose
+    /// native channel is reliable. Default "auto".
+    static let toolGrammarMode = "toolGrammarMode"
     static let jsSandboxEnabled = "jsSandboxEnabled"
     /// Resource limits of the JavaScript sandbox tool (census W3-13).
     static let jsSandboxDefaultTimeoutMS = "jsSandboxDefaultTimeoutMS"
@@ -346,7 +351,7 @@ enum SettingsKeys {
         audioGlossary, audioTranslationModel, audioVADMode,
         audioVADProfile, audioVADThreshold, audioVADMinSpeechMS,
         audioVADMinSilenceMS, audioVADMaxSpeechSeconds, audioVADSpeechPadMS,
-        extraArgs, embeddings, agentToolsEnabled, toolsRuntime, jsSandboxEnabled,
+        extraArgs, embeddings, agentToolsEnabled, toolsRuntime, toolGrammarMode, jsSandboxEnabled,
         jsSandboxDefaultTimeoutMS, jsSandboxMaxTimeoutMS, jsSandboxMaxOutputCharacters,
         memoryToolsEnabled, memoryArchiveHookQueueLimit, memoryArchiveHookTimeout,
         toolsUnsupportedModels, mcpServers, uiMcpProxy,

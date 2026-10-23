@@ -107,6 +107,42 @@ final class ToolTurnEnvelopeTests: CheckCase {
                                                         toolCount: 7, nativeToolCalls: true))
     }
 
+    /// The operator-facing mode override (toolGrammarMode): "on" forces the
+    /// envelope for models that need the decode discipline even when their
+    /// template speaks native syntax; "off" stands it down for models whose
+    /// native channel is reliable; "auto" (and anything unrecognized) keeps
+    /// the template-detection decision.
+    func testConstraintModeOverridesTheAutoDecision() {
+        XCTAssertTrue(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                       toolCount: 3, nativeToolCalls: true,
+                                                       mode: "on"),
+                      "on forces the envelope regardless of template detection")
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                        toolCount: 3, nativeToolCalls: false,
+                                                        mode: "off"),
+                       "off stands the envelope down regardless of template detection")
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                        toolCount: 3, nativeToolCalls: true,
+                                                        mode: "auto"),
+                       "auto follows the template detection")
+        XCTAssertTrue(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                       toolCount: 3, nativeToolCalls: false,
+                                                       mode: "auto"))
+        // An unrecognized value keeps the safe auto path, and the gates
+        // still apply before the mode is even consulted.
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                        toolCount: 3, nativeToolCalls: true,
+                                                        mode: "weird-value"))
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: true, engineKind: "bundled",
+                                                        toolCount: 3, nativeToolCalls: false,
+                                                        mode: "on"),
+                       "a remote route never gets the envelope, whatever the mode")
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                        toolCount: 0, nativeToolCalls: false,
+                                                        mode: "on"),
+                       "a turn with no tools offered never gets the envelope")
+    }
+
     // MARK: Completion-time unwrap
 
     /// A name branch becomes exactly one pending call with the arguments
@@ -162,6 +198,7 @@ extension ToolTurnEnvelopeTests {
             .init(name: "testEnvelopeCarriesOneBranchPerToolPlusReply") { try $0.testEnvelopeCarriesOneBranchPerToolPlusReply() },
             .init(name: "testEnvelopeRequiresOfferedTools") { $0.testEnvelopeRequiresOfferedTools() },
             .init(name: "testConstraintGates") { $0.testConstraintGates() },
+            .init(name: "testConstraintModeOverridesTheAutoDecision") { $0.testConstraintModeOverridesTheAutoDecision() },
             .init(name: "testUnwrapNameBranchBecomesAPendingCall") { try $0.testUnwrapNameBranchBecomesAPendingCall() },
             .init(name: "testUnwrapReplyBranchBecomesDisplayedText") { try $0.testUnwrapReplyBranchBecomesDisplayedText() },
             .init(name: "testUnwrapReturnsNilForNonEnvelopes") { $0.testUnwrapReturnsNilForNonEnvelopes() },

@@ -695,8 +695,13 @@ enum ToolTurnEnvelope {
     /// active model whose template has NO native tool-call syntax the
     /// engine specializes in (see EngineToolTemplate.speaksNativeToolCalls).
     static func shouldConstrain(remote: Bool, engineKind: String, toolCount: Int,
-                                nativeToolCalls: Bool) -> Bool {
-        !remote && engineKind == "bundled" && toolCount > 0 && !nativeToolCalls
+                                nativeToolCalls: Bool, mode: String = "auto") -> Bool {
+        guard !remote, engineKind == "bundled", toolCount > 0 else { return false }
+        switch mode {
+        case "on": return true
+        case "off": return false
+        default: return !nativeToolCalls
+        }
     }
 
     /// The `response_format` value for a tools-carrying turn, built from the
