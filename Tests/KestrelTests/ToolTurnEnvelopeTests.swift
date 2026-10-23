@@ -6,9 +6,11 @@ import Foundation
 @testable import KestrelCore
 
 /// Mission C1 Phase C pins: the tool-turn envelope — the response_format
-/// schema bound to every tools-carrying request on the local bundled engine
-/// (generic-path templates get it grammar-enforced; named families keep
-/// their own channel grammar) — and its completion-time unwrap.
+/// schema bound to tools-carrying requests on the local bundled engine for
+/// templates with NO native tool-call syntax (prose emitters get it
+/// grammar-enforced; native-syntax templates keep their own channel
+/// grammar, see the 2026-10-23 LFM2.5 finding in ToolTurnEnvelope) — and
+/// its completion-time unwrap.
 final class ToolTurnEnvelopeTests: CheckCase {
     private let offeredTools: Set<String> = ["read_file", "get_datetime"]
 
@@ -82,18 +84,27 @@ final class ToolTurnEnvelopeTests: CheckCase {
     // MARK: Constraint gate
 
     /// The constraint binds only for a local request on the bundled engine
-    /// with tools actually offered: remote providers keep their native
-    /// paths, custom engine binaries (which may predate json_schema) and
-    /// blocked/tool-less turns keep the legacy unconstrained path.
+    /// with tools actually offered AND an active model whose template has
+    /// no native tool-call syntax: remote providers keep their native
+    /// paths, custom engine binaries (which may predate json_schema),
+    /// blocked/tool-less turns, and native-syntax templates (the engine's
+    /// json_schema grammar would override their specialized tool handlers)
+    /// keep the legacy unconstrained path.
     func testConstraintGates() {
         XCTAssertTrue(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
-                                                       toolCount: 1))
+                                                       toolCount: 1, nativeToolCalls: false))
         XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: true, engineKind: "bundled",
-                                                        toolCount: 1))
+                                                        toolCount: 1, nativeToolCalls: false))
         XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "custom",
-                                                        toolCount: 1))
+                                                        toolCount: 1, nativeToolCalls: false))
         XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
-                                                        toolCount: 0))
+                                                        toolCount: 0, nativeToolCalls: false))
+        // The 2026-10-23 regression: an LFM-family template (native
+        // <|tool_call_start|> syntax) must never get the envelope — the
+        // whole-completion grammar overrides the engine's tool handler and
+        // the model never emits the call.
+        XCTAssertFalse(ToolTurnEnvelope.shouldConstrain(remote: false, engineKind: "bundled",
+                                                        toolCount: 7, nativeToolCalls: true))
     }
 
     // MARK: Completion-time unwrap

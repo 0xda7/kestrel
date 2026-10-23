@@ -667,15 +667,20 @@ enum ToolCallRescue {
 /// bundled engine. Every tools-carrying request also carries
 /// `response_format json_schema` over an envelope that admits exactly one
 /// of: a tool call `{"name": <offered name>, "arguments": <that tool's
-/// schema>}` or a free-text reply `{"reply": "…"}`. The engine's
-/// per-family precedence makes the SAME request shape correct everywhere:
-/// generic-path templates (GLM-class prose emitters) enforce the envelope
-/// grammar — malformed, fenced, or tagged blobs become unemittable, and the
-/// generic tools branch that produced the peg-native 500 is never
-/// synthesized — while named families (LFM2/LFM2.5, Kimi, Qwen) keep their
-/// own specialized tool grammar and carry calls through the channel. One
-/// call per turn by construction; the agent loop iterates for multi-tool
-/// flows.
+/// schema>}` or a free-text reply `{"reply": "…"}`. The envelope exists for
+/// GLM-class prose emitters whose templates have no native tool-call
+/// syntax: the grammar makes malformed, fenced, or tagged blobs unemittable
+/// and the generic tools branch that produced the peg-native 500 is never
+/// synthesized. One call per turn by construction; the agent loop iterates
+/// for multi-tool flows.
+///
+/// The envelope must NOT ride turns for templates with native tool-call
+/// syntax (the LFM2 family): the bundled engine turns any json_schema into
+/// a whole-completion grammar that overrides its specialized per-family
+/// tool handlers — verified 2026-10-23 on LFM2.5-8B (the engine's own
+/// channel worked bare; with the envelope the model looped in
+/// `<|channel>thought` and never emitted the call). Those templates keep
+/// the native tool channel, with the legacy text-side rescue as backstop.
 enum ToolTurnEnvelope {
     enum Outcome: Equatable {
         case calls([ChatToolCall])
@@ -684,11 +689,14 @@ enum ToolTurnEnvelope {
 
     /// When the constraint binds: a local request, the bundled engine (a
     /// custom binary may predate json_schema support and keeps the legacy
-    /// unconstrained path), and tools actually offered after every gate —
-    /// a blocklisted model offers no tools, sends no schema, and cannot
-    /// 500 (ToolSupport clears `availableTools` before this point).
-    static func shouldConstrain(remote: Bool, engineKind: String, toolCount: Int) -> Bool {
-        !remote && engineKind == "bundled" && toolCount > 0
+    /// unconstrained path), tools actually offered after every gate — a
+    /// blocklisted model offers no tools, sends no schema, and cannot
+    /// 500 (ToolSupport clears `availableTools` before this point) — and an
+    /// active model whose template has NO native tool-call syntax the
+    /// engine specializes in (see EngineToolTemplate.speaksNativeToolCalls).
+    static func shouldConstrain(remote: Bool, engineKind: String, toolCount: Int,
+                                nativeToolCalls: Bool) -> Bool {
+        !remote && engineKind == "bundled" && toolCount > 0 && !nativeToolCalls
     }
 
     /// The `response_format` value for a tools-carrying turn, built from the

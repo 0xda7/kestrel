@@ -114,6 +114,45 @@ final class EngineToolTemplateTests: CheckCase {
         XCTAssertNil(EngineToolTemplate.derivedTemplateFile(forModel: "", directory: dir))
     }
 
+    func testNativeToolCallSyntaxDetection() {
+        // The LFM2 family's call syntax — with or without the engine's
+        // static markers — means the engine has a specialized tool handler
+        // that the C1 json_schema envelope would override (2026-10-23:
+        // with the envelope, LFM2.5-8B looped in <|channel>thought and
+        // never emitted the call; without it, a clean tool_calls channel).
+        XCTAssertTrue(EngineToolTemplate.speaksNativeToolCalls(template: reauthoredLFM25))
+        let withListTokens = reauthoredLFM25
+            + "{{- \"<|tool_list_start|>\" + (tools|tojson) + \"<|tool_list_end|>\" -}}"
+        XCTAssertTrue(EngineToolTemplate.speaksNativeToolCalls(template: withListTokens))
+
+        // Prose/XML-style tool-call rendering without the family syntax
+        // keeps the envelope path — that is what the envelope was built for.
+        XCTAssertFalse(EngineToolTemplate.speaksNativeToolCalls(
+            template: "{{- '<tool_call>' + (tool_calls|tojson) + '</tool_call>' -}}"))
+        XCTAssertFalse(EngineToolTemplate.speaksNativeToolCalls(
+            template: "You are a helpful assistant."))
+    }
+
+    func testActiveModelNativeToolCallsFollowsTheGGUF() throws {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let lfm = dir.appendingPathComponent("lfm-mock.gguf")
+        try writeTemplateGGUF(to: lfm, template: reauthoredLFM25, tokens: ["a"])
+        XCTAssertTrue(EngineToolTemplate.activeModelSpeaksNativeToolCalls(lfm.path))
+
+        let prose = dir.appendingPathComponent("prose-mock.gguf")
+        try writeTemplateGGUF(to: prose,
+                              template: "{{- '<tool_call>' + (tool_calls|tojson) + '</tool_call>' -}}",
+                              tokens: ["a"])
+        XCTAssertFalse(EngineToolTemplate.activeModelSpeaksNativeToolCalls(prose.path))
+
+        // Unknown/unreadable model stays conservative: the envelope keeps
+        // protecting prose emitters.
+        XCTAssertFalse(EngineToolTemplate.activeModelSpeaksNativeToolCalls(
+            dir.appendingPathComponent("missing.gguf").path))
+    }
+
     func testAgentToolsLaunchCarriesDerivedTemplateFile() throws {
         let dir = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -212,5 +251,7 @@ extension EngineToolTemplateTests {
             .init(name: "testChatTemplateIsReadPastTokenizerArrays") { try $0.testChatTemplateIsReadPastTokenizerArrays() },
             .init(name: "testDerivedTemplateFileWrittenOnlyForTheBrokenShape") { try $0.testDerivedTemplateFileWrittenOnlyForTheBrokenShape() },
             .init(name: "testAgentToolsLaunchCarriesDerivedTemplateFile") { try $0.testAgentToolsLaunchCarriesDerivedTemplateFile() },
+            .init(name: "testNativeToolCallSyntaxDetection") { $0.testNativeToolCallSyntaxDetection() },
+            .init(name: "testActiveModelNativeToolCallsFollowsTheGGUF") { try $0.testActiveModelNativeToolCallsFollowsTheGGUF() },
         ])
 }

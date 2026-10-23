@@ -68,6 +68,29 @@ enum EngineToolTemplate {
         template + "\n" + lfm25MarkerComment + "\n"
     }
 
+    /// True when the template speaks a tool-call syntax the bundled engine
+    /// drives with its own specialized grammar (the LFM2 family's
+    /// `<|tool_call_start|>`/`<|tool_call_end|>`, markers or not). The
+    /// engine turns any `response_format json_schema` into a
+    /// whole-completion grammar that OVERRIDES those handlers — verified
+    /// 2026-10-23 against LFM2.5-8B on port 8081: with the C1 envelope
+    /// riding the turn the model looped inside `<|channel>thought` and never
+    /// emitted the call, while the same request without the envelope
+    /// returned a clean `tool_calls` channel. Tool-carrying turns for these
+    /// templates must therefore ride the native channel with no envelope.
+    static func speaksNativeToolCalls(template: String) -> Bool {
+        template.contains("<|tool_call_start|>")
+    }
+
+    /// The active model's template speaks a native tool-call syntax. Never
+    /// throws: unreadable metadata means "unknown", and unknown keeps the
+    /// envelope — the conservative path for GLM-class prose emitters, which
+    /// are the templates the envelope was built for.
+    static func activeModelSpeaksNativeToolCalls(_ modelPath: String) -> Bool {
+        guard let (template, _) = chatTemplates(at: modelPath) else { return false }
+        return speaksNativeToolCalls(template: template)
+    }
+
     /// Derives the override file for a model, or nil when the engine should
     /// keep reading the template from the GGUF. Never throws: every failure
     /// degrades to today's behavior rather than blocking the launch.

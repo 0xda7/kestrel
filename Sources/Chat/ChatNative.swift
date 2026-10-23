@@ -639,6 +639,28 @@ final class ChatStore: ObservableObject {
         return (word.count >= limit / 2 ? word : cut) + "…"
     }
 
+
+    /// Splits an inline LFM thought channel out of streamed content:
+    /// `<|channel>thought\n…<channel|>rest` → (`…`, `rest`). Runs when the
+    /// engine serves reasoning inline (--reasoning-format none) and leaves
+    /// the family's channel syntax inside `content`. A missing closing
+    /// marker (truncated stream) still captures the thought; text without
+    /// the channel syntax returns unchanged. Static and pure so the check
+    /// suite can pin every shape.
+    nonisolated static func splitInlineChannelThought(_ text: String)
+        -> (reasoning: String, visible: String) {
+        guard let open = text.range(of: "<|channel>thought") else { return ("", text) }
+        var thought = String(text[open.upperBound...])
+            .drop { $0 == "\n" || $0 == "\r" }
+        // Never lose model text: anything before the channel stays visible.
+        var visible = String(text[..<open.lowerBound])
+        if let close = thought.range(of: "<channel|>") {
+            visible += String(thought[close.upperBound...])
+            thought = thought[..<close.lowerBound]
+        }
+        return (String(thought).trimmingCharacters(in: .whitespacesAndNewlines),
+                visible)
+    }
     // MARK: projects
 
     func project(id: UUID?) -> ChatProject? {
@@ -940,9 +962,17 @@ final class ChatStore: ObservableObject {
             var grammarConstrained = false
 
             func composed() -> String {
-                guard !accumulator.reasoning.isEmpty else { return accumulator.visible }
-                return "<think>" + accumulator.reasoning
-                    + (accumulator.visible.isEmpty ? "" : "</think>" + accumulator.visible)
+                // Inline reasoning (the engine runs --reasoning-format none
+                // for these models) leaves the LFM thought channel inside
+                // `content`. Split it so the transcript stores a clean
+                // answer and the thought collapses into the UI's thought
+                // bubble instead of showing raw channel syntax (the
+                // 2026-10-23 "raw <|channel>thought" transcripts).
+                let (inline, clean) = Self.splitInlineChannelThought(accumulator.visible)
+                let reasoning = accumulator.reasoning + inline
+                guard !reasoning.isEmpty else { return clean }
+                return "<think>" + reasoning
+                    + (clean.isEmpty ? "" : "</think>" + clean)
             }
 
             func flush() {
@@ -1070,15 +1100,19 @@ final class ChatStore: ObservableObject {
                     let toolDefinitions = availableTools.compactMap(\.openAIDefinition)
                     body["tools"] = toolDefinitions
                     body["tool_choice"] = "auto"
-                    // Mission C1: grammar-constrained tool calls. The envelope
-                    // schema rides every tools-carrying turn on the local
-                    // bundled engine, and the engine's per-family precedence
-                    // does the rest (see ToolTurnEnvelope). A custom binary
-                    // may predate json_schema support, so it keeps the legacy
-                    // unconstrained path.
+                    // Mission C1: grammar-constrained tool calls for prose
+                    // emitters. The envelope grammar overrides the engine's
+                    // native tool-call handlers, so it stands down for
+                    // templates that speak a native call syntax (see
+                    // ToolTurnEnvelope — the 2026-10-23 LFM2.5 finding). A
+                    // custom binary may predate json_schema support and
+                    // keeps the legacy unconstrained path.
+                    let nativeToolCalls = EngineToolTemplate.activeModelSpeaksNativeToolCalls(
+                        ToolSupport.currentModelIdentity ?? "")
                     if ToolTurnEnvelope.shouldConstrain(remote: remote,
                                                         engineKind: ServerSettings.engineKind,
-                                                        toolCount: toolDefinitions.count),
+                                                        toolCount: toolDefinitions.count,
+                                                        nativeToolCalls: nativeToolCalls),
                        let format = ToolTurnEnvelope.responseFormat(definitions: toolDefinitions) {
                         body["response_format"] = format
                         grammarConstrained = true
