@@ -419,9 +419,22 @@ final class ChatStore: ObservableObject {
         generating || pendingToolPermission != nil || pendingAgentContinuation != nil || agentContext != nil
     }
 
-    private var fileURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    /// Where the whole store lives in production. The check suite redirects
+    /// every read and write through `storeDirectoryOverride` so no check can
+    /// touch the operator's live history: on 2026-10-21, checks that ran
+    /// ChatStore() against the real store leaked 106 fixture chats
+    /// ("importado"/"Pregunta") into the live sidebar when the async save
+    /// raced the suite's byte-restore.
+    static var storeDirectoryOverride: URL?
+
+    private static func storeDirectory() -> URL {
+        if let override = storeDirectoryOverride { return override }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel")
+    }
+
+    private var fileURL: URL {
+        let dir = Self.storeDirectory()
         // Census W8 ChatNative:425 — the persistence bootstrap must not be
         // silent: every conversation save lands inside this directory, so a
         // failed creation is logged here and re-checked once at launch below.
@@ -437,6 +450,20 @@ final class ChatStore: ObservableObject {
     /// and older builds simply show the flat list.
     private var projectsURL: URL {
         fileURL.deletingLastPathComponent().appendingPathComponent("projects.json")
+    }
+
+    /// The KV slot directory this store owns. Production: the engine's
+    /// per-port cache. Under the check override: a directory beside the
+    /// isolated store — pruneOrphanSlots deletes UUID-named files here, so a
+    /// check running against a fresh store must never point at the real one
+    /// (every live slot would read as an orphan and be pruned).
+    private static func slotCacheDirectory() -> URL {
+        if let override = storeDirectoryOverride {
+            let dir = override.appendingPathComponent("slots", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            return dir
+        }
+        return ServerSettings.primarySlotCacheDir
     }
 
     init() {
@@ -503,7 +530,7 @@ final class ChatStore: ObservableObject {
         // turn, so a failed delete is logged, never swallowed.
         do {
             try FileManager.default.removeItem(
-                at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+                at: Self.slotCacheDirectory().appendingPathComponent(Self.slotFile(c.id)))
         } catch {
             AppLog.chat.warning("failed to delete KV slot file \(Self.slotFile(c.id)): \(error.localizedDescription) — the stale slot could be restored into the wrong conversation")
         }
@@ -518,8 +545,7 @@ final class ChatStore: ObservableObject {
     /// Erases the stored conversations without a store: the settings window can
     /// outlive the chat window, and then nothing holds them in memory.
     static func eraseStoredConversations() {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel")
+        let dir = Self.storeDirectory()
         // Census W8 ChatNative:501 — a store file the wipe failed to delete is
         // logged, not swallowed: a surviving conversations.json resurrects the
         // erased history on the next launch.
@@ -528,7 +554,7 @@ final class ChatStore: ObservableObject {
         } catch {
             AppLog.app.error("failed to delete conversations.json during erase: \(error.localizedDescription) — the store file survives the wipe")
         }
-        let slots = ServerSettings.primarySlotCacheDir
+        let slots = Self.slotCacheDirectory()
         // Census W8 ChatNative:503 — an unscannable slot directory leaves stale
         // slots behind; the erase must say so instead of ending silently.
         guard let files = try? FileManager.default.contentsOfDirectory(at: slots,
@@ -564,7 +590,7 @@ final class ChatStore: ObservableObject {
             // after the reset; log the failure instead of swallowing it.
             do {
                 try FileManager.default.removeItem(
-                    at: ServerSettings.primarySlotCacheDir.appendingPathComponent(Self.slotFile(c.id)))
+                    at: Self.slotCacheDirectory().appendingPathComponent(Self.slotFile(c.id)))
             } catch {
                 AppLog.chat.warning("failed to delete KV slot file \(Self.slotFile(c.id)): \(error.localizedDescription) — the stale slot survives the reset")
             }
@@ -1680,7 +1706,7 @@ final class ChatStore: ObservableObject {
     /// Drop slot files with no matching conversation (deleted while disabled, or
     /// left over). Bounds disk use to the conversations that still exist.
     private func pruneOrphanSlots() {
-        let dir = ServerSettings.primarySlotCacheDir
+        let dir = Self.slotCacheDirectory()
         // Census W8 ChatNative:1548 — an unscannable slot directory leaves
         // orphaned slots in place; the prune must say so instead of ending
         // silently.

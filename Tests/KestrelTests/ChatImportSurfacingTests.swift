@@ -10,6 +10,13 @@ import Foundation
 /// custom-sampling rule at both enforcement points, the wedge-proof compaction
 /// failure contract (5a455ce), and JSONL skipped-record counting on the
 /// import path.
+///
+/// Store safety: ChecksMain redirects ChatStore to a per-run directory before
+/// any check executes, so the ChatStore() instantiations below run against an
+/// isolated store. The old byte-restore wrapper this file carried raced the
+/// store's async save queue and leaked fixture chats into the live
+/// conversations.json (106 "importado"/"Pregunta" chats, 2026-10-21);
+/// ChatStoreIsolationTests now pins that the live files stay byte-identical.
 final class ChatImportSurfacingTests: CheckCase {
     // MARK: - Custom sampling JSON (census W8 ChatNative:1014 + ChatAdvancedSettingsSection:428)
 
@@ -65,33 +72,31 @@ final class ChatImportSurfacingTests: CheckCase {
     /// A failed summarize (nil) must leave the conversation uncompacted and
     /// retryable — never advance summarizedCount, never wedge the store.
     @MainActor func testFailedSummarizeKeepsTheConversationCompactable() throws {
-        try withBackedUpConversationStore {
-            let store = ChatStore()
-            guard let conversation = store.current else {
-                return XCTFail("ChatStore must open with a conversation")
-            }
-            store.compacting = true
-            store.applyCompaction(conversation: conversation.id, cutoff: 3, summary: nil)
-            XCTAssertFalse(store.compacting,
-                           "a failed summarize must clear the compacting flag so compaction can retry")
-            let afterFailure = store.conversations.first(where: { $0.id == conversation.id })
-            XCTAssertNil(afterFailure?.summary, "a failed summarize must not store a summary")
-            XCTAssertNil(afterFailure?.summarizedCount,
-                         "a failed summarize must not advance summarizedCount")
-
-            // The store may reuse an existing empty conversation, so locate
-            // the target by id — index 0 is not guaranteed to be it.
-            guard let target = store.conversations.firstIndex(where: { $0.id == conversation.id }) else {
-                return XCTFail("the open conversation must stay in the store")
-            }
-            store.conversations[target].messages.append(ChatMessage(role: "user", content: "hola"))
-            store.compacting = true
-            store.applyCompaction(conversation: conversation.id, cutoff: 1, summary: "resumen")
-            let afterSuccess = store.conversations.first(where: { $0.id == conversation.id })
-            XCTAssertEqual(afterSuccess?.summary, "resumen", "a healthy summary applies")
-            XCTAssertEqual(afterSuccess?.summarizedCount, 1, "the cutoff advances summarizedCount")
-            XCTAssertFalse(store.compacting)
+        let store = ChatStore()
+        guard let conversation = store.current else {
+            return XCTFail("ChatStore must open with a conversation")
         }
+        store.compacting = true
+        store.applyCompaction(conversation: conversation.id, cutoff: 3, summary: nil)
+        XCTAssertFalse(store.compacting,
+                       "a failed summarize must clear the compacting flag so compaction can retry")
+        let afterFailure = store.conversations.first(where: { $0.id == conversation.id })
+        XCTAssertNil(afterFailure?.summary, "a failed summarize must not store a summary")
+        XCTAssertNil(afterFailure?.summarizedCount,
+                     "a failed summarize must not advance summarizedCount")
+
+        // The store may reuse an existing empty conversation, so locate
+        // the target by id — index 0 is not guaranteed to be it.
+        guard let target = store.conversations.firstIndex(where: { $0.id == conversation.id }) else {
+            return XCTFail("the open conversation must stay in the store")
+        }
+        store.conversations[target].messages.append(ChatMessage(role: "user", content: "hola"))
+        store.compacting = true
+        store.applyCompaction(conversation: conversation.id, cutoff: 1, summary: "resumen")
+        let afterSuccess = store.conversations.first(where: { $0.id == conversation.id })
+        XCTAssertEqual(afterSuccess?.summary, "resumen", "a healthy summary applies")
+        XCTAssertEqual(afterSuccess?.summarizedCount, 1, "the cutoff advances summarizedCount")
+        XCTAssertFalse(store.compacting)
     }
 
     // MARK: - JSONL skipped-record surfacing (census W8 ChatJSONL:28)
@@ -118,38 +123,16 @@ final class ChatImportSurfacingTests: CheckCase {
     }
 
     @MainActor func testImportArchiveDataReportsSkippedLinesThroughTheImportPath() throws {
-        try withBackedUpConversationStore {
-            let store = ChatStore()
-            let conversation = Conversation(title: "importado", messages: [
-                ChatMessage(role: "user", content: "Pregunta"),
-            ])
-            let healthy = String(decoding: try ChatJSONL.encode([conversation]), as: UTF8.self)
-            let result = try store.importArchiveData(Data((healthy + "\n{broken").utf8))
-            XCTAssertEqual(result.imported, 1)
-            XCTAssertEqual(result.skippedLines, 1,
-                           "the import result must carry the skipped count for the UI to surface")
-            XCTAssertNotNil(store.conversations.first(where: { $0.title == "importado" }))
-        }
-    }
-
-    // MARK: - Store backup discipline (same pattern as the agent-loop checks)
-
-    /// ChatStore persists to the real Application Support store; every check
-    /// that instantiates one backs the file up byte-exact and restores it.
-    @MainActor private func withBackedUpConversationStore(_ body: @MainActor () throws -> Void) throws {
-        let storeURL = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/conversations.json")
-        let priorBytes = try? Data(contentsOf: storeURL)
-        let hadFile = FileManager.default.fileExists(atPath: storeURL.path)
-        defer {
-            if let priorBytes {
-                try? priorBytes.write(to: storeURL)
-            } else if !hadFile {
-                try? FileManager.default.removeItem(at: storeURL)
-            }
-        }
-        try body()
+        let store = ChatStore()
+        let conversation = Conversation(title: "importado", messages: [
+            ChatMessage(role: "user", content: "Pregunta"),
+        ])
+        let healthy = String(decoding: try ChatJSONL.encode([conversation]), as: UTF8.self)
+        let result = try store.importArchiveData(Data((healthy + "\n{broken").utf8))
+        XCTAssertEqual(result.imported, 1)
+        XCTAssertEqual(result.skippedLines, 1,
+                       "the import result must carry the skipped count for the UI to surface")
+        XCTAssertNotNil(store.conversations.first(where: { $0.title == "importado" }))
     }
 }
 
