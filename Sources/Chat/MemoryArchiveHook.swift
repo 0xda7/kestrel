@@ -94,12 +94,20 @@ actor MemoryArchiveHook {
     /// KES-08: the receiver token rode plaintext UserDefaults — a ready-made
     /// exfiltration credential next to the endpoint it authorizes. It lives
     /// in the local secret store now; the legacy copy migrates once and is
-    /// then deleted so nothing plaintext remains.
+    /// then deleted so nothing plaintext remains — but the delete lands only
+    /// after the store confirms the write, so a failed store keeps the
+    /// legacy copy as the only surviving token (surfaced via
+    /// SupportDiagnostics) instead of destroying the secret.
     nonisolated static func receiverToken() -> String? {
         if let legacy = UserDefaults.standard.string(forKey: legacySecretKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines), !legacy.isEmpty {
-            _ = LocalSecretStore.store("memory-archive-token", legacy)
-            UserDefaults.standard.removeObject(forKey: legacySecretKey)
+            // Same law as Keychain.apiKey's migration: retire the legacy
+            // copy only on a confirmed store.
+            if LocalSecretStore.store("memory-archive-token", legacy) {
+                UserDefaults.standard.removeObject(forKey: legacySecretKey)
+            } else {
+                SupportDiagnostics.record("memory-archive receiver token: the local secret store would not take the migration write (\(LocalSecretStore.url("memory-archive-token").path)); the legacy copy stays as the only surviving token and migrates on a later read")
+            }
             return legacy
         }
         let s = LocalSecretStore.value("memory-archive-token")

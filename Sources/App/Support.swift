@@ -949,6 +949,16 @@ enum FileHash {
 enum Keychain {
     private static let service = "com.northlatchlabs.kestrel"
 
+    /// Set by the check harness before any check runs (nil in production):
+    /// when set, get/set/delete/exists resolve against this dictionary
+    /// instead of the real keychain, so checks can pin the legacy-item
+    /// migrations — seed a legacy item, prove it survives a failed
+    /// secret-store write — without writing the operator's keychain or
+    /// risking an ACL password dialog mid-run. Same contract as
+    /// LocalSecretStore.directoryOverride; unsafe-by-contract because it
+    /// is written only at startup, single-threaded.
+    nonisolated(unsafe) static var itemsOverride: [String: String]?
+
     /// In-process session cache. macOS evaluates an item's access-control list
     /// on every secret decryption, and this app is ad-hoc signed locally — each
     /// rebuild produces a new signing identity, so every uncached read of an
@@ -958,6 +968,7 @@ enum Keychain {
     private static let cache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
 
     static func get(_ account: String) -> String? {
+        if let itemsOverride { return itemsOverride[account] }
         if let cached = cache.withLock({ $0[account] }) { return cached }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -981,6 +992,7 @@ enum Keychain {
     /// (settings UI, migration logic) — the value is read later, once, only
     /// when a request actually needs it.
     static func exists(_ account: String) -> Bool {
+        if let itemsOverride { return itemsOverride[account] != nil }
         if cache.withLock({ $0[account] }) != nil { return true }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -993,6 +1005,10 @@ enum Keychain {
     }
 
     static func set(_ value: String, account: String) {
+        if itemsOverride != nil {
+            itemsOverride![account] = value
+            return
+        }
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1013,6 +1029,10 @@ enum Keychain {
     /// so background signing after explicit in-app consent stays prompt-free.
     @discardableResult
     static func setThisDeviceOnly(_ value: String, account: String) -> Bool {
+        if itemsOverride != nil {
+            itemsOverride![account] = value
+            return true
+        }
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1030,6 +1050,10 @@ enum Keychain {
     }
 
     static func delete(_ account: String) {
+        if itemsOverride != nil {
+            itemsOverride!.removeValue(forKey: account)
+            return
+        }
         SecItemDelete([
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -1045,19 +1069,30 @@ enum Keychain {
     /// access-dialog tax — and on ad-hoc local builds, that tax recurs on
     /// every rebuild. Legacy installs migrate their existing Keychain item on
     /// first use; if that one read is declined, a fresh key is generated and
-    /// clients adopt it on the next server start.
+    /// clients adopt it on the next server start. Both paths here retire the
+    /// legacy item (or admit the fresh one) only after the secret store
+    /// confirms the write — a failed store keeps the old copy as the only
+    /// surviving one, surfaced via SupportDiagnostics, never destroyed.
     static func apiKey() -> String {
         if let existing = LocalSecretStore.value("engine-api-key") { return existing }
         if let legacy = get("api-key") {
-            LocalSecretStore.store("engine-api-key", legacy)
-            // Migration succeeded; retire the Keychain copy so no future
-            // reader can trip an ACL prompt on it. Swallow failures.
-            delete("api-key")
+            // Retire only on a confirmed store: this Keychain item is the
+            // only other copy of the secret, so deleting it after a failed
+            // write would destroy the key — every later launch would hand
+            // the engine a brand-new one. A failed store keeps the item as
+            // the fallback source and surfaces the failure instead.
+            if LocalSecretStore.store("engine-api-key", legacy) {
+                delete("api-key")
+            } else {
+                SupportDiagnostics.record("engine api-key migration: the local secret store would not take the write (\(LocalSecretStore.url("engine-api-key").path)); the legacy Keychain item stays as the only surviving copy and the migration retries on a later launch")
+            }
             return legacy
         }
         let fresh = (0..<32).map { _ in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! }
         let key = String(fresh)
-        LocalSecretStore.store("engine-api-key", key)
+        if !LocalSecretStore.store("engine-api-key", key) {
+            SupportDiagnostics.record("engine api-key: a freshly generated key could not be persisted to the local secret store (\(LocalSecretStore.url("engine-api-key").path)); it serves this launch only and a new key generates on the next one")
+        }
         return key
     }
 }

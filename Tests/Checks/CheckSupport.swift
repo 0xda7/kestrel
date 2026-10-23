@@ -382,6 +382,13 @@ struct ChecksMain {
         AudioStudioController.recoveryURLOverride = ChatStore.storeDirectoryOverride?
             .appendingPathComponent("AudioRecovery.json")
         AppSupport.directoryOverride = ChatStore.storeDirectoryOverride
+        // The keychain is live operator data too (and a check reading a
+        // legacy item created by an older build could raise the ACL
+        // password dialog mid-run): with itemsOverride set, every Keychain
+        // get/set/delete/exists resolves against this dictionary, so
+        // migration checks can seed legacy items and prove they survive a
+        // failed secret-store write without ever touching the real one.
+        Keychain.itemsOverride = [:]
         let registry: [(String, CheckSet)] = Self.generatedRegistry()
         let watchdog = Watchdog()
         var failed = 0
