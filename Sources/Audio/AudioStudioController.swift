@@ -75,8 +75,16 @@ final class AudioStudioController: ObservableObject {
     private var undoHistory: [([SubtitleCue], [SubtitleCue])] = []
     private var redoHistory: [([SubtitleCue], [SubtitleCue])] = []
 
-    private static var recoveryURL: URL {
-        URL.applicationSupportDirectory
+    /// Set once by the check harness before any check runs (nil in
+    /// production): recovery-project reads and writes then aim at the
+    /// per-run directory instead of the operator's live AudioRecovery.json.
+    static var recoveryURLOverride: URL?
+
+    /// Internal (not private) so the check suite can pin that recovery I/O
+    /// honors the harness override and never aims at the live file.
+    static var recoveryURL: URL {
+        if let recoveryURLOverride { return recoveryURLOverride }
+        return URL.applicationSupportDirectory
             .appending(path: "Kestrel", directoryHint: .isDirectory)
             .appending(path: "AudioRecovery.json")
     }

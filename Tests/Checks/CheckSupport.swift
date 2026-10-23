@@ -334,19 +334,42 @@ private final class Watchdog {
     }
 }
 
+/// The operator's REAL Kestrel paths. Isolation pins read live bytes before
+/// and after a check's exercise to prove the suite changed nothing — that is
+/// the only permitted use. No check may use these paths to arrange or clean
+/// up state; arrangement belongs under the per-run overrides set in ChecksMain.
+enum CheckLivePaths {
+    static let kestrelDirectory = FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Kestrel", isDirectory: true)
+
+    static var conversationsJSON: URL { kestrelDirectory.appendingPathComponent("conversations.json") }
+    static var slotsDirectory: URL { kestrelDirectory.appendingPathComponent("slots", isDirectory: true) }
+    static var toolTemplatesDirectory: URL { kestrelDirectory.appendingPathComponent("tool-templates", isDirectory: true) }
+    static var secretsDirectory: URL { kestrelDirectory.appendingPathComponent("secrets", isDirectory: true) }
+    static var audioRecoveryJSON: URL { kestrelDirectory.appendingPathComponent("AudioRecovery.json") }
+}
+
 @MainActor @main
 struct ChecksMain {
     static func main() async {
         // One store directory per run: no check may touch the operator's
-        // live chat history, KV slots, or derived tool templates. On
-        // 2026-10-21 the suite leaked 106 fixture chats ("importado"/
-        // "Pregunta") into the live conversations.json, and the orphan
-        // pruner in ChatStore.init could delete live slot files the same
-        // way — both only possible because checks ran against the real
-        // store paths.
+        // live chat history, KV slots, derived tool templates, secrets, or
+        // audio recovery project. On 2026-10-21 the suite leaked 106 fixture
+        // chats ("importado"/"Pregunta") into the live conversations.json,
+        // and the orphan pruner in ChatStore.init could delete live slot
+        // files the same way — both only possible because checks ran against
+        // the real store paths.
         ChatStore.storeDirectoryOverride = FileManager.default.temporaryDirectory
             .appendingPathComponent("kestrel-checks-\(UUID().uuidString)", isDirectory: true)
         EngineToolTemplate.directoryOverride = ChatStore.storeDirectoryOverride
+        // Same doctrine for the remaining live-data writers: the local
+        // secret store (engine/provider keys, archive token) and the
+        // audio-studio recovery project ride the per-run directory too, so
+        // no sentinel or restore dance can ever reach the live files.
+        LocalSecretStore.directoryOverride = ChatStore.storeDirectoryOverride
+        AudioStudioController.recoveryURLOverride = ChatStore.storeDirectoryOverride?
+            .appendingPathComponent("AudioRecovery.json")
         let registry: [(String, CheckSet)] = Self.generatedRegistry()
         let watchdog = Watchdog()
         var failed = 0

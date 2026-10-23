@@ -3515,23 +3515,12 @@ final class EnterpriseHardeningTests: CheckCase {
     /// continuation — the run ends there, so the queued message starts its
     /// own turn (the same delivery every other turn boundary performs)
     /// instead of being silently cleared by the next manual send(). The
-    /// operator's conversations.json is backed up and restored byte-exact in
-    /// the defer; the delivered turn aims at a closed port so it fails fast
-    /// after the assertions.
+    /// store rides the suite's storeDirectoryOverride seam (pinned by
+    /// ChatStoreIsolationTests), so this run cannot touch the operator's
+    /// live conversations.json — no byte-restore defer remains. The
+    /// delivered turn aims at a closed port so it fails fast after the
+    /// assertions.
     @MainActor func testDeclinedContinuationDeliversQueuedSteeringMessage() async throws {
-        let conversationsURL = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/conversations.json")
-        let priorBytes = try? Data(contentsOf: conversationsURL)
-        let hadFile = FileManager.default.fileExists(atPath: conversationsURL.path)
-        defer {
-            if let priorBytes {
-                try? priorBytes.write(to: conversationsURL)
-            } else if !hadFile {
-                try? FileManager.default.removeItem(at: conversationsURL)
-            }
-        }
-
         let store = ChatStore()
         guard let conv = store.current else {
             return XCTFail("ChatStore must open with a conversation")

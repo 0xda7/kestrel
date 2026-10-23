@@ -173,16 +173,6 @@ final class EngineToolTemplateTests: CheckCase {
         var plain = minimalSettings(modelPath: model.path)
         plain.agentToolsEnabled = false
         XCTAssertFalse(plain.arguments.contains("--chat-template-file"))
-
-        // The launch writes into the real Application Support folder; remove
-        // the artifacts this check created so the operator's folder stays clean.
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/tool-templates", isDirectory: true)
-        if let leftovers = try? FileManager.default.contentsOfDirectory(atPath: support.path) {
-            for name in leftovers where name.hasPrefix("lfm-args-") {
-                try? FileManager.default.removeItem(at: support.appendingPathComponent(name))
-            }
-        }
     }
 
     // MARK: - Fixtures

@@ -123,11 +123,15 @@ final class LegacyKeyMigrationTests: CheckCase {
 
     /// The KES-08 self-retiring migration, pinned: a plaintext UserDefaults
     /// secret is returned once (value preserved), lands in the local secret
-    /// store, and the legacy key is gone after the read. Priors are restored
-    /// so the check leaves the operator's machine as it found it.
+    /// store, and the legacy key is gone after the read. The secret store
+    /// rides the suite's directoryOverride seam (set by ChecksMain), so the
+    /// sentinel can only land in the per-run directory — the live secrets
+    /// file is never touched; only the UserDefaults prior is restored.
     func testMemoryArchiveHookSecretSelfRetiresIntoTheLocalSecretStore() {
+        guard LocalSecretStore.directoryOverride != nil else {
+            return XCTFail("ChecksMain must set LocalSecretStore.directoryOverride before any check runs — without it the sentinel migrates into the operator's live secrets file")
+        }
         let storeName = "memory-archive-token"
-        let priorSecret = LocalSecretStore.value(storeName)
         let priorLegacy = UserDefaults.standard.object(forKey: MemoryArchiveHook.legacySecretKey)
         let sentinel = "t4-2-migration-sentinel-\(UUID().uuidString)"
         UserDefaults.standard.set(sentinel, forKey: MemoryArchiveHook.legacySecretKey)
@@ -137,16 +141,16 @@ final class LegacyKeyMigrationTests: CheckCase {
             } else {
                 UserDefaults.standard.removeObject(forKey: MemoryArchiveHook.legacySecretKey)
             }
-            if let priorSecret {
-                _ = LocalSecretStore.store(storeName, priorSecret)
-            } else {
-                LocalSecretStore.delete(storeName)
-            }
+            LocalSecretStore.delete(storeName)
         }
 
         let token = MemoryArchiveHook.receiverToken()
         XCTAssertEqual(token, sentinel, "the legacy value is returned, not dropped in transit")
         XCTAssertEqual(LocalSecretStore.value(storeName), sentinel, "the secret landed in the local store")
+        XCTAssertEqual(
+            LocalSecretStore.url(storeName).path,
+            LocalSecretStore.directoryOverride!.appendingPathComponent("secrets/\(storeName)").path,
+            "the migrated secret must land inside the per-run override, never the live secrets file")
         XCTAssertNil(UserDefaults.standard.object(forKey: MemoryArchiveHook.legacySecretKey),
                      "the legacy key self-retired on first read")
     }

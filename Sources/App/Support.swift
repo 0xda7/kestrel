@@ -1018,7 +1018,18 @@ enum LocalSecretStore {
     /// store() is the only writer, so the cache cannot go stale in-process.
     private static let cache = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
 
+    /// Set once by the check harness before any check runs (nil in
+    /// production): every secret path then resolves inside the per-run
+    /// directory instead of the operator's live secrets file, so no check's
+    /// sentinel, prior-value probe, or migration can read or rewrite it.
+    /// Same contract as ChatStore.storeDirectoryOverride; unsafe-by-contract
+    /// because it is written only at startup, single-threaded.
+    nonisolated(unsafe) static var directoryOverride: URL?
+
     static func url(_ name: String) -> URL {
+        if let directoryOverride {
+            return directoryOverride.appendingPathComponent("secrets/\(name)")
+        }
         let base = NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory,
                                                        .userDomainMask, true).first
             ?? NSHomeDirectory() + "/Library/Application Support"
