@@ -401,10 +401,10 @@ final class BenchmarkController: ObservableObject {
     /// differ by machine state, never by sampling.
     private func completeOnce(port: Int, nPredict: Int) async -> (tg: Double, pp: Double, accept: Double?)? {
         guard let url = URL(string: "http://127.0.0.1:\(port)/completion") else { return nil }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 600
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // The real-generation server is launched through ServerSettings.arguments,
+        // so H-1 keys it like any other launch; the probe must present the Bearer.
+        var req = EngineHTTP.request(url: url, method: "POST", timeout: 600,
+                                     apiKey: ServerSettings.activeAPIKey())
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
             "prompt": Self.realPrompt, "n_predict": nPredict,
             "temperature": 0, "seed": 42, "cache_prompt": false,

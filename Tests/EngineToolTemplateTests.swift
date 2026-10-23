@@ -168,6 +168,8 @@ final class EngineToolTemplateTests: CheckCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: derivedPath),
                       "the referenced template file must exist for the engine to launch")
         XCTAssertTrue(args.contains("--tools") && args.contains("all"))
+        XCTAssertTrue(args.contains("--api-key-file"),
+                      "the agent-tools launch is keyed even with the key toggle off (H-1)")
 
         // Without agent tools the engine keeps reading the GGUF's template.
         var plain = minimalSettings(modelPath: model.path)

@@ -364,10 +364,13 @@ struct ChecksMain {
             .appendingPathComponent("kestrel-checks-\(UUID().uuidString)", isDirectory: true)
         EngineToolTemplate.directoryOverride = ChatStore.storeDirectoryOverride
         // Same doctrine for the remaining live-data writers: the local
-        // secret store (engine/provider keys, archive token) and the
-        // audio-studio recovery project ride the per-run directory too, so
-        // no sentinel or restore dance can ever reach the live files.
+        // secret store (engine/provider keys, archive token), the
+        // audio-studio recovery project, and the router preset folder (a
+        // check building router argv resolves and creates it) ride the
+        // per-run directory too, so no sentinel or restore dance can ever
+        // reach the live files.
         LocalSecretStore.directoryOverride = ChatStore.storeDirectoryOverride
+        ServerSettings.routerDirectoryOverride = ChatStore.storeDirectoryOverride
         AudioStudioController.recoveryURLOverride = ChatStore.storeDirectoryOverride?
             .appendingPathComponent("AudioRecovery.json")
         let registry: [(String, CheckSet)] = Self.generatedRegistry()

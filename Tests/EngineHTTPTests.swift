@@ -19,9 +19,11 @@ final class EngineHTTPTests: CheckCase {
     }
 
     /// The one slot request both call sites issue: loopback /slots/0, POST,
-    /// action in the query, filename in the JSON body, explicit per-request
-    /// timeout overriding the session's 10 s default, and no Authorization
-    /// header when the engine is unprotected.
+    /// action in the query, filename in the JSON body, and an explicit
+    /// per-request timeout overriding the session's 10 s default. H-1: the
+    /// engine key is mandatory on every launch, so the request carries the
+    /// Bearer even with the key toggle off — the toggle no longer decides
+    /// whether the engine authenticates.
     func testSlotRequestShapeIsShared() throws {
         let key = SettingsKeys.apiKeyEnabled
         let original = UserDefaults.standard.object(forKey: key)
@@ -36,7 +38,9 @@ final class EngineHTTPTests: CheckCase {
         XCTAssertEqual(req.httpMethod, "POST")
         XCTAssertEqual(req.timeoutInterval, 30)
         XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertNil(req.value(forHTTPHeaderField: "Authorization"))
+        XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"),
+                       "Bearer " + Keychain.apiKey(),
+                       "the engine requires the key in every configuration (H-1)")
         let body = try XCTUnwrap(req.httpBody)
         let obj = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: String])
         XCTAssertEqual(obj["filename"], "x.bin")

@@ -166,10 +166,11 @@ With the server running, you get an **OpenAI-compatible API** at `http://127.0.0
 
 By default it only accepts connections from this Mac. To expose the local API on the network, enable **Discoverable on local network** in Settings and restart the server. Kestrel will listen on all interfaces and advertise `Kestrel API` through Bonjour. Connect to `http://<Mac-IP>:8080/v1`, and enable **Protect the API with a key** before exposing it, especially outside a trusted network.
 
-Example with curl:
+Every request must carry the API key — copy it from Settings (the "Protect the API with a key" row). Example with curl:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \\
+  -H "Authorization: Bearer YOUR-KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "messages": [{"role": "user", "content": "Hello"}],
@@ -183,7 +184,7 @@ Example with Python (the official `openai` library, just pointing it at the loca
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="not-needed")
+client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="YOUR-KEY")  # from Settings — always required
 stream = client.chat.completions.create(
     model="local",  # ignored unless Router mode is on, see that section
     messages=[{"role": "user", "content": "Hello"}],
@@ -213,7 +214,7 @@ There's also a minimal web chat at the root (`http://127.0.0.1:8080`) for browse
 #### Connecting external clients
 
 Any OpenAI-compatible client (VS Code + Continue/Cline/Copilot with a custom model, and generally almost everything else):
-- Base URL: `http://127.0.0.1:8080/v1` · model name: the `id` from `/v1/models` · API key: the one in Settings only if you enabled protection.
+- Base URL: `http://127.0.0.1:8080/v1` · model name: the `id` from `/v1/models` · API key: the one shown in Settings, required on every request.
 - **Raise Context to 32k or more**: these clients send huge prompts (instructions + open files) and at 16k the server rejects the request. Offset the memory by quantizing KV cache keys to `q8_0`.
 - Reasoning models "think" before answering and many clients don't display that phase: it **looks hung** while it's actually generating. Enable "Reasoning as plain text" in Settings → Inference, or use a non-reasoning model for coding.
 - The **first response takes a while**: on this class of GPU prompts process at ~80-120 t/s, so 16k tokens take 2-4 minutes. **Limit the client's input tokens** (e.g. `maxInputTokens: 8000`) so the first request drops to ~1-2 min; later ones reuse the cache and are incremental.
@@ -231,7 +232,7 @@ Any OpenAI-compatible client (VS Code + Continue/Cline/Copilot with a custom mod
 
 ##### Cursor
 - Settings (⌘,) → Models tab → OpenAI section → enable **Override Base URL** and paste `http://127.0.0.1:8080/v1`.
-- The API key field can't be empty (type anything if you didn't protect the API).
+- The API key field can't be empty — paste the key shown in Settings.
 - **A real Cursor limitation, not Kestrel's**: it requires HTTPS for that URL. A plain local HTTP endpoint won't connect directly, you'll need a TLS proxy in front (e.g. Caddy or an ngrok-style tunnel) pointing at `127.0.0.1:8080`.
 
 ##### Raycast
@@ -241,7 +242,7 @@ Any OpenAI-compatible client (VS Code + Continue/Cline/Copilot with a custom mod
 
 ##### Anthropic API clients
 Terminal agents and SDKs built on the Anthropic format, not just OpenAI's. The engine also implements native `/v1/messages`, including streaming and tool calls.
-- Most of these clients redirect via two standard SDK environment variables: `ANTHROPIC_BASE_URL=http://127.0.0.1:8080` and `ANTHROPIC_AUTH_TOKEN=any-text` (or the real key if you enabled protection).
+- Most of these clients redirect via two standard SDK environment variables: `ANTHROPIC_BASE_URL=http://127.0.0.1:8080` and `ANTHROPIC_AUTH_TOKEN=<the key shown in Settings>`.
 - The server accepts both `Authorization: Bearer` and `x-api-key`, the header these clients use.
 - Check your client's docs for its exact config file name; many only read those variables at startup, so restart it after changing them.
 """),

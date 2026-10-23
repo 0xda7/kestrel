@@ -5,8 +5,10 @@
 import Foundation
 @testable import KestrelCore
 
-/// KES-01/KES-03/KES-04 regression tests: the engine key must never appear in
-/// argv, logs, or diagnostics, and a keyless LAN bind must be refused.
+/// KES-01/KES-03/KES-04/H-1 regression tests: the engine key must never
+/// appear in argv, logs, or diagnostics; the engine is keyed on EVERY
+/// launch (H-1 — no keyless POST /tools); and a keyless LAN bind must be
+/// refused.
 final class SecretRedactionTests: CheckCase {
     private func makeSettings(apiKeyEnabled: Bool = false) -> ServerSettings {
         var s = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 8080,
@@ -77,11 +79,37 @@ final class SecretRedactionTests: CheckCase {
         XCTAssertFalse(args.contains("--api-key"),
                        "the key must not travel as an argv value (ps-visible, KES-04)")
         guard let i = args.firstIndex(of: "--api-key-file") else {
-            return XCTFail("expected --api-key-file when the key is enabled")
+            return XCTFail("expected --api-key-file on every launch (H-1)")
         }
         XCTAssertGreaterThan(args.count, i + 1)
         XCTAssertTrue(args[i + 1].contains("secrets/engine-api-key"),
                       "the engine should read the key from the 0600 secret store file")
+        XCTAssertFalse(args.contains(Keychain.apiKey()),
+                       "no argv token may be the literal key value (KES-04)")
+    }
+
+    /// H-1: the argv builders used to gate --api-key-file on apiKeyEnabled,
+    /// so agentToolsEnabled=true with the key toggle off launched POST /tools
+    /// — command execution — with no authentication at all. Both builders
+    /// (main and router) must carry the key file in exactly that
+    /// configuration: the engine key is mandatory whenever the server
+    /// launches.
+    func testKeyFileRidesBothArgvBuildersEvenWithTheKeyToggleOff() throws {
+        for router in [false, true] {
+            var settings = makeSettings(apiKeyEnabled: false)
+            settings.agentToolsEnabled = true
+            settings.routerMode = router
+            let args = settings.arguments
+            let builder = router ? "router" : "main"
+            guard let i = args.firstIndex(of: "--api-key-file") else {
+                return XCTFail("\(builder) argv must carry --api-key-file with agentToolsEnabled=true and apiKeyEnabled=false (H-1)")
+            }
+            XCTAssertGreaterThan(args.count, i + 1)
+            XCTAssertTrue(args[i + 1].contains("secrets/engine-api-key"),
+                          "\(builder): the engine reads the key from the 0600 secret store file")
+            XCTAssertFalse(args.contains(Keychain.apiKey()),
+                          "\(builder): no argv token may be the literal key value (KES-04)")
+        }
     }
 
     func testDiagnosticsReportOmitsTheKey() {
@@ -139,6 +167,7 @@ extension SecretRedactionTests {
             .init(name: "testEnvironmentLineMasksUserTokensOnly") { $0.testEnvironmentLineMasksUserTokensOnly() },
             .init(name: "testURLRedactionMasksUserinfoAndTokenQuery") { $0.testURLRedactionMasksUserinfoAndTokenQuery() },
             .init(name: "testAPIKeyNeverRidesArgvWhenEnabled") { try $0.testAPIKeyNeverRidesArgvWhenEnabled() },
+            .init(name: "testKeyFileRidesBothArgvBuildersEvenWithTheKeyToggleOff") { try $0.testKeyFileRidesBothArgvBuildersEvenWithTheKeyToggleOff() },
             .init(name: "testDiagnosticsReportOmitsTheKey") { $0.testDiagnosticsReportOmitsTheKey() },
             .init(name: "testStartupBannerOmitsTheKey") { $0.testStartupBannerOmitsTheKey() },
             .init(name: "testStartupBannerMasksEnvTokensFromExtraArguments") { $0.testStartupBannerMasksEnvTokensFromExtraArguments() },

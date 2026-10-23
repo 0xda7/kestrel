@@ -80,8 +80,11 @@ struct SpecDecodeMetrics: Equatable, Sendable {
     /// was started without `--metrics`, so callers can just hide the readout.
     static func fetch(port: Int, timeout: TimeInterval = 2) async -> SpecDecodeMetrics? {
         guard let url = URL(string: "http://127.0.0.1:\(port)/metrics") else { return nil }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = timeout
+        // /metrics is not one of the engine's public endpoints: since H-1 the
+        // engine is keyed on every launch, so the readout must present the
+        // same Bearer every other in-app client sends or it 401s into silence.
+        let request = EngineHTTP.request(url: url, method: "GET", timeout: timeout,
+                                         apiKey: ServerSettings.activeAPIKey())
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let text = String(data: data, encoding: .utf8) else { return nil }

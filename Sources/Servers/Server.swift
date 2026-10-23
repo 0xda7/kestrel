@@ -589,19 +589,21 @@ struct ServerSettings {
             args += ["--slot-save-path", Self.slotCacheDir(port: port).path]
         }
         if reasoningInline { args += ["--reasoning-format", "none"] }
-        if apiKeyEnabled {
-            // KES-04: argv is world-readable via ps(1) for the server's whole
-            // lifetime; this engine reads keys from a file just as well, and
-            // the 0600 local secret store is where the key already lives.
-            _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
-            // Census W8 (T2-2): a present-but-unreadable key file used to
-            // surface only as engine auth failures far from the cause. Log it
-            // typed at launch — surfacing only; the launch itself is unchanged.
-            if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
-                AppLog.server.error("\(reason)")
-            }
-            args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
+        // H-1: the engine key is mandatory whenever the server launches.
+        // Gating this on apiKeyEnabled left POST /tools — command execution —
+        // reachable with no Bearer whenever the toggle was off; the gate is
+        // "the server launches", not "the operator asked for a key".
+        // KES-04: argv is world-readable via ps(1) for the server's whole
+        // lifetime; this engine reads keys from a file just as well, and
+        // the 0600 local secret store is where the key already lives.
+        _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+        // Census W8 (T2-2): a present-but-unreadable key file used to
+        // surface only as engine auth failures far from the cause. Log it
+        // typed at launch — surfacing only; the launch itself is unchanged.
+        if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
+            AppLog.server.error("\(reason)")
         }
+        args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         // A compatible downloaded DFlash draft takes precedence over embedded MTP.
         // Speculation decodes several tokens at once and the expert cache only has slots
         // for one token's experts, so the two cannot run together.
@@ -724,14 +726,15 @@ struct ServerSettings {
             if !toolsRuntime.isEmpty { args += ["--tools-runtime", toolsRuntime] }
         }
         if uiMcpProxy || agentToolsEnabled { args.append("--ui-mcp-proxy") }
-        if apiKeyEnabled {
-            // KES-04, router path: same file-backed key as the main launch path.
-            _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
-            if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
-                AppLog.server.error("\(reason)")
-            }
-            args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
+        // H-1, router path: the same mandatory file-backed key as the main
+        // launch path — the router serves POST /tools too, so it must never
+        // come up keyless when the toggle is off (KES-04 keeps the key
+        // material out of argv either way).
+        _ = Keychain.apiKey()  // materializes the file (legacy items migrate here)
+        if let reason = LocalSecretStore.unreadableReason("engine-api-key") {
+            AppLog.server.error("\(reason)")
         }
+        args += ["--api-key-file", LocalSecretStore.url("engine-api-key").path]
         if let ui = Self.chatUIPath { args += ["--path", ui] }
         // Loopback-only bind unless the operator enabled LAN with a key: a
         // `--host` token from extraArgs would otherwise override the app's
@@ -748,9 +751,19 @@ struct ServerSettings {
         return custom.isEmpty ? ModelStore.defaultDirectory : URL(fileURLWithPath: custom, isDirectory: true)
     }
 
+    /// Set once by the check harness before any check runs (nil in
+    /// production): the router preset folder then resolves inside the
+    /// per-run store, so a check building router argv — which resolves and
+    /// creates that folder — cannot touch the operator's live Application
+    /// Support. Same contract as ChatStore.storeDirectoryOverride;
+    /// unsafe-by-contract because it is written only at startup.
+    nonisolated(unsafe) static var routerDirectoryOverride: URL?
+
     static func routerPresetPath(port: Int) -> URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/router")
+        let base = routerDirectoryOverride
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Kestrel", isDirectory: true)
+        let dir = base.appendingPathComponent("router")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("preset-\(port).ini")
     }
@@ -2025,9 +2038,13 @@ struct ServerSettings {
         SettingsNumericCoercion.bool(SettingsKeys.apiKeyEnabled, default: false, in: defaults)
     }
 
-    /// The API key the chat must send, when protection is enabled in Settings.
+    /// The API key every in-app engine client sends. H-1: both argv builders
+    /// launch the engine with --api-key-file unconditionally, so the engine
+    /// rejects Bearer-less requests in every configuration — a client-side
+    /// gate would 401 the app's own chat and tools exactly when the key
+    /// matters. Never nil: Keychain.apiKey() generates on first use.
     static func activeAPIKey() -> String? {
-        apiKeyGateArmed() ? Keychain.apiKey() : nil
+        Keychain.apiKey()
     }
 
     /// The model alias the native chat should send as `"model"`, or nil when

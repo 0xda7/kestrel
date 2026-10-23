@@ -621,8 +621,8 @@ struct SettingsView: View {
                     }
                     SettingsRow(icon: "key",
                                 title: loc.t("Proteger la API con clave", "Protect the API with a key"),
-                                help: loc.t("Genera una clave (guardada en el almacén local de secretos de la app: archivo 0600 en una carpeta privada) que el servidor exige a cada petición. El chat de la app la usa automáticamente; útil en Macs compartidas.",
-                                            "Generates a key (stored in the app's local secret store: a 0600 file in a private folder) required on every request. The in-app chat uses it automatically; useful on shared Macs.")) {
+                                help: loc.t("La clave (guardada en el almacén local de secretos de la app: archivo 0600 en una carpeta privada) la exige el servidor en cada petición, siempre; el chat de la app la usa automáticamente. Este interruptor autoriza además el servidor en la red local: sin él, el descubrimiento local no arranca.",
+                                            "The key (stored in the app's local secret store: a 0600 file in a private folder) is required by the server on every request, always; the in-app chat uses it automatically. This switch additionally authorizes the server on the local network: without it, local discovery refuses to start.")) {
                         SettingsToggle(isOn: $apiKeyEnabled)
                     }
                     SettingsRow(icon: "network",
@@ -662,24 +662,22 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if apiKeyEnabled {
-                    HStack {
-                        Text(loc.t("Clave", "Key")).foregroundStyle(.secondary)
-                        Text(engineAPIKey)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textSelection(.enabled)
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(engineAPIKey, forType: .string)
-                        } label: { Image(systemName: "doc.on.doc") }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(loc.t("Copiar la clave", "Copy the key"))
-                            .infoTip(loc.t("Copiar para usarla desde otros clientes (Authorization: Bearer …).",
-                                        "Copy to use from other clients (Authorization: Bearer …)."))
-                    }
-                    .font(.caption)
-                    .onAppear { engineAPIKey = Keychain.apiKey() }
+                HStack {
+                    Text(loc.t("Clave", "Key")).foregroundStyle(.secondary)
+                    Text(engineAPIKey)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(engineAPIKey, forType: .string)
+                    } label: { Image(systemName: "doc.on.doc") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(loc.t("Copiar la clave", "Copy the key"))
+                        .infoTip(loc.t("Copiar para usarla desde otros clientes (Authorization: Bearer …).",
+                                    "Copy to use from other clients (Authorization: Bearer …)."))
                 }
+                .font(.caption)
+                .onAppear { engineAPIKey = Keychain.apiKey() }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
