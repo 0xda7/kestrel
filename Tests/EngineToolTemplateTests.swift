@@ -196,8 +196,10 @@ final class EngineToolTemplateTests: CheckCase {
 
     /// A minimal GGUF v3 whose metadata carries a tokenizer string array
     /// BEFORE `tokenizer.chat_template`, plus the optional tool_use variant.
-    private func writeTemplateGGUF(to url: URL, template: String, tokens: [String],
-                                   toolUseTemplate: String? = nil) throws {
+    /// Internal so ChatStoreIsolationTests can build fixtures for its
+    /// live-folder isolation pin.
+    func writeTemplateGGUF(to url: URL, template: String, tokens: [String],
+                           toolUseTemplate: String? = nil) throws {
         var data = Data("GGUF".utf8)
         func appendUInt32(_ value: UInt32) {
             withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }

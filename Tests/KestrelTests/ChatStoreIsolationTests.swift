@@ -23,6 +23,7 @@ final class ChatStoreIsolationTests: CheckCase {
         let liveStoreURL = support.appendingPathComponent("conversations.json")
         let liveStoreBefore = try? Data(contentsOf: liveStoreURL)
         let liveSlotsBefore = Self.slotFileInventory(under: support.appendingPathComponent("slots", isDirectory: true))
+        let liveTemplatesBefore = Self.slotFileInventory(under: support.appendingPathComponent("tool-templates", isDirectory: true))
 
         let store = ChatStore()
         let fixture = Conversation(title: "importado", messages: [
@@ -45,6 +46,21 @@ final class ChatStoreIsolationTests: CheckCase {
         XCTAssertEqual(Self.slotFileInventory(under: support.appendingPathComponent("slots", isDirectory: true)),
                        liveSlotsBefore,
                        "a check-suite ChatStore lifecycle must not add, remove, or touch live KV slot files")
+
+        // Derived tool templates (EngineToolTemplate) ride the same
+        // isolation: a default-directory derivation must land beside the
+        // per-run store, never in the operator's real tool-templates.
+        let templateFixture = "{%- if tools -%}{{- '<|tool_call_start|>' + (tools|tojson) + '<|tool_call_end|>' -}}{%- endif -%}"
+        let derivationModel = ChatStore.storeDirectoryOverride!
+            .appendingPathComponent("native-mock.gguf")
+        try EngineToolTemplateTests().writeTemplateGGUF(
+            to: derivationModel, template: templateFixture, tokens: ["a"])
+        XCTAssertNotNil(
+            EngineToolTemplate.derivedTemplateFile(forModel: derivationModel.path),
+            "the default-directory derivation must succeed against the overridden directory")
+        XCTAssertEqual(Self.slotFileInventory(under: support.appendingPathComponent("tool-templates", isDirectory: true)),
+                       liveTemplatesBefore,
+                       "a derived tool template must never land in the operator's real tool-templates folder")
     }
 
     /// Stable inventory of every file under the slot tree: relative path plus

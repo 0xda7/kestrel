@@ -160,8 +160,16 @@ enum EngineToolTemplate {
         return (found, toolUse)
     }
 
+    /// Set once by the check harness before any check runs (nil in
+    /// production): derived templates then land beside the isolated store
+    /// instead of the operator's real tool-templates folder, so a crashed
+    /// check cannot leave `lfm-args-*` artifacts in Application Support.
+    /// Unsafe-by-contract: written only at startup, single-threaded.
+    nonisolated(unsafe) static var directoryOverride: URL?
+
     private static var applicationSupportDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        if let override = Self.directoryOverride { return override }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Kestrel", isDirectory: true)
     }
 

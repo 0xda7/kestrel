@@ -338,13 +338,15 @@ private final class Watchdog {
 struct ChecksMain {
     static func main() async {
         // One store directory per run: no check may touch the operator's
-        // live chat history or KV slots. On 2026-10-21 the suite leaked 106
-        // fixture chats ("importado"/"Pregunta") into the live
-        // conversations.json, and the orphan pruner in ChatStore.init could
-        // delete live slot files the same way — both only possible because
-        // checks ran against the real store paths.
+        // live chat history, KV slots, or derived tool templates. On
+        // 2026-10-21 the suite leaked 106 fixture chats ("importado"/
+        // "Pregunta") into the live conversations.json, and the orphan
+        // pruner in ChatStore.init could delete live slot files the same
+        // way — both only possible because checks ran against the real
+        // store paths.
         ChatStore.storeDirectoryOverride = FileManager.default.temporaryDirectory
             .appendingPathComponent("kestrel-checks-\(UUID().uuidString)", isDirectory: true)
+        EngineToolTemplate.directoryOverride = ChatStore.storeDirectoryOverride
         let registry: [(String, CheckSet)] = Self.generatedRegistry()
         let watchdog = Watchdog()
         var failed = 0
