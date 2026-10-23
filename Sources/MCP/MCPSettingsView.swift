@@ -11,9 +11,26 @@ struct MCPSettingsSection: View {
     @State private var testingID: UUID?
     @State private var status: [UUID: String] = [:]
     @State private var importing = false
+    @State private var storeUnreadable = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if storeUnreadable {
+                HStack(spacing: 10) {
+                    Label(loc.t("La configuración MCP guardada no se puede leer. Se conserva intacta y el guardado queda desactivado hasta que la reemplaces.",
+                                "The stored MCP configuration cannot be read. It is kept untouched, and saving stays off until you replace it."),
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                    Spacer()
+                    Button(loc.t("Reemplazar", "Replace")) {
+                        MCPServerStore.acknowledgeUnreadableStore()
+                        storeUnreadable = false
+                    }
+                    .glassButton()
+                }
+                .padding(10)
+                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
             if servers.isEmpty {
                 HStack(spacing: 12) {
                     Image(systemName: "point.3.connected.trianglepath.dotted")
@@ -96,7 +113,10 @@ struct MCPSettingsSection: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear { servers = MCPServerStore.load() }
+        .onAppear {
+            servers = MCPServerStore.load()
+            storeUnreadable = MCPServerStore.hasUnreadableStore
+        }
         .sheet(isPresented: $importing) {
             MCPConfigImportSheet { imported in
                 for server in imported {

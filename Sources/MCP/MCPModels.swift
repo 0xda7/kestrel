@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Northlatch Labs <opensource@northlatchlabs.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 import Foundation
 
 enum MCPTransport: String, Codable, CaseIterable, Identifiable {
@@ -32,6 +33,11 @@ struct MCPServer: Identifiable, Codable, Equatable {
     var workingDirectory = ""
 
     var credentialAccount: String { "mcp-headers-\(id.uuidString)" }
+    /// The per-server environment map's key in the local secret store: env
+    /// values pasted in with a config can be tokens, so they live in the
+    /// 0600 store under this name — the credentialAccount shape — never in
+    /// UserDefaults or a settings export.
+    var envAccount: String { "mcp-env-\(id.uuidString)" }
 
     /// What the row shows as the server's address.
     var addressLabel: String {
@@ -42,6 +48,33 @@ struct MCPServer: Identifiable, Codable, Equatable {
 
     var isConfigured: Bool {
         transport.isLocal ? !command.trimmingCharacters(in: .whitespaces).isEmpty : !url.isEmpty
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, url, enabled, transport, timeoutSeconds
+        case command, arguments, environment, workingDirectory
+    }
+
+    /// Encode never writes environment VALUES: the JSON form (UserDefaults
+    /// and every settings export built from it) carries key names only, so
+    /// a secret pasted into a config never lands in plaintext preferences
+    /// or a shared export file. Decode still accepts full values — the
+    /// legacy plaintext form migrates into the secret store on first read
+    /// (see MCPServerStore).
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(url, forKey: .url)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(transport, forKey: .transport)
+        try container.encode(timeoutSeconds, forKey: .timeoutSeconds)
+        try container.encode(command, forKey: .command)
+        try container.encode(arguments, forKey: .arguments)
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: environment.keys.sorted().map { ($0, "") }),
+            forKey: .environment)
+        try container.encode(workingDirectory, forKey: .workingDirectory)
     }
 }
 
@@ -92,6 +125,29 @@ enum MCPConfigImport {
 }
 
 enum MCPServerStore {
+    /// Check seam (nil in production): [MCPServer] is plain value Codable,
+    /// so no real input makes the encoder throw; the harness plants an
+    /// error here to pin save()'s fail-safe path deterministically. Same
+    /// contract as Keychain.itemsOverride — written only by checks.
+    nonisolated(unsafe) static var encodeFailureInjection: (any Error)?
+
+    /// Set the moment a load() finds stored bytes that do not decode. The
+    /// blob is the operator's only copy of the configuration, so save()
+    /// refuses to overwrite it until acknowledgeUnreadableStore() — the
+    /// SettingsArchive import doctrine, storage side: present but
+    /// undecodable never reads as empty, and never dissolves into a blind
+    /// write.
+    private static let unreadableStore = OSAllocatedUnfairLock<Bool>(initialState: false)
+
+    static var hasUnreadableStore: Bool { unreadableStore.withLock { $0 } }
+
+    /// The explicit way past the refusal: the UI offers it as a deliberate
+    /// "replace the unreadable configuration" action, never as a side
+    /// effect of an unrelated save.
+    static func acknowledgeUnreadableStore() {
+        unreadableStore.withLock { $0 = false }
+    }
+
     /// The raw stored bytes, the cache key for tool discovery: any edit,
     /// addition or removal changes it.
     static func savedData() -> Data? {
@@ -99,17 +155,115 @@ enum MCPServerStore {
     }
 
     static func load() -> [MCPServer] {
-        guard let data = savedData(),
-              let servers = try? JSONDecoder().decode([MCPServer].self, from: data) else { return [] }
-        return servers
+        guard let data = savedData() else { return [] }
+        do {
+            let servers = try JSONDecoder().decode([MCPServer].self, from: data)
+            unreadableStore.withLock { $0 = false }
+            return migratingEnvironmentSecrets(servers)
+        } catch {
+            let firstFailure = !unreadableStore.withLock { state -> Bool in
+                let wasUnreadable = state
+                state = true
+                return wasUnreadable
+            }
+            if firstFailure {
+                let detail = SupportDiagnostics.asciiDetail(error.localizedDescription)
+                AppLog.app.error("the stored MCP server list cannot be decoded: \(detail, privacy: .public) — the bytes are kept and saves are refused until acknowledged")
+                SupportDiagnostics.record("MCP server list: the stored configuration cannot be decoded (\(detail)); the previous bytes are kept and saving is refused until the unreadable store is acknowledged")
+            }
+            return []
+        }
     }
 
     static func save(_ servers: [MCPServer]) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(servers), forKey: SettingsKeys.mcpServers)
+        guard !hasUnreadableStore else {
+            AppLog.app.error("save refused: the stored MCP server list is present but undecodable — acknowledge it before overwriting")
+            SupportDiagnostics.record("MCP server list: a save was refused because the stored configuration is present but undecodable; acknowledge the unreadable store (or fix the stored bytes) before overwriting it")
+            return
+        }
+        for server in servers where server.environment.values.contains(where: { !$0.isEmpty }) {
+            if !MCPServerEnvSecrets.write(server.environment, account: server.envAccount) {
+                SupportDiagnostics.record("MCP server '\(server.name)' environment: the local secret store would not take the write (\(LocalSecretStore.url(server.envAccount).path)); the values serve this launch and the write is retried on the next save")
+            }
+        }
+        persistEncoded(servers)
     }
 
     static func deleteCredentials(for server: MCPServer) {
         Keychain.delete(server.credentialAccount)
+        LocalSecretStore.delete(server.envAccount)
+    }
+
+    /// Encode + store, fail-safe: the old `try?` handed nil to
+    /// UserDefaults.set, which ERASED the key — any encode failure
+    /// silently wiped the operator's server list. A failure now keeps the
+    /// previous stored bytes and surfaces the reason.
+    private static func persistEncoded(_ servers: [MCPServer]) {
+        do {
+            if let injected = encodeFailureInjection { throw injected }
+            let data = try JSONEncoder().encode(servers)
+            UserDefaults.standard.set(data, forKey: SettingsKeys.mcpServers)
+        } catch {
+            let detail = SupportDiagnostics.asciiDetail(error.localizedDescription)
+            AppLog.app.error("the MCP server list could not be encoded: \(detail, privacy: .public) — the previous stored bytes are kept")
+            SupportDiagnostics.record("MCP server list: the new configuration could not be encoded (\(detail)); the previous stored bytes are kept untouched")
+        }
+    }
+
+    /// The receiverToken migration shape (KES-08), per server: a decoded
+    /// environment with any non-empty VALUE is the legacy plaintext form —
+    /// its values move into the 0600 local secret store, and the
+    /// plaintext copy retires (the encoder writes key names only) once
+    /// every store confirmed the write. One failed store keeps the legacy
+    /// blob as the only surviving copy, surfaced via SupportDiagnostics,
+    /// retried on a later read. Servers without legacy values hydrate
+    /// their environment from the secret store instead.
+    private static func migratingEnvironmentSecrets(_ servers: [MCPServer]) -> [MCPServer] {
+        var legacyValuesFound = false
+        var legacyValuesRemaining = false
+        var hydrated: [MCPServer] = []
+        for server in servers {
+            let carriesLegacyValues = server.environment.values.contains { !$0.isEmpty }
+            legacyValuesFound = legacyValuesFound || carriesLegacyValues
+            if carriesLegacyValues {
+                if MCPServerEnvSecrets.write(server.environment, account: server.envAccount) {
+                    hydrated.append(server)
+                } else {
+                    legacyValuesRemaining = true
+                    SupportDiagnostics.record("MCP server '\(server.name)' environment: the local secret store would not take the migration write (\(LocalSecretStore.url(server.envAccount).path)); the legacy plaintext copy stays as the only surviving one and migrates on a later read")
+                    hydrated.append(server)
+                }
+            } else {
+                var hydratedServer = server
+                let stored = MCPServerEnvSecrets.read(server.envAccount)
+                if !stored.isEmpty { hydratedServer.environment = stored }
+                hydrated.append(hydratedServer)
+            }
+        }
+        if legacyValuesFound && !legacyValuesRemaining {
+            persistEncoded(hydrated)   // retire: the encoder writes key names only
+        }
+        return hydrated
+    }
+}
+
+/// The per-server environment map's 0600 home. Values can be tokens
+/// pasted in with a config, so they live in the local secret store, JSON
+/// encoded, one file per server (the credentialAccount shape).
+enum MCPServerEnvSecrets {
+    static func read(_ account: String) -> [String: String] {
+        guard let raw = LocalSecretStore.value(account) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: Data(raw.utf8))) ?? [:]
+    }
+
+    @discardableResult
+    static func write(_ environment: [String: String], account: String) -> Bool {
+        if environment.isEmpty {
+            LocalSecretStore.delete(account)
+            return true
+        }
+        guard let data = try? JSONEncoder().encode(environment) else { return false }
+        return LocalSecretStore.store(account, String(decoding: data, as: UTF8.self))
     }
 }
 

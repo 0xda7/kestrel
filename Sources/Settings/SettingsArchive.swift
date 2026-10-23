@@ -14,7 +14,7 @@ enum SettingsArchive {
     static func exportData(defaults: UserDefaults = .standard) throws -> Data {
         let all = defaults.dictionaryRepresentation()
         let config = Dictionary(uniqueKeysWithValues: SettingsKeys.resettableOptionKeys.compactMap { key in
-            all[key].map { (key, archiveValue($0)) }
+            all[key].map { (key, archiveValue(envScrubbedForExport($0, key: key))) }
         })
         return try JSONSerialization.data(withJSONObject: [
             "format": "kestrel-settings",
@@ -131,7 +131,12 @@ enum SettingsArchive {
             do {
                 let servers = try JSONDecoder().decode([MCPServer].self, from: blob)
                 for server in servers where server.transport.isLocal && server.isConfigured {
-                    rows.append("MCP '\(server.name)': \(([server.command] + server.arguments).joined(separator: " "))")
+                    // Env key NAMES only, never values (the KES-03 banner
+                    // doctrine): the summary shows what an import would set
+                    // in the spawned process's environment.
+                    let envKeys = server.environment.keys.filter { !$0.isEmpty }.sorted()
+                    let env = envKeys.isEmpty ? "" : " (env: \(envKeys.joined(separator: ", ")))"
+                    rows.append("MCP '\(server.name)': \(([server.command] + server.arguments).joined(separator: " "))\(env)")
                 }
             } catch {
                 // A present-but-undecodable MCP blob used to read as "no MCP
@@ -148,6 +153,21 @@ enum SettingsArchive {
             }
         }
         return rows.isEmpty ? .none : .rows(rows)
+    }
+
+    /// The MCP blob is the one setting that can carry secret VALUES (env
+    /// tokens pasted in with a config, still plaintext in a not-yet-
+    /// migrated legacy blob). MCPServer's encoder writes environment as
+    /// key names only, so a decode + re-encode pins every export to key
+    /// names — the KES-06 consent summary still sees what an import would
+    /// set, but a shared export file never leaves the machine carrying a
+    /// secret. A blob with no env values exports byte-identical.
+    private static func envScrubbedForExport(_ value: Any, key: String) -> Any {
+        guard key == SettingsKeys.mcpServers, let blob = value as? Data,
+              let servers = try? JSONDecoder().decode([MCPServer].self, from: blob),
+              servers.contains(where: { server in server.environment.values.contains { !$0.isEmpty } })
+        else { return value }
+        return (try? JSONEncoder().encode(servers)) ?? blob
     }
 
     private static func archiveValue(_ value: Any) -> Any {

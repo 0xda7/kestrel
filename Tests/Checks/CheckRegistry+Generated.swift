@@ -96,6 +96,7 @@ enum CheckRegistry {
         ("ToolTurnEnvelopeTests", ToolTurnEnvelopeTests.__checkSet),
         ("SurgicalChecks", SurgicalChecks.__checkSet),
         ("SurgicalDictationParseSurfacingTests", SurgicalDictationParseSurfacingTests.__checkSet),
+        ("MCPStoreFailSafeTests", MCPStoreFailSafeTests.__checkSet),
     ]
 }
 
