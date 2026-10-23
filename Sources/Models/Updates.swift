@@ -167,10 +167,8 @@ final class UpdateChecker: ObservableObject {
             }
             guard let data = checksumsData,
                   let listing = String(data: data, encoding: .utf8),
-                  let expected = listing.split(separator: "\n")
-                      .first { $0.contains(dmgURL.lastPathComponent) }?
-                      .split(separator: " ").first.map(String.init),
-                  let actual = await Task.detached { FileHash.sha256(of: dest) }.value,
+                  let expected = Self.expectedChecksum(in: listing, forDMGBasename: dmgURL.lastPathComponent),
+                  let actual = await Task.detached(operation: { FileHash.sha256(of: dest) }).value,
                   expected.lowercased() == actual.lowercased() else {
                 // Census W8 Updates:121 (T2-3 chunk F): a download that
                 // failed verification and could not be discarded stays on
@@ -193,6 +191,21 @@ final class UpdateChecker: ObservableObject {
         } catch {
             installError = error.localizedDescription
         }
+    }
+
+    /// The expected SHA-256 digest a release's checksums listing publishes
+    /// for a DMG basename: the first space-separated token of the first
+    /// line mentioning the basename (sha256sum's "digest  name" shape).
+    /// nil when no line covers the asset or the covering line carries no
+    /// token — the KES-09 guard then aborts the install. The selection is
+    /// an explicit first(where:) in a pure seam because the trailing-closure
+    /// form inside that guard is confusable with the statement body under
+    /// SE-0286's forward scan; checks pin match, absent and malformed
+    /// listings so it cannot silently rebind.
+    nonisolated static func expectedChecksum(in listing: String, forDMGBasename basename: String) -> String? {
+        listing.split(separator: "\n")
+            .first(where: { $0.contains(basename) })?
+            .split(separator: " ").first.map(String.init)
     }
 
     /// Mounts the DMG, copies the app bundle into place (the running bundle's

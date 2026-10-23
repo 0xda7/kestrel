@@ -158,6 +158,57 @@ final class UpdateSwapSafetyTests: CheckCase {
             UpdateChecker.swapRestoreBlockerMessage(target: "Kestrel.app", reason: "busy"),
             "Could not remove the half-installed Kestrel.app to restore the previous app: busy")
     }
+
+    // MARK: checksums matcher (KES-09 fail-closed selection)
+
+    func testChecksumMatcherExtractsThePublishedDigestForTheDMGBasename() {
+        // sha256sum shape ("digest  name" — two spaces), the AVX2 and
+        // no-AVX2 assets side by side with a non-matching line between:
+        // the first line mentioning THIS basename decides, and its FIRST
+        // token is the digest.
+        let listing = "aaa1  Kestrel-0.82.dmg\nbbb2  Kestrel-0.81.dmg\nccc3  Kestrel-0.82-noavx2.dmg\n"
+        XCTAssertEqual(
+            UpdateChecker.expectedChecksum(in: listing, forDMGBasename: "Kestrel-0.82.dmg"),
+            "aaa1",
+            "the covering line's first token is the expected digest, double-space separators included")
+        XCTAssertEqual(
+            UpdateChecker.expectedChecksum(in: listing, forDMGBasename: "Kestrel-0.82-noavx2.dmg"),
+            "ccc3",
+            "a no-AVX2 install must never rebind to the AVX2 asset's line (or vice versa)")
+    }
+
+    func testChecksumMatcherFailsClosedWhenNoLineCoversTheAsset() {
+        XCTAssertNil(
+            UpdateChecker.expectedChecksum(in: "aaa1  Kestrel-0.81.dmg\n", forDMGBasename: "Kestrel-0.82.dmg"),
+            "an entry that does not cover this asset yields no expected digest — the KES-09 guard discards the download")
+        XCTAssertNil(
+            UpdateChecker.expectedChecksum(in: "aaa1  other.dmg\nbbb2  Kestrel-0.82.txt\n", forDMGBasename: "Kestrel-0.82.dmg"),
+            "a basename that appears nowhere verbatim yields no expected digest")
+        XCTAssertNil(
+            UpdateChecker.expectedChecksum(in: "", forDMGBasename: "Kestrel-0.82.dmg"),
+            "an empty listing yields no expected digest")
+    }
+
+    func testChecksumMatcherPinsMalformedLines() {
+        // A covering line with no digest token degenerates to its first
+        // token (the basename itself), exactly like the historical inline
+        // matcher — the digest comparison then fails and the install
+        // aborts, so the shape is pinned rather than "improved".
+        XCTAssertEqual(
+            UpdateChecker.expectedChecksum(in: "Kestrel-0.82.dmg\n", forDMGBasename: "Kestrel-0.82.dmg"),
+            "Kestrel-0.82.dmg",
+            "a token-less covering line yields its only token, never nil")
+        // Blank lines are skipped, and the FIRST covering line wins even
+        // when a later line mentions the same basename.
+        XCTAssertEqual(
+            UpdateChecker.expectedChecksum(in: "\nfirst1  Kestrel-0.82.dmg\nsecond2  Kestrel-0.82.dmg\n",
+                                           forDMGBasename: "Kestrel-0.82.dmg"),
+            "first1")
+        // More tokens than the two-field shape: still the first token.
+        XCTAssertEqual(
+            UpdateChecker.expectedChecksum(in: "leading1 trailing  Kestrel-0.82.dmg\n", forDMGBasename: "Kestrel-0.82.dmg"),
+            "leading1")
+    }
 }
 
 // MARK: - Generated registration (port from XCTest)
@@ -177,5 +228,8 @@ extension UpdateSwapSafetyTests {
             .init(name: "testRelaunchFailureSurfacesAndNeverTerminates") { $0.testRelaunchFailureSurfacesAndNeverTerminates() },
             .init(name: "testSwapRestoreBlocksOnlyWhenTheHalfInstalledTargetIsStillPresent") { $0.testSwapRestoreBlocksOnlyWhenTheHalfInstalledTargetIsStillPresent() },
             .init(name: "testSwapRestoreBlockerMessageNamesTheHalfInstalledTarget") { $0.testSwapRestoreBlockerMessageNamesTheHalfInstalledTarget() },
+            .init(name: "testChecksumMatcherExtractsThePublishedDigestForTheDMGBasename") { $0.testChecksumMatcherExtractsThePublishedDigestForTheDMGBasename() },
+            .init(name: "testChecksumMatcherFailsClosedWhenNoLineCoversTheAsset") { $0.testChecksumMatcherFailsClosedWhenNoLineCoversTheAsset() },
+            .init(name: "testChecksumMatcherPinsMalformedLines") { $0.testChecksumMatcherPinsMalformedLines() },
         ])
 }
