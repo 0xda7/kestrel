@@ -694,14 +694,22 @@ final class VideoGenPool: ObservableObject {
 /// Writes the frame sequence as an H.264 mp4. AVFoundation can encode it natively,
 /// which is the whole reason the engine's own .webm is not what we hand the user.
 enum VideoExporter {
-    enum ExportError: Error {
+    enum ExportError: LocalizedError {
         case noFrames
         case writerFailed(String)
-        case staleOutput(String)
         /// The writer input never became ready again (census W2-5, T4-3
         /// H5): the wait is capped, and a stall past the cap fails the
         /// export with this typed timeout instead of spinning forever.
         case writerInputStalled(timeoutSeconds: Double)
+
+        var errorDescription: String? {
+            switch self {
+            case .noFrames: return "No frames to export."
+            case .writerFailed(let message): return "The video writer failed: \(message)"
+            case .writerInputStalled(let seconds):
+                return "The video writer stalled for over \(Int(seconds)) seconds."
+            }
+        }
     }
 
     /// Cap on waiting for AVAssetWriterInput readiness between frames
@@ -710,23 +718,6 @@ enum VideoExporter {
     /// the thread forever with no way out.
     static let writerInputStallCapSeconds: Double = 30
 
-    /// Census W8 VideoGen:653 (T2-3 chunk C): whether a failed stale-output
-    /// removal is the benign first-export case (nothing to clear yet) or a
-    /// real failure. Covers the Cocoa no-such-file codes (CocoaError
-    /// .fileNoSuchFile = 4 and .fileReadNoSuchFile = 260) and the POSIX
-    /// ENOENT equivalent. Pure so checks can pin the benign
-    /// classification (D3).
-    static func isNoSuchFile(_ error: NSError) -> Bool {
-        switch (error.domain, error.code) {
-        case (NSCocoaErrorDomain, NSFileNoSuchFileError),
-             (NSCocoaErrorDomain, NSFileReadNoSuchFileError),
-             (NSPOSIXErrorDomain, Int(ENOENT)):
-            return true
-        default:
-            return false
-        }
-    }
-
     static func writeMP4(frames: [NSImage], fps: Int, to url: URL) throws {
         guard let first = frames.first else { throw ExportError.noFrames }
         // H.264 needs even dimensions.
@@ -734,19 +725,30 @@ enum VideoExporter {
         let h = Int(first.size.height) & ~1
         guard w > 0, h > 0 else { throw ExportError.noFrames }
 
+        // Guardian slice (2026-10-23): the mp4 is written to a staging file
+        // beside the destination and only a completed export is swapped in
+        // with FileManager.replaceItemAt — the old remove-first unlink had
+        // already destroyed the operator's existing file by the time the
+        // writer failed after it. Every failure past the staging point now
+        // surfaces as AtomicFileSave.SaveError, which names the destination.
+        let staged = AtomicFileSave.stagingURL(beside: url)
+        defer { AtomicFileSave.discard(staged) }
         do {
-            try FileManager.default.removeItem(at: url)
+            try encode(frames: frames, width: w, height: h, fps: fps, to: staged)
+            try AtomicFileSave.commit(staged, to: url)
+        } catch let saved as AtomicFileSave.SaveError {
+            throw saved
         } catch {
-            // Census W8 VideoGen:653 (T2-3 chunk C): a stale output that could
-            // not be removed was swallowed — the writer below would then fail
-            // with an unrelated error, or the stale file would survive as if
-            // it were fresh. A missing file is the normal first export, not a
-            // failure.
-            guard isNoSuchFile(error as NSError) else {
-                throw ExportError.staleOutput(error.localizedDescription)
-            }
+            throw AtomicFileSave.SaveError(destinationPath: url.path, reason: error.localizedDescription)
         }
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+    }
+
+    /// The H.264 encode itself, writing to the staging file — split from
+    /// writeMP4 so the swap above can wrap every writer failure with the
+    /// destination the operator chose.
+    private static func encode(frames: [NSImage], width w: Int, height h: Int,
+                                fps: Int, to staged: URL) throws {
+        let writer = try AVAssetWriter(outputURL: staged, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: w,

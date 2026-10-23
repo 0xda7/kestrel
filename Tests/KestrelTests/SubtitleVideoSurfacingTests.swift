@@ -11,9 +11,11 @@ import AppKit
 /// resets to the default loudly (SubtitleStyle:56), a failed format-description
 /// read records the colour-space drop (SubtitleVideoExporter:79), the
 /// video run directory and finished-frame scans are typed verdicts
-/// (VideoGen:350/:477), and a stale mp4 output that cannot be removed is a
-/// typed export error while the benign missing-file case still succeeds
-/// (VideoGen:653).
+/// (VideoGen:350/:477), and — since the 2026-10-23 guardian slice made
+/// writeMP4 a staged atomic swap — a write forced to fail at a protected
+/// destination leaves the operator's pre-existing file byte-identical,
+/// while a successful write still replaces it and a first export to an
+/// absent destination still lands.
 final class SubtitleVideoSurfacingTests: CheckCase {
     private struct Boom: Error {}
 
@@ -103,24 +105,7 @@ final class SubtitleVideoSurfacingTests: CheckCase {
                      "a successful empty scan keeps the existing no-frames handling")
     }
 
-    // MARK: - VideoGen:653 — stale-output removal typed, benign absence kept
-
-    /// The benign first-export case classification: a missing file is not a
-    /// failure; a permission failure is.
-    func testNoSuchFileClassificationCoversTheBenignCodes() {
-        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
-                                                     code: NSFileNoSuchFileError)),
-                      "CocoaError.fileNoSuchFile is the benign first export")
-        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
-                                                     code: NSFileReadNoSuchFileError)),
-                      "fileReadNoSuchFile is benign")
-        XCTAssertTrue(VideoExporter.isNoSuchFile(NSError(domain: NSPOSIXErrorDomain,
-                                                     code: Int(ENOENT))),
-                      "POSIX ENOENT is benign")
-        XCTAssertFalse(VideoExporter.isNoSuchFile(NSError(domain: NSCocoaErrorDomain,
-                                                      code: NSFileWriteNoPermissionError)),
-                       "a permission failure is a real stale-output failure")
-    }
+    // MARK: - VideoGen — writeMP4 is a staged atomic swap (2026-10-23)
 
     /// writeMP4 over a path with no stale output completes and leaves the mp4.
     @MainActor func testWriteMP4OverAnAbsentOutputSucceeds() throws {
@@ -132,27 +117,51 @@ final class SubtitleVideoSurfacingTests: CheckCase {
         XCTAssertGreaterThan(size, 0, "the export must produce the mp4")
     }
 
-    /// A stale output that cannot be removed is the typed staleOutput error —
-    /// never a silent swallow. The stale file here sits in a read-only
-    /// directory, so the unlink itself fails.
-    @MainActor func testWriteMP4OverAnUnremovableStaleOutputThrowsTyped() throws {
+    /// A write forced to fail at a protected destination (read-only folder
+    /// holding the operator's previous export) surfaces SaveError naming
+    /// the destination while the original stays byte-identical — the old
+    /// remove-first unlink had already destroyed it by then.
+    @MainActor func testWriteMP4FailureAtProtectedDestinationKeepsTheOriginal() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("kestrel-check-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let stale = dir.appendingPathComponent("stale.mp4")
-        try Data("stale".utf8).write(to: stale)
+        let dest = dir.appendingPathComponent("previous.mp4")
+        let previous = Data("the operator's previous export".utf8)
+        try previous.write(to: dest)
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
         defer {
             try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
-            try? FileManager.default.removeItem(at: stale)
             try? FileManager.default.removeItem(at: dir)
         }
-        XCTAssertThrowsError(try VideoExporter.writeMP4(frames: [Self.tinyFrame()], fps: 12, to: stale)) { error in
-            guard case VideoExporter.ExportError.staleOutput(let message) = error else {
-                return XCTFail("an unremovable stale output must throw the typed staleOutput error, got \(error)")
+
+        XCTAssertThrowsError(try VideoExporter.writeMP4(frames: [Self.tinyFrame()], fps: 12, to: dest)) { error in
+            guard let save = error as? AtomicFileSave.SaveError else {
+                return XCTFail("a forced write failure must surface SaveError naming the destination, got \(error)")
             }
-            XCTAssertFalse(message.isEmpty, "the typed error carries the removal failure")
+            XCTAssertEqual(save.destinationPath, dest.path,
+                           "the surfaced failure names the destination")
+            XCTAssertTrue(save.localizedDescription.contains(dest.path),
+                          "the alert text names the destination: \(save.localizedDescription)")
         }
+        XCTAssertEqual(try Data(contentsOf: dest), previous,
+                       "the operator's pre-existing file is byte-identical")
+    }
+
+    /// A successful write still replaces an existing destination — the
+    /// atomic swap is what makes the export fresh, never a remove-first
+    /// unlink that could leave nothing behind on failure.
+    @MainActor func testWriteMP4SuccessStillReplacesTheExistingDestination() throws {
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kestrel-check-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: dest) }
+        let previous = Data("the operator's previous export".utf8)
+        try previous.write(to: dest)
+
+        try VideoExporter.writeMP4(frames: [Self.tinyFrame()], fps: 12, to: dest)
+        XCTAssertNotEqual(try Data(contentsOf: dest), previous,
+                          "the fresh export replaced the stale destination")
+        let size = try dest.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        XCTAssertGreaterThan(size, 100, "the replaced file is a real mp4, not the stale bytes")
     }
 
     /// A 4×4 opaque frame (even dimensions, real pixels for the encoder).
@@ -186,10 +195,10 @@ extension SubtitleVideoSurfacingTests {
             .init(name: "testAbsentSavedStyleIsAQuietFirstLaunch") { $0.testAbsentSavedStyleIsAQuietFirstLaunch() },
             .init(name: "testValidSavedStyleStillRoundTripsIdentically") { try $0.testValidSavedStyleStillRoundTripsIdentically() },
             .init(name: "testFormatLoadFailureRecordsTheColourSpaceDrop") { $0.testFormatLoadFailureRecordsTheColourSpaceDrop() },
-            .init(name: "testNoSuchFileClassificationCoversTheBenignCodes") { $0.testNoSuchFileClassificationCoversTheBenignCodes() },
+            .init(name: "testWriteMP4FailureAtProtectedDestinationKeepsTheOriginal") { try $0.testWriteMP4FailureAtProtectedDestinationKeepsTheOriginal() },
             .init(name: "testRunDirectoryFailureAbortsAndNamesTheDirectory") { try $0.testRunDirectoryFailureAbortsAndNamesTheDirectory() },
             .init(name: "testScanFailureIsItsOwnVerdictDistinctFromExitStatus") { try $0.testScanFailureIsItsOwnVerdictDistinctFromExitStatus() },
             .init(name: "testWriteMP4OverAnAbsentOutputSucceeds") { try $0.testWriteMP4OverAnAbsentOutputSucceeds() },
-            .init(name: "testWriteMP4OverAnUnremovableStaleOutputThrowsTyped") { try $0.testWriteMP4OverAnUnremovableStaleOutputThrowsTyped() },
+            .init(name: "testWriteMP4SuccessStillReplacesTheExistingDestination") { try $0.testWriteMP4SuccessStillReplacesTheExistingDestination() },
         ])
 }

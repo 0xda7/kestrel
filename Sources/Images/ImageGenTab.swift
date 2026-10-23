@@ -831,8 +831,15 @@ struct QueueFeedView: View {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = g.url.lastPathComponent
         if panel.runModal() == .OK, let dest = panel.url {
-            try? FileManager.default.removeItem(at: dest)
-            try? FileManager.default.copyItem(at: g.url, to: dest)
+            // Guardian slice (2026-10-23): the copy lands through a
+            // staging file and one atomic swap — the old remove-then-copy
+            // destroyed the operator's existing file the moment the save
+            // started, and a failed copy then left nothing behind.
+            do {
+                try AtomicFileSave.copy(from: g.url, to: dest)
+            } catch {
+                showImageSaveFailure(error)
+            }
         }
     }
 }
@@ -1488,6 +1495,18 @@ func imageCopyFailureSummary(_ failures: [(file: String, reason: String)],
     guard !failures.isEmpty else { return nil }
     let named = failures.map { "\($0.file) (\($0.reason))" }.joined(separator: "; ")
     return "Some images could not be copied to \(destinationName): \(named)"
+}
+
+/// Guardian slice (2026-10-23): the alert for a failed save-panel export.
+/// SaveError's localizedDescription names the destination path and states
+/// the file there was left unchanged — the same surfacing shape as the
+/// copy-failure alert in saveImagesToFolder above.
+@MainActor private func showImageSaveFailure(_ error: Error) {
+    let alert = NSAlert()
+    alert.messageText = "Kestrel"
+    alert.informativeText = error.localizedDescription
+    alert.alertStyle = .warning
+    alert.runModal()
 }
 
 /// Turn the engine's failure sentinel into a bilingual, actionable message.
@@ -2175,8 +2194,13 @@ struct ImageCanvas: View {
         panel.nameFieldStringValue = "kestrel.\(format.ext)"
         panel.allowedContentTypes = [format == .jpg ? .jpeg : .png]
         if panel.runModal() == .OK, let dest = panel.url {
-            try? FileManager.default.removeItem(at: dest)
-            try? FileManager.default.copyItem(at: source, to: dest)
+            // Guardian slice (2026-10-23): same staging swap as save(_:)
+            // above — never remove the destination first.
+            do {
+                try AtomicFileSave.copy(from: source, to: dest)
+            } catch {
+                showImageSaveFailure(error)
+            }
         }
     }
 

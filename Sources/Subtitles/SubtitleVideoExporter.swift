@@ -95,35 +95,45 @@ final class SubtitleVideoExporter: ObservableObject {
         guard let export = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw CocoaError(.fileWriteUnknown)
         }
-        // Census W8 SubtitleVideoExporter:86 (T2-3 chunk C, minimal debt kept):
-        // a stale output that cannot be removed still fails the export typed
-        // one step later — AVAssetWriter init or exportAsynchronously throws,
-        // and the status check at the end of performExport rethrows
-        // export.error — so the old file can never pass silently as the fresh
-        // export; only the failure message is less precise, which is why the
-        // census scores this minimal.
-        try? FileManager.default.removeItem(at: outputURL)
-        export.outputURL = outputURL
-        export.outputFileType = .mov
-        export.shouldOptimizeForNetworkUse = true
-        export.videoComposition = videoComposition
-        session = export
-        progressTask = Task { [weak self, weak export] in
-            while !Task.isCancelled, let export {
-                self?.progress = Double(export.progress)
-                // Census W8 SubtitleVideoExporter:95 (T2-3 chunk C,
-                // display-only): the progress-poll tick; a failed sleep only
-                // ends this cosmetic UI update loop (cancel() ends it too),
-                // the export itself is unaffected, so the silent skip is kept
-                // deliberately.
-                try? await Task.sleep(for: .milliseconds(250))
+        // Guardian slice (2026-10-23): the burn-in writes to a staging file
+        // beside the destination and only a completed export is swapped in
+        // with FileManager.replaceItemAt. The old remove-first unlink (its
+        // silent try? was the census W8 debt above) destroyed the
+        // operator's existing file the moment the export started, so any
+        // failure below left nothing behind. Now the destination is never
+        // removed first, and every failure in the write surfaces as
+        // SaveError naming the destination path.
+        let staged = AtomicFileSave.stagingURL(beside: outputURL)
+        defer { AtomicFileSave.discard(staged) }
+        do {
+            export.outputURL = staged
+            export.outputFileType = .mov
+            export.shouldOptimizeForNetworkUse = true
+            export.videoComposition = videoComposition
+            session = export
+            progressTask = Task { [weak self, weak export] in
+                while !Task.isCancelled, let export {
+                    self?.progress = Double(export.progress)
+                    // Census W8 SubtitleVideoExporter:95 (T2-3 chunk C,
+                    // display-only): the progress-poll tick; a failed sleep only
+                    // ends this cosmetic UI update loop (cancel() ends it too),
+                    // the export itself is unaffected, so the silent skip is kept
+                    // deliberately.
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
             }
-        }
-        await withCheckedContinuation { continuation in
-            export.exportAsynchronously { continuation.resume() }
-        }
-        if export.status != .completed {
-            throw export.error ?? CocoaError(.fileWriteUnknown)
+            await withCheckedContinuation { continuation in
+                export.exportAsynchronously { continuation.resume() }
+            }
+            if export.status != .completed {
+                throw export.error ?? CocoaError(.fileWriteUnknown)
+            }
+            try AtomicFileSave.commit(staged, to: outputURL)
+        } catch let saved as AtomicFileSave.SaveError {
+            throw saved
+        } catch {
+            throw AtomicFileSave.SaveError(destinationPath: outputURL.path,
+                                           reason: error.localizedDescription)
         }
     }
 
