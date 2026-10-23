@@ -65,12 +65,27 @@ actor MemoryArchiveHook {
     /// as silently. Internal so the check suite can pin it against temp paths.
     nonisolated static func ensureQueueDirectory(_ dir: URL) -> Bool {
         do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            return true
+            // 0700 at creation, the chat-store custody doctrine: queued
+            // deliveries hold full turn bodies (0600 files via OwnerOnlyFile),
+            // so the enclosing queue folder must not sit at the loose 0755
+            // default — 0600-in-0700 keeps other local accounts out even if
+            // the parent Application Support folder's permission drifts.
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
         } catch {
             AppLog.chat.error("memory archive hook queue directory \(dir.path) could not be created: \(error.localizedDescription) — deliveries cannot be queued until it can be")
             return false
         }
+        // Idempotent tighten on every resolve, not only at creation: a queue
+        // directory that already exists at the loose default (0755 from an
+        // older build or a restored backup) must not keep the invariant
+        // broken either.
+        do {
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        } catch {
+            AppLog.chat.warning("memory archive hook queue directory \(dir.path) could not be tightened to owner-only (0700): \(error.localizedDescription) — queued turn bodies sit in a loose folder until it is fixed")
+        }
+        return true
     }
 
     nonisolated static var url: URL? {
@@ -153,12 +168,14 @@ actor MemoryArchiveHook {
         }
         // The name carries the timestamp so the directory listing sorts into delivery order.
         let name = String(format: "%013.0f-%@.json", Date().timeIntervalSince1970 * 1000, payload.delivery_id)
-        do {
-            try data.write(to: queueDirectory.appendingPathComponent(name), options: .atomic)
-        } catch {
+        // Owner-only custody (0600) via the one atomic owner-only writer: a
+        // durable delivery holds the full turn text, and a plain `.atomic`
+        // write renames a default-mode temp into place — world-readable until
+        // a chmod that never comes. Same writer as the chat store.
+        if !OwnerOnlyFile.write(data, to: queueDirectory.appendingPathComponent(name)) {
             // Census W8 :107 — the durable write failed: the event never reaches
             // the drain loop, so this surfaced error is its only trace.
-            AppLog.chat.error("memory archive event \(payload.delivery_id) could not be written to the durable queue: \(error.localizedDescription) — the event is dropped")
+            AppLog.chat.error("memory archive event \(payload.delivery_id) could not be written to the durable queue — the event is dropped")
         }
         trim()
         await drain()
@@ -225,7 +242,10 @@ actor MemoryArchiveHook {
         pending(in: dir).first { !skipping.contains($0) }
     }
 
-    private func drain() async {
+    /// One drain pass over the queue. Internal (not private) so the check
+    /// suite can drive a full pass against a loopback receiver and pin the
+    /// skip-on-failure contract (nextPending honors the skip set).
+    func drain() async {
         guard !draining else { return }
         draining = true
         defer { draining = false }
@@ -253,7 +273,17 @@ actor MemoryArchiveHook {
                 backoff = 1
             case .rejected:
                 // The receiver understood and refused it; another attempt would be refused too.
-                try? FileManager.default.removeItem(at: file)
+                do {
+                    try FileManager.default.removeItem(at: file)
+                } catch {
+                    // Same law as the delivered arm above: an event whose file
+                    // cannot be removed must leave the pass, or the loop
+                    // re-POSTs it at full speed against nextPending for as
+                    // long as the drain runs. One warning and a skip ends the
+                    // spin; a later pass tries exactly once more.
+                    AppLog.chat.warning("memory archive event \(file.lastPathComponent) was refused but could not be removed from the queue: \(error.localizedDescription) — it is skipped for the rest of this pass instead of being re-POSTed")
+                    skipped.insert(file)
+                }
                 backoff = 1
             case .retry:
                 try? await Task.sleep(for: .seconds(min(backoff, 300)))
