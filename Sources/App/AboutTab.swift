@@ -12,7 +12,7 @@ enum AppInfo {
     /// below is the release scripts' sed target (keep this line shape intact) and the
     /// value used by the kestrel-checks CLI target, which has no app bundle.
     /// Never hand-edit the version for a release: bump VERSION and run scripts/release.sh.
-    static let versionFallback = "0.90.0"
+    static let versionFallback = "0.90.1"
     static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? versionFallback
