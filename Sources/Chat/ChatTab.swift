@@ -163,6 +163,13 @@ struct ChatMainView: View {
 
     private var chatDetail: some View {
         NativeChatView()
+            // Mission Merlin slice 5 (AMENDMENT 3 option (a)): the minimal
+            // Merlin surface — a context menu on the chat detail that runs the
+            // composer draft as a Merlin task when the "Agent engine" toggle
+            // (Chat settings → Agents) is set to Merlin and the local engine
+            // is up. The modifier renders nothing itself when the toggle is
+            // classic, so the legacy loop is untouched.
+            .modifier(MerlinChatContextModifier())
     }
 
     private var windowBackdropColor: Color {

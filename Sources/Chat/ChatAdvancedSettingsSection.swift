@@ -15,6 +15,11 @@ struct ChatAdvancedSettingsSection: View {
     @AppStorage(SettingsKeys.toolGrammarMode) private var toolGrammarMode = "auto"
     @AppStorage(SettingsKeys.jsSandboxEnabled) private var jsSandboxEnabled = false
     @AppStorage(SettingsKeys.memoryToolsEnabled) private var memoryToolsEnabled = true
+    /// Mission Merlin slice 5: the agent-engine toggle. Raw-value pattern of
+    /// chatSortOrder above; default classic (AMENDMENT 3). Reset deliberately
+    /// spares it — like chatSortOrder, it is an engine choice, not a tunable,
+    /// and reset() below lists the same keys it listed before this slice.
+    @AppStorage(MerlinChatKeys.chatAgentEngine) private var agentEngineRaw = MerlinAgentEngine.appStorageDefault
     @State private var blockedToolModels: [String] = ToolSupport.blockedModels
     @AppStorage(SettingsKeys.memoryArchiveHookURL) private var archiveHookURL = ""
     /// KES-08: the receiver token lives in the local secret store, not UserDefaults.
@@ -246,6 +251,33 @@ struct ChatAdvancedSettingsSection: View {
                                                "How many recent tokens DRY scans. 0 disables it."))
                 }
             }
+            }
+
+            if destination == .agents {
+                // Mission Merlin slice 5 (AMENDMENT 3): the engine toggle,
+                // first row of the Agents tab so it frames the tool rows
+                // below it. Default classic — flipping the default is an
+                // operator-approved moment after the eval gate passes.
+                ChatSettingsGroup(title: loc.t("Motor de agente", "Agent engine")) {
+                    SettingsRow(icon: "wand.and.stars",
+                                title: loc.t("Motor de agente", "Agent engine"),
+                                help: loc.t("Merlin es el nuevo kernel de agente para modelos pequeños; Clásico es el bucle antiguo. Con Merlin, usa «Ejecutar como tarea Merlin» en el menú contextual del chat para lanzar una tarea con el texto del compositor.",
+                                            "Merlin is the new small-model agent kernel; Classic is the legacy loop. With Merlin, use \"Run as Merlin task\" from the chat's context menu to launch a task with the composer text.")) {
+                        Picker("", selection: $agentEngineRaw) {
+                            Text(loc.t("Merlin", "Merlin")).tag(MerlinAgentEngine.merlin.rawValue)
+                            Text(loc.t("Clásico", "Classic")).tag(MerlinAgentEngine.classic.rawValue)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: Self.controlColumn)
+                        .labelsHidden()
+                    }
+                    Text(loc.t("Merlin es el nuevo kernel de agente para modelos pequeños; Clásico es el bucle antiguo.",
+                               "Merlin is the new small-model agent kernel; Classic is the legacy loop."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
             }
 
             if destination == .agents {
