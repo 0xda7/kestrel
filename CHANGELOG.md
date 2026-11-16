@@ -3,7 +3,7 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] — product-takeover wave 1
+## [0.90.1] - 2026-11-16 — product-takeover wave 1
 
 Reliability and release-truth fixes from the 2026-11-16 takeover audit
 (`product-takeover/`), validated on a Radeon Pro 5500M test box. All 865

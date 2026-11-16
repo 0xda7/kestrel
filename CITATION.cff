@@ -11,8 +11,8 @@ identifiers:
 repository-code: "https://github.com/0xda7/kestrel"
 url: "https://northlatchlabs.com/kestrel"
 license: GPL-3.0-or-later
-version: 0.83.21
-date-released: "2026-08-12"
+version: "0.90.1"
+date-released: '2026-11-16'
 keywords:
   - large language models
   - inference
