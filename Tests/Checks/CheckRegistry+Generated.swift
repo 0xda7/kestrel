@@ -12,6 +12,7 @@ enum CheckRegistry {
     static let generated: [(String, CheckSet)] = [
         ("AgentLoopTests", AgentLoopTests.__checkSet),
         ("AgentTurnBudgetTests", AgentTurnBudgetTests.__checkSet),
+        ("MerlinChecks", MerlinChecks.__checkSet),
         ("AudioSurfacingTests", AudioSurfacingTests.__checkSet),
         ("AtomicExportTests", AtomicExportTests.__checkSet),
         ("AudioVideoExportIntegrationTests", AudioVideoExportIntegrationTests.__checkSet),
@@ -97,6 +98,9 @@ enum CheckRegistry {
         ("SurgicalChecks", SurgicalChecks.__checkSet),
         ("SurgicalDictationParseSurfacingTests", SurgicalDictationParseSurfacingTests.__checkSet),
         ("MCPStoreFailSafeTests", MCPStoreFailSafeTests.__checkSet),
+        ("MerlinChecks2", MerlinChecks2.__checkSet),
+        ("MerlinChecks3", MerlinChecks3.__checkSet),
+        ("MerlinChecks4", MerlinChecks4.__checkSet),
     ]
 }
 
