@@ -17,10 +17,14 @@ checks green.
   and the release scripts hard-fail if the stamp ever misses.
 - **CI version gate**: tag builds assert tag == bundle == source before
   publishing.
-- **Unsigned releases can never ship again**: CI's sign job fails a tag build
-  when the signing secrets are absent, instead of silently keeping ad-hoc
-  (which Gatekeeper rejects for every browser-download user). `make-app.sh`
-  likewise fails on engine-less CI/release bundles.
+- **Distribution policy — unsigned ad-hoc builds, by operator decision**: the
+  Developer-ID signing + notarization pipeline presumed an Apple Developer ID
+  that has never existed and hard-failed every tag build. It is removed. Release
+  integrity is the published SHA-256 checksums; the ad-hoc signature keeps the
+  bundle loadable and lets the updater verify update-to-update consistency; the
+  README documents the one-time "Open Anyway" first-open step. In-app self-updates
+  carry no browser quarantine (KES-09) and install without warnings.
+  `make-app.sh` still fails on engine-less CI/release bundles.
 - **Agent turns survive a grammar the engine cannot compile**: the failure
   that killed a live turn ("Failed to initialize samplers") now retries once
   without the envelope grammar, falling through to the text-side tool-call
