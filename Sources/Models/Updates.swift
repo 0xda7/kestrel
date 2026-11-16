@@ -32,7 +32,7 @@ final class UpdateChecker: ObservableObject {
     private var checksumsURL: URL?
     private var periodicTask: Task<Void, Never>?
 
-    static let releasesAPI = "https://api.github.com/repos/0xda7/kestrel/releases/latest"
+    static let releasesAPI = "https://api.github.com/repos/\(AppInfo.repositorySlug)/releases/latest"
 
     /// Re-checks every hour while the app stays open, for people who never
     /// relaunch. Silent: it only lights up the existing update badge.
@@ -420,7 +420,7 @@ final class UpdateChecker: ObservableObject {
         // that with its could-not-load line, which stays the user surface —
         // but the skip was invisible in the log. Same nil result, now named;
         // a successful fetch keeps its existing display untouched.
-        guard let url = URL(string: "https://api.github.com/repos/0xda7/kestrel/releases?per_page=30") else { return }
+        guard let url = URL(string: "https://api.github.com/repos/\(AppInfo.repositorySlug)/releases?per_page=30") else { return }
         let data: Data
         do {
             let (fetched, response) = try await URLSession.shared.data(from: url)
@@ -594,7 +594,7 @@ struct ReleaseNotesPopover: View {
             Divider()
             Button(loc.t("Ver en GitHub", "View on GitHub")) {
                 let tag = updates.releaseNotes?.first.map { "v\($0.version)" } ?? "v\(AppInfo.version)"
-                NSWorkspace.shared.open(URL(string: "https://github.com/0xda7/kestrel/releases/tag/\(tag)")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/\(AppInfo.repositorySlug)/releases/tag/\(tag)")!)
             }
             .buttonStyle(.link).font(.caption)
         }

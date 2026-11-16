@@ -134,7 +134,7 @@ public struct KestrelApp: App {
                 openWindow(id: "control")
             }
             Button(loc.t("Reportar un problema", "Report an issue")) {
-                NSWorkspace.shared.open(URL(string: "https://github.com/0xda7/kestrel/issues")!)
+                NSWorkspace.shared.open(URL(string: AppInfo.issuesURL)!)
             }
         }
     }

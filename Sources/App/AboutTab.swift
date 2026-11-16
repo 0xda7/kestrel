@@ -23,11 +23,16 @@ enum AppInfo {
     static let developerName = "Northlatch Labs"
     static let developerHandle = "Northlatch-Labs-LLC"
     static let githubURL = "https://github.com/Northlatch-Labs-LLC"
-    static let repositoryURL = "https://github.com/0xda7/kestrel"
+    /// The ONE repo slug every feed, issue, release and sponsor URL derives
+    /// from (audit G3): the update checker died silently once already because
+    /// these were hand-copied in four places. When publishing moves to the
+    /// Northlatch org, change only this constant.
+    static let repositorySlug = "0xda7/kestrel"
+    static let repositoryURL = "https://github.com/" + repositorySlug
     static let issuesURL = repositoryURL + "/issues"
     static let featureRequestURL = repositoryURL + "/issues/new?template=feature_request.yml"
     static let discussionsURL = repositoryURL + "/discussions"
-    static let sponsorURL = "https://github.com/0xda7/kestrel#support-the-project"
+    static let sponsorURL = "https://github.com/" + repositorySlug + "#support-the-project"
     static let donateNoteEN = "If Kestrel is useful to you, you can support development with a donation."
 }
 
