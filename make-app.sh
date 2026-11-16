@@ -130,12 +130,19 @@ cp Assets/model-icons/*.webp Assets/model-icons/sources.json "$APP/Contents/Reso
 IMAGE_STATIC="vendor/stable-diffusion.cpp/build-static/bin"
 if [ -x "$IMAGE_STATIC/sd-cli" ]; then
     if [ ! -f "$IMAGE_STATIC/default.metallib" ]; then
-        echo "ERROR: image-engine default.metallib is required; rebuild the engines" >&2
-        exit 1
+        # The metallib is a precompile speed-up, not a functional need: without
+        # it the engine compiles shaders at first launch. A CLT-only machine
+        # has no Metal compiler, so dev builds warn loudly; release builds
+        # still fail hard (slow first load is a release defect).
+        if [ -n "$CI" ] || [ "$KESTREL_RELEASE" = "1" ]; then
+            echo "ERROR: image-engine default.metallib is required; rebuild the engines" >&2
+            exit 1
+        fi
+        echo "WARNING: no image-engine default.metallib (CLT-only machine, no Metal compiler) — runtime shader compile, slower first use" >&2
     fi
     mkdir -p "$APP/Contents/Resources/bin-image"
     cp "$IMAGE_STATIC/sd-cli" "$APP/Contents/Resources/bin-image/"
-    cp "$IMAGE_STATIC/default.metallib" "$APP/Contents/Resources/bin-image/"
+    [ -f "$IMAGE_STATIC/default.metallib" ] && cp "$IMAGE_STATIC/default.metallib" "$APP/Contents/Resources/bin-image/"
     echo "bundled image generation engine"
 fi
 
@@ -146,13 +153,16 @@ if [ -x "$WHISPER_STATIC/whisper-cli" ]; then
         exit 1
     fi
     if [ ! -f "$WHISPER_STATIC/default.metallib" ]; then
-        echo "ERROR: Whisper.cpp default.metallib is required; rebuild the engines" >&2
-        exit 1
+        if [ -n "$CI" ] || [ "$KESTREL_RELEASE" = "1" ]; then
+            echo "ERROR: Whisper.cpp default.metallib is required; rebuild the engines" >&2
+            exit 1
+        fi
+        echo "WARNING: no Whisper.cpp default.metallib (CLT-only machine) — runtime shader compile, slower first use" >&2
     fi
     mkdir -p "$APP/Contents/Resources/bin-audio"
     cp "$WHISPER_STATIC/whisper-cli" "$WHISPER_STATIC/whisper-server" \
        "$APP/Contents/Resources/bin-audio/"
-    cp "$WHISPER_STATIC/default.metallib" "$APP/Contents/Resources/bin-audio/"
+    [ -f "$WHISPER_STATIC/default.metallib" ] && cp "$WHISPER_STATIC/default.metallib" "$APP/Contents/Resources/bin-audio/"
     echo "bundled Whisper.cpp speech-to-text engine"
 fi
 
