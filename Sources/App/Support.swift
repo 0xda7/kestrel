@@ -51,6 +51,15 @@ enum SettingsKeys {
     /// Excluded from resettableOptionKeys: a per-model record the app
     /// learned; a reset must not re-attach a projector that failed to load.
     static let incompatibleMmproj = "incompatibleMmproj"
+    /// Persisted (model, engine) pairs whose GGUF architecture the engine
+    /// refused ("unknown model architecture" — e.g. LFM3 on the 0.89.x engine,
+    /// which crash-looped the engine six times on 2026-11-16 before anyone
+    /// read the log). Start refuses these up front instead of exiting the
+    /// engine again; keyed to the engine binary, so choosing or updating an
+    /// engine clears the refusal automatically.
+    /// Excluded from resettableOptionKeys: a per-model record the app
+    /// learned, same doctrine as incompatibleMmproj.
+    static let unsupportedArchModels = "unsupportedArchModels"
     /// Per-model manual projector override: a path pins that mmproj, "" disables
     /// vision, absent falls back to auto-pairing.
     /// Excluded from resettableOptionKeys: a per-model override record,

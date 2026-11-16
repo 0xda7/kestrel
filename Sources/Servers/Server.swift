@@ -1875,6 +1875,30 @@ struct ServerSettings {
             .contains(mmprojPairKey(model, projector))
     }
 
+    /// Records that this engine could not even parse `model`'s GGUF
+    /// architecture ("unknown model architecture"). Start then refuses the
+    /// model up front instead of spawning an engine that is guaranteed to
+    /// exit again (the six-restart LFM3 loop, 2026-11-16). Keyed to the
+    /// engine binary as well, so switching or updating the engine clears
+    /// the refusal automatically — the new engine speaks for itself.
+    nonisolated static func recordUnsupportedArchitecture(model: String, engine: String) {
+        var list = SettingsNumericCoercion.stringArray(SettingsKeys.unsupportedArchModels)
+        let key = unsupportedArchPairKey(model: model, engine: engine)
+        if !list.contains(key) {
+            list.append(key)
+            UserDefaults.standard.set(list, forKey: SettingsKeys.unsupportedArchModels)
+        }
+    }
+
+    nonisolated static func isUnsupportedArchitecture(model: String, engine: String) -> Bool {
+        SettingsNumericCoercion.stringArray(SettingsKeys.unsupportedArchModels)
+            .contains(unsupportedArchPairKey(model: model, engine: engine))
+    }
+
+    private static func unsupportedArchPairKey(model: String, engine: String) -> String {
+        model + "\u{1}" + engine
+    }
+
     nonisolated static func extraArgs(forModel path: String) -> String {
         (SettingsNumericCoercion.dictionary(SettingsKeys.extraArgsByModel) as? [String: String])?[path] ?? ""
     }
@@ -2397,6 +2421,17 @@ final class ServerController: ObservableObject {
                 state = .failed("Select a model in the Models tab")
                 return
             }
+            // A model whose architecture this engine already refused is not
+            // launched again: every attempt is a guaranteed engine exit, and
+            // the repeated restarts look like a crash-loop to the operator
+            // (C3: six LFM3 restarts in six minutes on 2026-11-16). The
+            // record is keyed to this engine binary, so choosing another
+            // engine or updating this one clears the refusal automatically.
+            if ServerSettings.isUnsupportedArchitecture(model: settings.modelPath,
+                                                        engine: settings.serverBinary) {
+                state = .failed("Arquitectura no soportada por este motor: este GGUF ya falló al cargar — elige otro modelo, u otro/actualizado motor en Ajustes / model architecture not supported by this engine: this GGUF already failed to load — pick another model, or another/updated engine in Settings")
+                return
+            }
             // TurboQuant weight quants (tq3_1s/tq4_1s) decode to garbage, so refuse
             // rather than serve it.
             if ServerSettings.modelIsTurboQuantWeights(at: settings.modelPath) {
@@ -2614,7 +2649,15 @@ final class ServerController: ObservableObject {
                         return
                     }
                     AppLog.server.error("engine exited with status \(proc.terminationStatus)")
-                    self.state = .failed(Self.diagnose(self.log, exitCode: proc.terminationStatus))
+                    let diagnosis = Self.diagnose(self.log, exitCode: proc.terminationStatus)
+                    // The engine refused to even parse this GGUF's architecture:
+                    // remember it so start() refuses up front instead of
+                    // crash-looping the engine on every click (C3, LFM3).
+                    if diagnosis.contains("architecture not supported by this engine") {
+                        ServerSettings.recordUnsupportedArchitecture(model: settings.modelPath,
+                                                                     engine: settings.serverBinary)
+                    }
+                    self.state = .failed(diagnosis)
                 }
             }
         }
