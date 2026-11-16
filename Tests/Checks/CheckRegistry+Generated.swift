@@ -101,6 +101,7 @@ enum CheckRegistry {
         ("MerlinChecks2", MerlinChecks2.__checkSet),
         ("MerlinChecks3", MerlinChecks3.__checkSet),
         ("MerlinChecks4", MerlinChecks4.__checkSet),
+        ("ToolGrammarRetryTests", ToolGrammarRetryTests.__checkSet),
     ]
 }
 

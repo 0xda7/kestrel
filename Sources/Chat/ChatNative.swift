@@ -1146,36 +1146,75 @@ final class ChatStore: ObservableObject {
                 // gate enforces, and a miss (stale or imported value) fails
                 // the turn instead of sending different sampling.
                 body = try Self.mergedCustomSampling(body, customJSON: sampling.customJSON)
-                let wire = RouteWire.wire(body: body, port: port, route: remote ? route : nil,
-                                          localAPIKey: ServerSettings.activeAPIKey(),
-                                          remoteAPIKey: remote
-                                              ? route.map(InferenceRoutes.apiKey(for:)) : nil)
-                var req = URLRequest(url: wire.url)
-                req.httpMethod = "POST"
-                for (field, value) in wire.headers {
-                    req.setValue(value, forHTTPHeaderField: field)
+                func makeRequest(_ wireBody: [String: Any]) throws -> URLRequest {
+                    let w = RouteWire.wire(body: wireBody, port: port, route: remote ? route : nil,
+                                           localAPIKey: ServerSettings.activeAPIKey(),
+                                           remoteAPIKey: remote
+                                               ? route.map(InferenceRoutes.apiKey(for:)) : nil)
+                    var r = URLRequest(url: w.url)
+                    r.httpMethod = "POST"
+                    for (field, value) in w.headers {
+                        r.setValue(value, forHTTPHeaderField: field)
+                    }
+                    r.timeoutInterval = 600
+                    if !remote {
+                        r.setValue(streamIdentity, forHTTPHeaderField: "X-Conversation-Id")
+                    }
+                    // The wire transform is the body of record: it strips llama-only
+                    // fields for remote dialects, forces the route's model id, and
+                    // reshapes messages for Anthropic. Sending the pre-transform
+                    // dictionary here would bypass the seam entirely.
+                    r.httpBody = try JSONSerialization.data(withJSONObject: w.body)
+                    return r
                 }
-                req.timeoutInterval = 600
-                if !remote {
-                    req.setValue(streamIdentity, forHTTPHeaderField: "X-Conversation-Id")
-                }
-                // The wire transform is the body of record: it strips llama-only
-                // fields for remote dialects, forces the route's model id, and
-                // reshapes messages for Anthropic. Sending the pre-transform
-                // dictionary here would bypass the seam entirely.
-                req.httpBody = try JSONSerialization.data(withJSONObject: wire.body)
-
-                let (bytes, response) = try await ChatStore.streamingSession.bytes(for: req)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                guard status == 200 else {
-                    // The error body explains the cause (e.g. context overflow);
-                    // surface it instead of a generic "bad server response".
+                // C4 fallback: one retry without the envelope grammar when the
+                // engine cannot compile it (shouldRetryWithoutGrammar). The retry
+                // re-clears grammarConstrained so finalization runs the legacy
+                // text-side tool-call rescue instead of envelope unwrapping.
+                var sentBody = body
+                var grammarAttemptDone = false
+                var streamBytes: URLSession.AsyncBytes?
+                var streamResponse: URLResponse?
+                var streamStatus = 0
+                var streamErrorBody = ""
+                while streamBytes == nil {
+                    let request = try makeRequest(sentBody)
+                    let (bytes, response) = try await ChatStore.streamingSession.bytes(for: request)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    if status == 200 {
+                        streamBytes = bytes
+                        streamResponse = response
+                        streamStatus = status
+                        break
+                    }
                     var raw = ""
                     for try await line in bytes.lines {
                         raw += line
                         if raw.count > 4000 { break }
                     }
-                    throw StreamError(message: Self.describeServerError(status: status, body: raw))
+                    if Self.shouldRetryWithoutGrammar(status: status, errorBody: raw,
+                                                      grammarConstrained: grammarConstrained,
+                                                      alreadyRetried: grammarAttemptDone) {
+                        grammarAttemptDone = true
+                        grammarConstrained = false
+                        sentBody.removeValue(forKey: "response_format")
+                        AppLog.chat.notice("engine rejected the tool-call grammar; retrying the turn without it")
+                        continue
+                    }
+                    streamBytes = bytes
+                    streamResponse = response
+                    streamStatus = status
+                    streamErrorBody = raw
+                    break
+                }
+                guard let bytes = streamBytes, let response = streamResponse else {
+                    throw StreamError(message: "The request could not be sent")
+                }
+                let status = streamStatus
+                guard status == 200 else {
+                    // The error body explains the cause (e.g. context overflow);
+                    // surface it instead of a generic "bad server response".
+                    throw StreamError(message: Self.describeServerError(status: status, body: streamErrorBody))
                 }
 
                 var completed = false
@@ -2367,6 +2406,25 @@ final class ChatStore: ObservableObject {
             AppLog.chat.error("compaction summarize failed: the model returned an empty summary")
         }
         return text.isEmpty ? nil : text
+    }
+
+    /// C4 fallback (live failure, task 4080 on 2026-11-16): a grammar the engine
+    /// cannot turn into a sampler fails sampler init server-side
+    /// ("Failed to initialize samplers: std::exception") and kills the whole turn.
+    /// When this turn was grammar-constrained, one retry without the envelope
+    /// grammar beats a dead turn: an unconstrained tool call can still be
+    /// rescued by the text-side path, a plain reply always answers.
+    /// Pure so the retry contract is unit-testable.
+    nonisolated static func shouldRetryWithoutGrammar(status: Int,
+                                                      errorBody: String,
+                                                      grammarConstrained: Bool,
+                                                      alreadyRetried: Bool) -> Bool {
+        guard status != 200, grammarConstrained, !alreadyRetried else { return false }
+        let message = errorBody.lowercased()
+        return message.contains("failed to initialize samplers")
+            || message.contains("grammar sampler")
+            || message.contains("parse grammar")
+            || message.contains("invalid grammar")
     }
 
     /// Maps llama-server HTTP errors ({"error":{"message":…}}) to readable,
