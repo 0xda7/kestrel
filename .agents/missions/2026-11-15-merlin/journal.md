@@ -214,3 +214,39 @@ Server: vendor/llama.cpp/build-static/bin/llama-server, version 0.6.0-dev build 
 - Machinery signal (not gate): clean separations T02/T14, faster shared passes T05 (5t/148s vs 8t/451s); wedge retry recovered 9/11. Merlinspecific failure mode = 6 actor_failed cells (T03/T06/T08/T10/T11/T12) → next kernel work item.
 - analyze.py schema bug found + fixed during report writing (report emits `pass`, analyzer read `passed` → false 0/14 both modes). Fixed analyzer verified against matrix-run.log ✔ lines and the runner's own summary table (4/14, 2/14 — agree).
 - Uncommitted: journal.md, results/GATE-REPORT.md, gate-*/ evidence, analyze.py fix. No commit/push ordered for these yet.
+
+## 2026-11-16 evening — actor_failed class closed: kernel survives parse-class actor failures
+
+- **Root cause of the 6 actor_failed cells (the gate's "next kernel work item"):** every cell died to
+  `[nativeTools] response carried no parseable tool calls` — the kernel treated ONE content-only
+  completion as machinery death (MerlinKernel catch: instant `.failed`), while tool errors, guardian
+  and verifier rejections all fed back correctively. Small models narrate instead of calling; several
+  cells died mid-progress (T03 had reorganized half the workspace at turn 5).
+- **Fix (MerlinKernel + LlamaServerActor):** `ActorError` now carries `parseFailure` / `responseExcerpt`
+  / `finishReason`. Parse-class failures (server answered, no usable call) are ledgered as blockers,
+  fed back through the new `receiveActorFailure` seam (offending narration as assistant turn +
+  corrective instruction as user turn), bounded by the stop authority's repeat threshold (3 consecutive
+  → honest `.failed`); any parsed batch resets the streak. Transport-class failures stay instantly
+  fatal (harness owns restart). Empty-batch path untouched (checks rely on it).
+- **Pinned by 6 new checks** (MerlinChecks3): survive-and-correct, threshold bound, streak reset,
+  transport-fatal, error carries excerpt+finish_reason, transcript correction shape. Full suite:
+  **860 checks, 0 failures** (was 850).
+- **Live verification, 6 cells re-run on Spark (fresh-server protocols):** zero parse-class failures
+  anywhere. T03 actor_failed@5t→budget@14t · T06 @12t→budget@14t · T10 @3t→**task_done@5t (voluntary)** ·
+  T11 @4t→**task_done@9t (voluntary)** · T12 @9t→budget@14t · T08 → harness_event_wedge on all 3 attempts
+  (the documented llama-server wedge class — engine defect, not kernel; cell unmeasurable until that
+  class is fixed). Pass-rate still 0/6 on merits — honest: the 1.7B doesn't clear the suite; what
+  changed is the machinery no longer kills runs prematurely.
+- **Protocol note:** first fresh-server protocol had a bind race (3s pkill wait < the engine's
+  documented SIGTERM latency — BUG-1 class); corrected script waits for port-free + verifies the
+  listener pid is the launched pid.
+- **Release hygiene (the 0.90.0 drift):** v0.90.0 shipped with VERSION=0.89.17 (hand-cut release
+  bypassed release.sh's VERSION stamp; AboutTab was correct, only VERSION lagged). Reconciled:
+  VERSION=0.90.1 + AboutTab=0.90.1 (exactly make-app.sh's post-release bump). New
+  ReleaseHygieneChecks suite (4 checks) makes the drift class build-breaking: VERSION format,
+  AboutTab==VERSION, CHANGELOG never stamps ahead of VERSION, newest stamped section has its tag
+  (shallow-CI skip is explicit). Negative proof: regressing VERSION to 0.89.17 → 2 failures, exit 1,
+  naming the drift. Restored; suite 860/0.
+- Uncommitted: MerlinKernel.swift, LlamaServerActor.swift, MerlinChecks3.swift (+6 checks),
+  ReleaseHygieneChecks.swift, CheckRegistry+Generated.swift, VERSION, AboutTab.swift. Evidence:
+  results/actorfix-rerun/, results/actorfix-rerun-cells/, results/actorfix-rerun-fix/.

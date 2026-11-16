@@ -1,0 +1,19 @@
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.00.369.308 I srv  llama_server: initializing ...
+0.00.369.470 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.00.369.473 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.371.511 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.374.090 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.03.053.932 I cmn          init: llama threadpool init, n_threads = 16
+0.16.153.551 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.16.259.239 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.16.259.298 I srv  llama_server: model loaded
+0.16.259.305 I srv  llama_server: listening on http://127.0.0.1:8311
+0.17.966.513 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.17.968.324 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.47.483.938 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =    776, progress = 0.60, t =  29.52 s / 26.29 tokens per second
+1.03.605.794 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1229, progress = 0.95, t =  45.64 s / 26.93 tokens per second
+1.09.772.116 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1247, progress = 0.97, t =  51.80 s / 24.07 tokens per second
+1.17.050.151 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1288, progress = 1.00, t =  59.08 s / 21.80 tokens per second
+7.18.339.044 W srv          stop: cancel task, id_task = 0
+7.18.934.712 I srv    operator(): operator(): cleaning up before exit...

@@ -1,0 +1,12 @@
+2026-11-16T15:56:51Z	port=8311	cell=T08/spark-x2.5-nativeTools	wedge_first_attempt	harness_timeout
+2026-11-16T15:57:07Z	port=8311	cell=T08/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 4651 on port 8311
+2026-11-16T16:04:07Z	port=8311	cell=T08/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge
+2026-11-16T16:11:07Z	port=8311	cell=T10/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T16:11:28Z	port=8311	cell=T10/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 8035 on port 8311
+2026-11-16T16:18:28Z	port=8311	cell=T10/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge
+2026-11-16T16:25:28Z	port=8311	cell=T11/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T16:25:43Z	port=8311	cell=T11/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 10092 on port 8311
+2026-11-16T16:32:44Z	port=8311	cell=T11/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge
+2026-11-16T16:39:44Z	port=8311	cell=T12/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T16:39:59Z	port=8311	cell=T12/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 10283 on port 8311
+2026-11-16T16:49:59Z	port=8311	cell=T12/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge

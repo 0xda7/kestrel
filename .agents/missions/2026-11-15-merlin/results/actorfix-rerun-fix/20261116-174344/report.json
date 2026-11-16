@@ -1,0 +1,107 @@
+{
+  "completion_max_tokens": 1280,
+  "context_tokens": 8192,
+  "date": "2026-11-16",
+  "driver": "live",
+  "immutable_seed_boot_hashes": {
+    "T10": {}
+  },
+  "machinery": "merlin",
+  "mission": "2026-11-15-merlin",
+  "model": "Spark-X2.5-1.7B-Q8_0",
+  "model_id": "Spark-X2.5-1.7B-Q8_0.gguf",
+  "model_path": "/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf",
+  "profile_envelope_mode": "sharedShape",
+  "profile_family": "spark-x2.5",
+  "profile_min_completion_tokens": 768,
+  "profile_rung": "nativeTools",
+  "profile_template_notes": "Rung 1 verified byte-perfect on 1.7B and 4B (Q8_0/Q4_K_M); envelope also clean on 4B (dual-capable fallback). THINK BUDGET: emits reasoning_content on chat completions — slice-6 live probe on Spark-X2.5-1.7B-Q8_0 (:8199) returned a reasoning_content field on every tool-calling completion (222 and 493 chars across two prompts), and usage.completion_tokens (89, 143) COUNT those reasoning tokens, so reasoning eats the max_tokens budget; the earlier 'no think budget' note was wrong. Floor raised 512 → 768 so a reasoning burst cannot starve the action tokens.",
+  "run_root": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun-fix/20261116-174344",
+  "server_url": "http://127.0.0.1:8311",
+  "suite": "merlin-eval-v1",
+  "summary": {
+    "passed": 0,
+    "recovery_events": 0,
+    "repeat_failures": 0,
+    "seed_drift": [],
+    "tasks": 1,
+    "tool_errors": 0,
+    "voluntary_stops": 1
+  },
+  "tasks": [
+    {
+      "assertions": [
+        {
+          "description": "json_field restock_plan.json items.0.part_id == \"P-101\"",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "json_field restock_plan.json items.0.qty == 3",
+          "detail": "field items.0.qty is 6, expected 3 (tolerance 1e-09)",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.supplier == \"ACME\"",
+          "index": 2,
+          "passed": true
+        },
+        {
+          "description": "json_field restock_plan.json items.0.cost == 120",
+          "detail": "field items.0.cost is 240, expected 120 (tolerance 1e-09)",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.1.supplier == \"NOVA\"",
+          "index": 4,
+          "passed": true
+        },
+        {
+          "description": "json_field restock_plan.json items.1.cost == 60",
+          "detail": "field items.1.cost is 120, expected 60 (tolerance 1e-09)",
+          "index": 5,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.2.cost == 36",
+          "detail": "field items.2.cost is 0, expected 36 (tolerance 1e-09)",
+          "index": 6,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json grand_total == 216",
+          "detail": "field grand_total is 360, expected 216 (tolerance 1e-09)",
+          "index": 7,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [
+        "assertions 3/8 green: json_field restock_plan.json items.0.qty == 3 — field items.0.qty is 6, expected 3 (tolerance 1e-09); json_field restock_plan.json items.0.cost == 120 — field items.0.cost is 240, expected 120 (tolerance 1e-09); json_field restock_plan.json items.1.cost == 60 — field items.1.cost is 120, expected 60 (tolerance 1e-09); json_field restock_plan.json items.2.cost == 36 — field items.2.cost is 0, expected 36 (tolerance 1e-09); json_field restock_plan.json grand_total == 216 — field grand_total is 360, expected 216 (tolerance 1e-09)"
+      ],
+      "id": "T10",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 9,
+      "tool_errors": 0,
+      "turns_budget": 18,
+      "turns_used": 5,
+      "voluntary_stop": true,
+      "wall_clock_s": 113.02,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun-fix/20261116-174344/T10"
+    }
+  ],
+  "tasks_source": ".agents/missions/2026-11-15-merlin/eval/tasks.json",
+  "temperature": 0,
+  "wall_guard_s": 600
+}

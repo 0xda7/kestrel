@@ -1,0 +1,5 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock data summary.txt","turn":1}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock data summary.txt","turn":2}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":2}
+{"key":"actor","kind":"blocker","text":"actor failed: Error Domain=NSURLErrorDomain Code=-999 \"cancelled\" UserInfo={NSErrorFailingURLStringKey=http:\/\/127.0.0.1:8311\/v1\/chat\/completions, NSErrorFailingURLKey=http:\/\/127.0.0.1:8311\/v1\/chat\/completions, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <2E5C66A6-040F-45A4-B10C-CF05E04B4158>.<52>\"\n), _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <2E5C66A6-040F-45A4-B10C-CF05E04B4158>.<52>, NSLocalizedDescription=cancelled}","turn":3}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":3}

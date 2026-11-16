@@ -981,6 +981,192 @@ final class MerlinChecks3: CheckCase {
         XCTAssertEqual(toolTurn["tool_call_id"] as? String, "call_1_0")
     }
 
+    // MARK: - Kernel integration: recoverable actor failures (parse class)
+    //
+    // The 2026-11-16 gate fix, pinned: one content-only completion must not
+    // end a run that was making progress. Parse-class ActorErrors are fed
+    // back correctively through the transcript and bounded by the stop
+    // authority's repeat threshold; transport-class failures stay fatal.
+
+    /// One script step for the flaky actor: a thrown error or a call batch.
+    private enum ActorStep {
+        case failure(LlamaServerActor.ActorError)
+        case batch([MerlinToolCall])
+    }
+
+    /// An actor whose completions either parse or throw the exact error
+    /// class under test, recording every failure-feedback handback.
+    @MainActor private final class FlakyScriptedActor: MerlinActorWithFeedback {
+        private let steps: [ActorStep]
+        private var index = 0
+        private(set) var receivedFeedback: [MerlinTurnFeedback] = []
+        private(set) var failureFeedback: [MerlinActorFailureFeedback] = []
+        init(_ steps: [ActorStep]) { self.steps = steps }
+        func toolCalls(prompt: String, turn: Int) async throws -> [MerlinToolCall] {
+            defer { index += 1 }
+            guard index < steps.count else { return [] }
+            switch steps[index] {
+            case .failure(let error): throw error
+            case .batch(let batch): return batch
+            }
+        }
+        func receive(feedback: MerlinTurnFeedback) async {
+            receivedFeedback.append(feedback)
+        }
+        func receiveActorFailure(_ feedback: MerlinActorFailureFeedback) async {
+            failureFeedback.append(feedback)
+        }
+    }
+
+    /// The exact failure the live gate died to (Spark nativeTools rung):
+    /// a 2xx completion, tool_calls empty, prose content, truncated by
+    /// budget — parse class, carrying the model's own words.
+    private static func parseClassActorError() -> LlamaServerActor.ActorError {
+        LlamaServerActor.ActorError(rung: "nativeTools",
+                                    suspectedResultHallucination: false,
+                                    message: "response carried no parseable tool calls (finish_reason length); content: \"I will now organize the files.\"",
+                                    parseFailure: true,
+                                    responseExcerpt: "I will now organize the files.",
+                                    finishReason: "length")
+    }
+
+    func testKernelSurvivesParseClassActorFailureAndCorrects() async throws {
+        let (kernel, _) = try makeKernel(maxTurns: 6)
+        let actor = FlakyScriptedActor([
+            .failure(Self.parseClassActorError()),
+            .batch([MerlinToolCall(name: "task_done",
+                                   argumentsJSON: #"{"summary": "All finished.\n- notes/a.md"}"#)]),
+        ])
+        let outcome = await kernel.run(actor: actor)
+        XCTAssertEqual(outcome.status, .completed,
+                       "one content-only completion must not kill a run mid-progress")
+        XCTAssertEqual(outcome.turnsUsed, 2, "the corrected turn completes the run")
+        XCTAssertEqual(actor.failureFeedback.count, 1,
+                       "the parse failure is corrected through the transcript")
+        XCTAssertTrue(actor.failureFeedback[0].instruction.contains("tool call"),
+                      "the correction names the contract, not the machinery")
+        XCTAssertTrue(kernel.ledger.allEntries.contains {
+            $0.kind == .blocker && $0.text.contains("no usable tool call")
+        }, "the failure is ledgered as a blocker, honestly")
+        XCTAssertTrue(kernel.ledger.allEntries.contains {
+            $0.kind == .result && $0.text.contains("contract violation fed back")
+        }, "the ledger records that the turn was consumed correctively")
+    }
+
+    func testKernelEndsRunAfterConsecutiveParseFailuresAtThreshold() async throws {
+        let (kernel, _) = try makeKernel(maxTurns: 12)
+        let error = Self.parseClassActorError()
+        let actor = FlakyScriptedActor([.failure(error), .failure(error), .failure(error)])
+        let outcome = await kernel.run(actor: actor)
+        XCTAssertEqual(outcome.status, .failed)
+        XCTAssertEqual(outcome.turnsUsed, 3,
+                       "the stop authority's repeat threshold (3) bounds the corrective loop")
+        XCTAssertTrue(outcome.summary.contains("3 consecutive"), outcome.summary)
+        XCTAssertEqual(actor.failureFeedback.count, 3,
+                       "every parse failure is corrected before the run gives up")
+    }
+
+    func testKernelResetsActorFailureStreakOnParsedBatch() async throws {
+        let (kernel, workspace) = try makeKernel(maxTurns: 12)
+        let error = Self.parseClassActorError()
+        let actor = FlakyScriptedActor([
+            .failure(error),
+            .batch([MerlinToolCall(name: "fs_write",
+                                   argumentsJSON: #"{"path": "a.md", "content": "v"}"#)]),
+            .failure(error),
+            .failure(error),
+            .batch([MerlinToolCall(name: "task_done",
+                                   argumentsJSON: #"{"summary": "Done.\n- a.md"}"#)]),
+        ])
+        let outcome = await kernel.run(actor: actor)
+        XCTAssertEqual(outcome.status, .completed,
+                       "a parsed batch resets the streak: 1-1-2 failures never reach 3 in a row")
+        XCTAssertEqual(outcome.turnsUsed, 5)
+        XCTAssertEqual(actor.failureFeedback.count, 3)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workspace.rootURL.appendingPathComponent("a.md").path))
+    }
+
+    func testKernelTreatsTransportClassActorFailureAsFatal() async throws {
+        let (kernel, _) = try makeKernel(maxTurns: 6)
+        let actor = FlakyScriptedActor([
+            .failure(LlamaServerActor.ActorError(rung: "nativeTools",
+                                                 suspectedResultHallucination: false,
+                                                 message: "server returned HTTP 500: wedged mid-generation")),
+            .batch([MerlinToolCall(name: "task_done",
+                                   argumentsJSON: #"{"summary": "never reached"}"#)]),
+        ])
+        let outcome = await kernel.run(actor: actor)
+        XCTAssertEqual(outcome.status, .failed)
+        XCTAssertEqual(outcome.turnsUsed, 1,
+                       "transport-class failures stay instantly fatal — the host's restart policy owns recovery")
+        XCTAssertEqual(actor.failureFeedback.count, 0,
+                       "no corrective feedback for a dead server")
+        XCTAssertTrue(outcome.summary.contains("HTTP 500"), outcome.summary)
+    }
+
+    func testParseNativeToolsErrorCarriesExcerptAndFinishReason() throws {
+        let body: [String: Any] = [
+            "choices": [[
+                "finish_reason": "length",
+                "message": ["role": "assistant",
+                            "content": "I will now organize the files.",
+                            "tool_calls": []],
+            ]],
+        ]
+        XCTAssertThrowsError(try LlamaServerActor.parseNativeTools(body)) { error in
+            guard let actorError = error as? LlamaServerActor.ActorError else {
+                return XCTFail("expected ActorError, got \(error)")
+            }
+            XCTAssertTrue(actorError.parseFailure, "an answered completion with no calls is parse class")
+            XCTAssertEqual(actorError.finishReason, "length")
+            XCTAssertEqual(actorError.responseExcerpt, "I will now organize the files.")
+            let text = String(describing: actorError)
+            XCTAssertTrue(text.contains("response carried no parseable tool calls"), text)
+            XCTAssertTrue(text.contains("finish_reason length"), text)
+            XCTAssertTrue(text.contains("I will now organize"),
+                          "the corrective turn needs the model's own words")
+        }
+    }
+
+    func testLlamaServerActorFailureFeedbackAppendsCorrectionAsConversation() async throws {
+        // The stock actor must fold a parse failure into the transcript as
+        // conversation — the offending narration as the assistant turn, the
+        // instruction as a user turn — so the next completion sees the
+        // violation it is being corrected for.
+        let errorBody = """
+        {"choices":[{"finish_reason":"length","message":{"role":"assistant","content":"I will sort the notes first.","tool_calls":[]}}]}
+        """
+        let goodBody = """
+        {"choices":[{"message":{"role":"assistant","content":"","tool_calls":[
+            {"id":"c9","type":"function","function":{"name":"task_done","arguments":"{\\"summary\\": \\"done after correction\\"}"}}]}}]}
+        """
+        let actor = try LlamaServerActor(
+            serverURL: URL(string: "http://127.0.0.1:8151")!,
+            modelPath: "Mock-7B-Instruct.gguf",
+            profile: MerlinModelProfile.known["spark-x2.5"]!,
+            scriptedResponses: [
+                .init(status: 200, body: errorBody),
+                .init(status: 200, body: goodBody),
+            ])
+        let kernel = try makeKernel(maxTurns: 5).0
+        let outcome = await kernel.run(actor: actor)
+        XCTAssertEqual(outcome.status, .completed,
+                       "the corrected turn must complete the run — the gate's six dead cells, replayed")
+        // The final request (turn 2's completion) carries the correction.
+        let request = try XCTUnwrapSpec(MerlinMockURLProtocol.recordedRequests().last)
+        let messages = try XCTUnwrapSpec(request["messages"] as? [[String: Any]])
+        let roles = messages.compactMap { $0["role"] as? String }
+        // system + user cue + assistant narration + user correction + user cue
+        XCTAssertEqual(roles, ["system", "user", "assistant", "user", "user"],
+                       "the violation and its correction ride the transcript: \(roles)")
+        let narration = try XCTUnwrapSpec(messages.first { ($0["role"] as? String) == "assistant" })
+        XCTAssertEqual(narration["content"] as? String, "I will sort the notes first.",
+                       "the model sees its own words, not a summary of them")
+        let correction = messages.compactMap { ($0["content"] as? String) }
+            .first { $0.contains("RUNTIME: Your last reply was not a tool call") }
+        XCTAssertNotNil(correction, "the corrective instruction is explicit conversation")
+    }
+
     private func chatBody(content: String) -> String {
         let escaped = content
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -1304,6 +1490,12 @@ final class MerlinChecks3: CheckCase {
             .init(name: "testFeedbackCarriesVerifierRejectionForTaskDone") { try await $0.testFeedbackCarriesVerifierRejectionForTaskDone() },
             .init(name: "testPlainActorStillWorksWithoutFeedbackSeam") { try await $0.testPlainActorStillWorksWithoutFeedbackSeam() },
             .init(name: "testLlamaServerActorFeedbackAppendsAssistantAndToolTurns") { try await $0.testLlamaServerActorFeedbackAppendsAssistantAndToolTurns() },
+            .init(name: "testKernelSurvivesParseClassActorFailureAndCorrects") { try await $0.testKernelSurvivesParseClassActorFailureAndCorrects() },
+            .init(name: "testKernelEndsRunAfterConsecutiveParseFailuresAtThreshold") { try await $0.testKernelEndsRunAfterConsecutiveParseFailuresAtThreshold() },
+            .init(name: "testKernelResetsActorFailureStreakOnParsedBatch") { try await $0.testKernelResetsActorFailureStreakOnParsedBatch() },
+            .init(name: "testKernelTreatsTransportClassActorFailureAsFatal") { try await $0.testKernelTreatsTransportClassActorFailureAsFatal() },
+            .init(name: "testParseNativeToolsErrorCarriesExcerptAndFinishReason") { try await $0.testParseNativeToolsErrorCarriesExcerptAndFinishReason() },
+            .init(name: "testLlamaServerActorFailureFeedbackAppendsCorrectionAsConversation") { try await $0.testLlamaServerActorFailureFeedbackAppendsCorrectionAsConversation() },
         ])
 }
 

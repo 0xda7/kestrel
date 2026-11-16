@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "part_id": "P-101",
+      "qty": 6,
+      "supplier": "ACME",
+      "cost": 240
+    },
+    {
+      "part_id": "P-102",
+      "qty": 20,
+      "supplier": "NOVA",
+      "cost": 120
+    },
+    {
+      "part_id": "P-103",
+      "qty": 0,
+      "supplier": "ACME",
+      "cost": 0
+    }
+  ],
+  "grand_total": 360
+}

@@ -1,0 +1,23 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock data summary.txt","turn":1}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock data summary.txt","turn":2}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":2}
+{"key":"fs_list","kind":"result","text":".merlin-lock data merlin-ledger.jsonl summary.txt","turn":3}
+{"key":"fs_grep","kind":"result","text":"no matches","turn":3}
+{"key":"fs_read","kind":"result","text":"eval-T12","turn":4}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/eval-T12","turn":5}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/data","turn":6}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/summary.txt","turn":6}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/merlin-ledger.jsonl","turn":7}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":8}
+{"key":"shell_run","kind":"result","text":"exit 1 total 24 drwxr-xr-x@ 7 admin staff 224 Nov 16 09:20 . -rw-r--r--@ 1 admin staff 9 Nov 16 09:17 .merlin-lock drwxr-xr-x@ 3 admin staff 96 Nov 16 09:20 .merlin-scratch drwxr-xr-x@ 4 admin staff …","turn":8}
+{"key":"fs_list","kind":"result","text":"tmp","turn":9}
+{"key":"fs_list","kind":"result","text":"(empty directory)","turn":10}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; writes confined to the workspace; HOME hidden)","turn":10}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; writes confined to the workspace; HOME hidden)","turn":11}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted \/bin\/sh: \/dev\/null: Operation not permitted \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; write…","turn":11}
+{"key":"actor","kind":"blocker","text":"actor produced no usable tool call (attempt 1 of 3): [nativeTools] response carried no parseable tool calls (finish_reason length); content: \"\"","turn":12}
+{"key":"actor","kind":"result","text":"contract violation fed back; turn consumed","turn":12}
+{"key":"shell_run","kind":"result","text":"exit 0 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; writes confined to the workspace; HOME hidden)","turn":13}
+{"key":"shell_run","kind":"result","text":"exit 0 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; writes confined to the workspace; HOME hidden)","turn":13}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: \/bin\/sh: \/dev\/null: Operation not permitted confinement: seatbelt (no network; writes confined to the workspace; HOME hidden)","turn":14}
+{"key":"kernel","kind":"result","text":"turn budget exhausted","turn":14}

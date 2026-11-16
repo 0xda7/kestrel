@@ -1,0 +1,10 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock catalog orders suppliers","turn":1}
+{"key":"fs_read","kind":"result","text":"part_id,name,unit_price P-101,sensor,40 P-102,cable,6 P-103,bracket,9","turn":1}
+{"key":"fs_list","kind":"result","text":"acme.md nova.md","turn":1}
+{"key":"fs_read","kind":"result","text":"part_id,qty P-101,3 P-102,10","turn":1}
+{"key":"fs_read","kind":"result","text":"# ACME Supply Supplies parts: P-101, P-103 Lead time: 5 days","turn":2}
+{"key":"fs_read","kind":"result","text":"# NOVA Parts Co Supplies parts: P-102 Lead time: 2 days","turn":2}
+{"key":"restock_plan.json","kind":"artifact","text":"wrote 338 chars to restock_plan.json","turn":3}
+{"key":"fs_write","kind":"result","text":"wrote restock_plan.json (338 chars)","turn":3}
+{"key":"fs_read","kind":"result","text":"{ \"items\": [ { \"part_id\": \"P-101\", \"qty\": 6, \"supplier\": \"ACME\", \"cost\": 240 }, { \"part_id\": \"P-102\", \"qty\": 20, \"supplier\": \"NOVA\", \"cost\": 120 }, { \"part_id\": \"P-103\", \"qty\": 0, \"supplier\": \"ACME\",…","turn":4}
+{"key":"task_done","kind":"result","text":"Restock plan built and verified.\n- restock_plan.json","turn":5}

@@ -46,10 +46,43 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
     /// body, rung parse failure). Carries the rung and — for content that
     /// narrates a tool call instead of emitting one — the
     /// `suspected_result_hallucination` flag (M4 tie-in).
+    ///
+    /// `parseFailure` splits the failure classes the kernel treats
+    /// differently (2026-11-16 gate evidence: 6/14 Spark cells died to the
+    /// first content-only completion): true means the server ANSWERED with
+    /// a well-formed completion the rung could not turn into a tool call —
+    /// model behavior, correctable with a disciplinary turn. False means
+    /// transport/malformed-response trouble (HTTP error, dead socket,
+    /// missing choices) — no in-loop nudge fixes a dead server, so the
+    /// kernel ends the run and the host's restart policy owns recovery.
     public struct ActorError: Error, CustomStringConvertible {
         public let rung: String
         public let suspectedResultHallucination: Bool
         public let message: String
+        /// The server answered but the completion yielded no usable tool
+        /// call (parse class). See the type discussion above.
+        public let parseFailure: Bool
+        /// The model's own words (≤200 chars) when a completion was
+        /// received — the corrective turn shows the model its narration so
+        /// it recognizes the reply being corrected.
+        public let responseExcerpt: String?
+        /// The completion's `finish_reason` when known ("stop", "length",
+        /// …). "length" means the completion budget truncated the reply —
+        /// often mid-tool-call — which the correction must address by
+        /// demanding terse, call-only replies.
+        public let finishReason: String?
+
+        public init(rung: String, suspectedResultHallucination: Bool, message: String,
+                    parseFailure: Bool = false, responseExcerpt: String? = nil,
+                    finishReason: String? = nil) {
+            self.rung = rung
+            self.suspectedResultHallucination = suspectedResultHallucination
+            self.message = message
+            self.parseFailure = parseFailure
+            self.responseExcerpt = responseExcerpt
+            self.finishReason = finishReason
+        }
+
         public var description: String {
             if suspectedResultHallucination {
                 return "[\(rung)] suspected_result_hallucination: \(message)"
@@ -213,6 +246,22 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
         }
     }
 
+    /// Recoverable actor-failure seam (parse class): the kernel hands back
+    /// what the model actually said plus the corrective instruction. The
+    /// offending narration is appended as a plain assistant turn — it
+    /// already happened on the wire, and hiding it would make the
+    /// transcript lie about the conversation the server template must stay
+    /// coherent with — then the instruction lands as an explicit user
+    /// turn, the same conversational shape stop-authority instructions
+    /// ride. The next `toolCalls` completion happens over a transcript
+    /// where the model can see its own contract violation.
+    public func receiveActorFailure(_ feedback: MerlinActorFailureFeedback) async {
+        if let excerpt = feedback.responseExcerpt, !excerpt.isEmpty {
+            session.append(["role": "assistant", "content": excerpt])
+        }
+        session.append(["role": "user", "content": "RUNTIME: \(feedback.instruction)"])
+    }
+
     // MARK: - Wire
 
     private func complete() async throws -> [MerlinToolCall] {
@@ -261,7 +310,9 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
 
     /// Parses the OpenAI tool_calls shape into Merlin calls. Throws with
     /// the hallucination flag when the rung-1 response narrates a tool in
-    /// content while `tool_calls` came back empty.
+    /// content while `tool_calls` came back empty. Every parse-class throw
+    /// carries the finish reason and the model's own words so the kernel's
+    /// corrective turn can quote them back.
     public static func parseNativeTools(_ object: [String: Any]) throws -> [MerlinToolCall] {
         guard let choices = object["choices"] as? [[String: Any]], !choices.isEmpty else {
             throw ActorError(rung: "nativeTools", suspectedResultHallucination: false,
@@ -270,6 +321,8 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
         let message = (choices[0]["message"] as? [String: Any]) ?? [:]
         let content = (message["content"] as? String) ?? ""
         let rawCalls = (message["tool_calls"] as? [[String: Any]]) ?? []
+        let finishReason = (choices[0]["finish_reason"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let excerpt = content.isEmpty ? nil : String(content.prefix(200))
 
         var calls: [MerlinToolCall] = []
         for raw in rawCalls.prefix(4) {
@@ -289,10 +342,14 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
         }
         if calls.isEmpty {
             let flagged = MerlinToolSchema.definitions.contains { content.contains($0.name) }
+            let finishNote = finishReason.map { " (finish_reason \($0))" } ?? ""
             throw ActorError(rung: "nativeTools", suspectedResultHallucination: flagged,
                              message: flagged
-                                 ? "tool_calls empty but content narrates a tool call: \(content.prefix(200))"
-                                 : "response carried no parseable tool calls")
+                                 ? "tool_calls empty but content narrates a tool call\(finishNote): \(content.prefix(200))"
+                                 : "response carried no parseable tool calls\(finishNote); content: \"\(excerpt ?? "")\"",
+                             parseFailure: true,
+                             responseExcerpt: excerpt,
+                             finishReason: finishReason)
         }
         return calls
     }
@@ -315,14 +372,21 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
               let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let name = envelope["name"] as? String else {
             let flagged = MerlinToolSchema.definitions.contains { content.contains($0.name) }
+            let finishReason = (choices[0]["finish_reason"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             throw ActorError(rung: "jsonEnvelope", suspectedResultHallucination: flagged,
                              message: flagged
                                  ? "content names a tool but fails envelope parse: \(content.prefix(200))"
-                                 : "envelope content is not a tool-call object: \(content.prefix(200))")
+                                 : "envelope content is not a tool-call object: \(content.prefix(200))",
+                             parseFailure: true,
+                             responseExcerpt: content.isEmpty ? nil : String(content.prefix(200)),
+                             finishReason: finishReason)
         }
         guard MerlinToolSchema.isKnownTool(name) else {
             throw ActorError(rung: "jsonEnvelope", suspectedResultHallucination: true,
-                             message: "envelope names an unknown tool: \(name)")
+                             message: "envelope names an unknown tool: \(name)",
+                             parseFailure: true,
+                             responseExcerpt: content.isEmpty ? nil : String(content.prefix(200)),
+                             finishReason: (choices[0]["finish_reason"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         let arguments = (envelope["arguments"] as? [String: Any]) ?? [:]
         let argumentsData: Data
@@ -353,10 +417,14 @@ public struct LlamaServerActor: MerlinActor, MerlinActorWithFeedback {
                                             maxCalls: 4)
         if calls.isEmpty {
             let flagged = MerlinToolSchema.definitions.contains { content.contains($0.name) }
+            let finishReason = (choices[0]["finish_reason"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             throw ActorError(rung: "rescue", suspectedResultHallucination: flagged,
                              message: flagged
                                  ? "content names a tool but no call could be rescued: \(content.prefix(200))"
-                                 : "content carries no rescuable tool call")
+                                 : "content carries no rescuable tool call: \(content.prefix(200))",
+                             parseFailure: true,
+                             responseExcerpt: content.isEmpty ? nil : String(content.prefix(200)),
+                             finishReason: finishReason)
         }
         return calls
     }

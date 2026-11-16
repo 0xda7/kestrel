@@ -1,0 +1,8 @@
+# Workspace Tidy
+
+- api_reference.md
+- how_to_run.md
+- meeting_notes_monday.txt
+- meeting_notes_tuesday.txt
+- sales_q1.csv
+- sales_q2.csv

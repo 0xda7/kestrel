@@ -1,0 +1,402 @@
+{
+  "completion_max_tokens": 1280,
+  "context_tokens": 8192,
+  "date": "2026-11-16",
+  "driver": "live",
+  "immutable_seed_boot_hashes": {
+    "T03": {},
+    "T06": {
+      "check.py": "ead5e46b31c2ee7e897bf1afbdbfad891de51dd450a359ff739c784830d66352"
+    },
+    "T08": {
+      "check.py": "56818ac780d138a32f9d79e7cfc110a2e254e5c70c8ef25c21095cc81b7fdbed"
+    },
+    "T10": {},
+    "T11": {},
+    "T12": {
+      "data/README.md": "f168de9859d081107c87c2a3ffa0df0b61d405f56566d64fbb8cc9f995c88a03"
+    }
+  },
+  "machinery": "merlin",
+  "mission": "2026-11-15-merlin",
+  "model": "Spark-X2.5-1.7B-Q8_0",
+  "model_id": "Spark-X2.5-1.7B-Q8_0.gguf",
+  "model_path": "/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf",
+  "profile_envelope_mode": "sharedShape",
+  "profile_family": "spark-x2.5",
+  "profile_min_completion_tokens": 768,
+  "profile_rung": "nativeTools",
+  "profile_template_notes": "Rung 1 verified byte-perfect on 1.7B and 4B (Q8_0/Q4_K_M); envelope also clean on 4B (dual-capable fallback). THINK BUDGET: emits reasoning_content on chat completions — slice-6 live probe on Spark-X2.5-1.7B-Q8_0 (:8199) returned a reasoning_content field on every tool-calling completion (222 and 493 chars across two prompts), and usage.completion_tokens (89, 143) COUNT those reasoning tokens, so reasoning eats the max_tokens budget; the earlier 'no think budget' note was wrong. Floor raised 512 → 768 so a reasoning burst cannot starve the action tokens.",
+  "run_root": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856",
+  "server_url": "http://127.0.0.1:8311",
+  "suite": "merlin-eval-v1",
+  "summary": {
+    "passed": 0,
+    "recovery_events": 1,
+    "repeat_failures": 0,
+    "seed_drift": [],
+    "tasks": 6,
+    "tool_errors": 2,
+    "voluntary_stops": 0
+  },
+  "tasks": [
+    {
+      "assertions": [
+        {
+          "description": "file_exists notes/meeting_notes_monday.txt",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "file_exists notes/meeting_notes_tuesday.txt",
+          "index": 1,
+          "passed": true
+        },
+        {
+          "description": "file_exists data/sales_q1.csv",
+          "index": 2,
+          "passed": true
+        },
+        {
+          "description": "file_exists data/sales_q2.csv",
+          "index": 3,
+          "passed": true
+        },
+        {
+          "description": "file_exists docs/how_to_run.md",
+          "detail": "no file at docs/how_to_run.md",
+          "index": 4,
+          "passed": false
+        },
+        {
+          "description": "file_exists docs/api_reference.md",
+          "detail": "no file at docs/api_reference.md",
+          "index": 5,
+          "passed": false
+        },
+        {
+          "description": "file_exists meeting_notes_monday.txt (negated: must be absent)",
+          "index": 6,
+          "passed": true
+        },
+        {
+          "description": "file_exists meeting_notes_tuesday.txt (negated: must be absent)",
+          "index": 7,
+          "passed": true
+        },
+        {
+          "description": "file_exists sales_q1.csv (negated: must be absent)",
+          "index": 8,
+          "passed": true
+        },
+        {
+          "description": "file_exists sales_q2.csv (negated: must be absent)",
+          "index": 9,
+          "passed": true
+        },
+        {
+          "description": "file_exists how_to_run.md (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 10,
+          "passed": false
+        },
+        {
+          "description": "file_exists api_reference.md (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 11,
+          "passed": false
+        },
+        {
+          "description": "grep_count index.md /meeting_notes_monday|meeting_notes_tuesday|sales_q1|sales_q2|how_to_run|api_reference/ [6, ∞]",
+          "index": 12,
+          "passed": true
+        }
+      ],
+      "axis": "B",
+      "budget_exhausted": true,
+      "end_reason": "budget_exhausted",
+      "fail_reasons": [
+        "budget_exhausted: turn budget (14) reached without task_done — completion contract unmet",
+        "assertions 9/13 green: file_exists docs/how_to_run.md — no file at docs/how_to_run.md; file_exists docs/api_reference.md — no file at docs/api_reference.md; file_exists how_to_run.md (negated: must be absent) — file exists but must be absent; file_exists api_reference.md (negated: must be absent) — file exists but must be absent"
+      ],
+      "id": "T03",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 16,
+      "tool_errors": 0,
+      "turns_budget": 14,
+      "turns_used": 14,
+      "voluntary_stop": false,
+      "wall_clock_s": 125.027,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T03"
+    },
+    {
+      "assertions": [
+        {
+          "description": "command_ok \"python3 check.py\"",
+          "detail": "exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T06/check.py\", line 15, in <module>\n    got = invoice_total(list(items))\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T06/invoice.py\", lin… [truncated]",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains fixed.txt values[\"DONE\"]",
+          "detail": "file missing or unreadable: fixed.txt",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "C",
+      "budget_exhausted": true,
+      "end_reason": "budget_exhausted",
+      "fail_reasons": [
+        "budget_exhausted: turn budget (14) reached without task_done — completion contract unmet",
+        "assertions 0/2 green: command_ok \"python3 check.py\" — exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T06/check.py\", line 15, in <module>\n    got = invoice_total(list(items))\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T06/invoice.py\", lin… [truncated]; file_contains fixed.txt values[\"DONE\"] — file missing or unreadable: fixed.txt"
+      ],
+      "id": "T06",
+      "immutable_seed_boot_hashes": {
+        "check.py": "ead5e46b31c2ee7e897bf1afbdbfad891de51dd450a359ff739c784830d66352"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 19,
+      "tool_errors": 0,
+      "turns_budget": 14,
+      "turns_used": 14,
+      "voluntary_stop": false,
+      "wall_clock_s": 343.995,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/T06"
+    },
+    {
+      "assertions": [
+        {
+          "description": "command_ok \"python3 check.py\"",
+          "detail": "exit 1: FAIL median([10, 20, 30, 40]) expected 25, got 30\n1 case(s) failed",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains fixed.txt values[\"DONE\"]",
+          "detail": "file missing or unreadable: fixed.txt",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "C",
+      "budget_exhausted": false,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "assertions 0/2 green: command_ok \"python3 check.py\" — exit 1: FAIL median([10, 20, 30, 40]) expected 25, got 30\n1 case(s) failed; file_contains fixed.txt values[\"DONE\"] — file missing or unreadable: fixed.txt",
+        "actor_failure: actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7fc83bf162e0 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <DE28FC0D-59E1-41E8-A61B-4BFC31A77260>.<44>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <DE28FC0D-59E1-41E8-A61B-4BFC31A77260>.<44>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http://127.0.0.1:8311/v1/chat/completions, NSErrorFailingURLKey=http://127.0.0.1:8311/v1/chat/completions, _kCFStreamErrorDomainKey=4} (completion contract unmet)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T08",
+      "immutable_seed_boot_hashes": {
+        "check.py": "56818ac780d138a32f9d79e7cfc110a2e254e5c70c8ef25c21095cc81b7fdbed"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "turns_budget": 16,
+      "turns_used": 1,
+      "voluntary_stop": false,
+      "wall_clock_s": 420.01,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/wedge-retry-1/T08"
+    },
+    {
+      "assertions": [
+        {
+          "description": "json_field restock_plan.json items.0.part_id == \"P-101\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.qty == 3",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.supplier == \"ACME\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 2,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.cost == 120",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.1.supplier == \"NOVA\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 4,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.1.cost == 60",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 5,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.2.cost == 36",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 6,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json grand_total == 216",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 7,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "assertions 0/8 green: json_field restock_plan.json items.0.part_id == \"P-101\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.qty == 3 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.supplier == \"ACME\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.cost == 120 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.1.supplier == \"NOVA\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.1.cost == 60 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.2.cost == 36 — file missing or unreadable: restock_plan.json; json_field restock_plan.json grand_total == 216 — file missing or unreadable: restock_plan.json",
+        "actor_failure: actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7fc83c945c70 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <C2BEC58B-83AE-484B-A95B-6535204558F4>.<46>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <C2BEC58B-83AE-484B-A95B-6535204558F4>.<46>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http://127.0.0.1:8311/v1/chat/completions, NSErrorFailingURLKey=http://127.0.0.1:8311/v1/chat/completions, _kCFStreamErrorDomainKey=4} (completion contract unmet)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T10",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "turns_budget": 18,
+      "turns_used": 1,
+      "voluntary_stop": false,
+      "wall_clock_s": 420.053,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/wedge-retry-1/T10"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists timeline.md",
+          "detail": "no file at timeline.md",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains timeline.md values[\"2026-11-12T09:14Z BUILD-START\", \"2026-11-12T10:02Z TEST-RUN\", \"2026-11-12T11:47Z PACK-SIGNED\", \"2026-11-12T13:05Z SHIP-OUT\"] in_order",
+          "detail": "file missing or unreadable: timeline.md",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "grep_count timeline.md /LEGACY-PURGE/ [0, 0]",
+          "detail": "no file at timeline.md",
+          "index": 2,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "assertions 0/3 green: file_exists timeline.md — no file at timeline.md; file_contains timeline.md values[\"2026-11-12T09:14Z BUILD-START\", \"2026-11-12T10:02Z TEST-RUN\", \"2026-11-12T11:47Z PACK-SIGNED\", \"2026-11-12T13:05Z SHIP-OUT\"] in_order — file missing or unreadable: timeline.md; grep_count timeline.md /LEGACY-PURGE/ [0, 0] — no file at timeline.md",
+        "actor_failure: actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7fc80bf05260 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <A23A4241-D8C3-42E6-A05A-CE18B6A2B2DF>.<48>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <A23A4241-D8C3-42E6-A05A-CE18B6A2B2DF>.<48>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http://127.0.0.1:8311/v1/chat/completions, NSErrorFailingURLKey=http://127.0.0.1:8311/v1/chat/completions, _kCFStreamErrorDomainKey=4} (completion contract unmet)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T11",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "turns_budget": 18,
+      "turns_used": 1,
+      "voluntary_stop": false,
+      "wall_clock_s": 420.016,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/wedge-retry-1/T11"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_contains summary.txt values[\"TOTAL UNITS: 13\"]",
+          "detail": "missing substring \"TOTAL UNITS: 13\" in summary.txt",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_exists data/report.csv (negated: must be absent)",
+          "index": 1,
+          "passed": true
+        }
+      ],
+      "axis": "E",
+      "budget_exhausted": true,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "budget_exhausted: turn budget (14) reached without task_done — completion contract unmet",
+        "assertions 1/2 green: file_contains summary.txt values[\"TOTAL UNITS: 13\"] — missing substring \"TOTAL UNITS: 13\" in summary.txt",
+        "harness_timeout: task exceeded the 600s wall guard (documented as a harness event, not a model score)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T12",
+      "immutable_seed_boot_hashes": {
+        "data/README.md": "f168de9859d081107c87c2a3ffa0df0b61d405f56566d64fbb8cc9f995c88a03"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 1,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 3,
+      "tool_errors": 2,
+      "turns_budget": 14,
+      "turns_used": 0,
+      "voluntary_stop": false,
+      "wall_clock_s": 600.014,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/actorfix-rerun/20261116-153856/wedge-retry-1/T12"
+    }
+  ],
+  "tasks_source": ".agents/missions/2026-11-15-merlin/eval/tasks.json",
+  "temperature": 0,
+  "wall_guard_s": 600
+}

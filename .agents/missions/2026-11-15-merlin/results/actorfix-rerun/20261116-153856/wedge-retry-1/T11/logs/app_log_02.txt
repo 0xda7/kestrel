@@ -1,0 +1,3 @@
+2026-11-12T09:30Z cache warm
+note from archive: EVENT=LEGACY-PURGE ts=2026-09-01T00:00Z
+2026-11-12T09:31Z healthy

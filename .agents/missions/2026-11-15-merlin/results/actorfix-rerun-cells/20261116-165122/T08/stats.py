@@ -1,0 +1,1 @@
+"""Median of a list of numbers.""" def median(values): s = sorted(values) n = len(s) if n == 0: raise ValueError("empty list") if n % 2 == 1: return s[n // 2] else: return (s[n // 2 - 1] + s[n // 2]) / 2

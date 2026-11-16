@@ -1,0 +1,143 @@
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.00.273.111 I srv  llama_server: initializing ...
+0.00.273.177 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.00.273.180 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.274.435 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.276.901 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.02.742.864 I cmn          init: llama threadpool init, n_threads = 16
+0.13.571.442 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.13.678.939 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.13.678.985 I srv  llama_server: model loaded
+0.13.678.989 I srv  llama_server: listening on http://127.0.0.1:8311
+0.13.862.007 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.13.863.936 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.41.227.403 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =    775, progress = 0.60, t =  27.36 s / 28.32 tokens per second
+0.55.492.030 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1228, progress = 0.95, t =  41.63 s / 29.50 tokens per second
+1.00.925.284 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1246, progress = 0.97, t =  47.06 s / 26.48 tokens per second
+1.07.859.357 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1287, progress = 1.00, t =  53.99 s / 23.84 tokens per second
+7.14.035.052 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+7.14.036.129 I slot launch_slot_: id  2 | task 57 | processing task, is_child = 0
+7.14.597.447 W srv          stop: cancel task, id_task = 0
+7.40.761.698 I slot      release: id  3 | task 0 | stop processing: n_tokens = 1343, truncated = 0
+7.40.761.835 I slot print_timing: id  2 | task 57 | prompt processing, n_tokens =    950, progress = 0.65, t =  26.72 s / 35.55 tokens per second
+7.54.187.508 I slot print_timing: id  2 | task 57 | prompt processing, n_tokens =   1403, progress = 0.96, t =  40.15 s / 34.94 tokens per second
+8.00.377.100 I slot print_timing: id  2 | task 57 | prompt processing, n_tokens =   1421, progress = 0.97, t =  46.34 s / 30.66 tokens per second
+8.07.608.821 I slot print_timing: id  2 | task 57 | prompt processing, n_tokens =   1462, progress = 1.00, t =  53.57 s / 27.29 tokens per second
+14.14.574.280 W srv          stop: cancel task, id_task = 57
+14.18.467.081 I srv    operator(): operator(): cleaning up before exit...
+4651
+2026-11-16T16:11:12Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.01.101.596 I srv  llama_server: initializing ...
+0.01.101.614 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.01.101.615 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.01.102.263 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.01.104.157 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.03.008.148 I cmn          init: llama threadpool init, n_threads = 16
+0.14.717.821 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.14.807.413 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.14.807.448 I srv  llama_server: model loaded
+0.14.807.452 I srv  llama_server: listening on http://127.0.0.1:8311
+0.16.027.481 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.16.029.100 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.42.914.603 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =    949, progress = 0.65, t =  26.89 s / 35.30 tokens per second
+0.53.846.462 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1402, progress = 0.96, t =  37.82 s / 37.07 tokens per second
+1.00.431.370 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1420, progress = 0.97, t =  44.40 s / 31.98 tokens per second
+1.08.161.340 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1461, progress = 1.00, t =  52.13 s / 28.02 tokens per second
+7.16.719.666 W srv          stop: cancel task, id_task = 0
+7.18.060.557 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+7.18.062.648 I slot launch_slot_: id  2 | task 66 | processing task, is_child = 0
+7.18.062.762 I slot      release: id  3 | task 0 | stop processing: n_tokens = 1525, truncated = 0
+7.51.526.442 I slot print_timing: id  2 | task 66 | prompt processing, n_tokens =    879, progress = 0.63, t =  33.46 s / 26.27 tokens per second
+8.09.879.434 I slot print_timing: id  2 | task 66 | prompt processing, n_tokens =   1332, progress = 0.95, t =  51.82 s / 25.71 tokens per second
+8.17.836.183 I slot print_timing: id  2 | task 66 | prompt processing, n_tokens =   1350, progress = 0.97, t =  59.77 s / 22.59 tokens per second
+8.25.779.856 I slot print_timing: id  2 | task 66 | prompt processing, n_tokens =   1391, progress = 1.00, t =  67.72 s / 20.54 tokens per second
+14.16.870.879 W srv          stop: cancel task, id_task = 66
+14.16.954.306 I srv    operator(): operator(): cleaning up before exit...
+8035
+2026-11-16T16:25:29Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.01.127.029 I srv  llama_server: initializing ...
+0.01.127.055 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.01.127.056 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.01.127.950 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.01.129.797 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.03.119.140 I cmn          init: llama threadpool init, n_threads = 16
+0.13.858.177 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.13.953.606 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.13.953.675 I srv  llama_server: model loaded
+0.13.953.680 I srv  llama_server: listening on http://127.0.0.1:8311
+0.14.029.868 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.14.031.588 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.41.817.693 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =    876, progress = 0.63, t =  27.79 s / 31.53 tokens per second
+0.55.868.873 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1329, progress = 0.95, t =  41.84 s / 31.77 tokens per second
+1.01.350.263 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1347, progress = 0.97, t =  47.32 s / 28.47 tokens per second
+1.08.026.541 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1388, progress = 1.00, t =  53.99 s / 25.71 tokens per second
+7.14.185.365 W srv          stop: cancel task, id_task = 0
+7.18.740.916 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+7.18.742.763 I slot launch_slot_: id  2 | task 80 | processing task, is_child = 0
+7.18.742.840 I slot      release: id  3 | task 0 | stop processing: n_tokens = 1466, truncated = 0
+7.44.080.668 I slot print_timing: id  2 | task 80 | prompt processing, n_tokens =    747, progress = 0.59, t =  25.34 s / 29.48 tokens per second
+7.58.583.281 I slot print_timing: id  2 | task 80 | prompt processing, n_tokens =   1200, progress = 0.95, t =  39.84 s / 30.12 tokens per second
+8.04.125.429 I slot print_timing: id  2 | task 80 | prompt processing, n_tokens =   1218, progress = 0.96, t =  45.38 s / 26.84 tokens per second
+8.10.659.350 I slot print_timing: id  2 | task 80 | prompt processing, n_tokens =   1259, progress = 1.00, t =  51.92 s / 24.25 tokens per second
+14.14.390.594 W srv          stop: cancel task, id_task = 80
+14.14.586.113 I srv    operator(): operator(): cleaning up before exit...
+10092
+2026-11-16T16:39:44Z supervisor: no listener found on port 8311
+2026-11-16T16:39:45Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.01.131.296 I srv  llama_server: initializing ...
+0.01.131.327 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.01.131.329 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.01.132.298 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.01.134.740 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.03.452.367 I cmn          init: llama threadpool init, n_threads = 16
+0.13.589.427 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.13.700.092 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.13.700.136 I srv  llama_server: model loaded
+0.13.700.140 I srv  llama_server: listening on http://127.0.0.1:8311
+0.14.011.446 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.14.013.549 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.40.794.704 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =    747, progress = 0.59, t =  26.78 s / 27.89 tokens per second
+0.55.649.321 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1200, progress = 0.95, t =  41.64 s / 28.82 tokens per second
+1.00.984.597 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1218, progress = 0.96, t =  46.97 s / 25.93 tokens per second
+1.08.294.412 I slot print_timing: id  3 | task 0 | prompt processing, n_tokens =   1259, progress = 1.00, t =  54.28 s / 23.19 tokens per second
+2.38.362.580 I slot print_timing: id  3 | task 0 | n_gen =    100, tg =   1.17 t/s, tg_3s =   1.18 t/s
+2.41.616.738 I slot print_timing: id  3 | task 0 | n_gen =    111, tg =   1.25 t/s, tg_3s =   3.38 t/s
+2.44.745.648 I slot print_timing: id  3 | task 0 | n_gen =    122, tg =   1.33 t/s, tg_3s =   3.52 t/s
+2.47.842.975 I slot print_timing: id  3 | task 0 | n_gen =    133, tg =   1.40 t/s, tg_3s =   3.55 t/s
+2.50.929.182 I slot print_timing: id  3 | task 0 | n_gen =    144, tg =   1.47 t/s, tg_3s =   3.56 t/s
+2.54.116.954 I slot print_timing: id  3 | task 0 | n_gen =    157, tg =   1.55 t/s, tg_3s =   4.08 t/s
+2.57.161.681 I slot print_timing: id  3 | task 0 | n_gen =    169, tg =   1.62 t/s, tg_3s =   3.94 t/s
+3.00.221.030 I slot print_timing: id  3 | task 0 | n_gen =    181, tg =   1.69 t/s, tg_3s =   3.92 t/s
+3.03.228.068 I slot print_timing: id  3 | task 0 | n_gen =    193, tg =   1.75 t/s, tg_3s =   3.99 t/s
+3.06.377.890 I slot print_timing: id  3 | task 0 | n_gen =    200, tg =   1.76 t/s, tg_3s =   2.22 t/s
+3.09.576.129 I slot print_timing: id  3 | task 0 | n_gen =    211, tg =   1.81 t/s, tg_3s =   3.44 t/s
+3.11.356.494 I slot print_timing: id  3 | task 0 | prompt eval time =   59519.73 ms /  1263 tokens (   47.13 ms per token,    21.22 tokens per second)
+3.11.356.505 I slot print_timing: id  3 | task 0 |        eval time =  117823.06 ms /   217 tokens (  545.48 ms per token,     1.83 tokens per second)
+3.11.356.506 I slot print_timing: id  3 | task 0 |       total time =  177342.80 ms /  1480 tokens
+3.11.356.508 I slot print_timing: id  3 | task 0 |    graphs reused =        215
+3.11.356.509 I slot print_timing: id  3 | task 0 |   graph reallocs =          1    /     0        (same size) / (changed size)
+3.11.356.699 I slot      release: id  3 | task 0 | stop processing: n_tokens = 1479, truncated = 0
+3.11.398.780 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+3.11.400.147 I slot launch_slot_: id  2 | task 222 | processing task, is_child = 0
+3.33.893.736 I slot print_timing: id  2 | task 222 | prompt processing, n_tokens =    847, progress = 0.62, t =  22.36 s / 37.88 tokens per second
+3.46.220.523 I slot print_timing: id  2 | task 222 | prompt processing, n_tokens =   1211, progress = 0.89, t =  34.69 s / 34.91 tokens per second
+3.54.149.515 I slot print_timing: id  2 | task 222 | prompt processing, n_tokens =   1318, progress = 0.97, t =  42.62 s / 30.93 tokens per second
+4.00.403.540 I slot print_timing: id  2 | task 222 | prompt processing, n_tokens =   1359, progress = 1.00, t =  48.87 s / 27.81 tokens per second
+8.23.914.499 I slot print_timing: id  2 | task 222 | prompt eval time =   54549.87 ms /  1363 tokens (   40.02 ms per token,    24.99 tokens per second)
+8.23.914.517 I slot print_timing: id  2 | task 222 |        eval time =  257833.19 ms /    47 tokens ( 5605.07 ms per token,     0.18 tokens per second)
+8.23.914.519 I slot print_timing: id  2 | task 222 |       total time =  312383.06 ms /  1410 tokens
+8.23.914.521 I slot print_timing: id  2 | task 222 |    graphs reused =        260
+8.23.914.523 I slot print_timing: id  2 | task 222 |   graph reallocs =          3    /     0        (same size) / (changed size)
+8.23.924.199 I slot      release: id  2 | task 222 | stop processing: n_tokens = 1409, truncated = 0
+8.24.006.954 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = -1
+8.24.009.212 I slot launch_slot_: id  1 | task 274 | processing task, is_child = 0
+8.58.776.348 I slot print_timing: id  1 | task 274 | prompt processing, n_tokens =    998, progress = 0.66, t =  34.32 s / 29.08 tokens per second
+9.06.153.513 I slot print_timing: id  1 | task 274 | prompt processing, n_tokens =   1250, progress = 0.83, t =  41.69 s / 29.98 tokens per second
+9.16.392.709 I slot print_timing: id  1 | task 274 | prompt processing, n_tokens =   1469, progress = 0.97, t =  51.93 s / 28.29 tokens per second
+9.22.480.202 I slot print_timing: id  1 | task 274 | prompt processing, n_tokens =   1510, progress = 1.00, t =  58.02 s / 26.03 tokens per second
+10.14.388.743 W srv          stop: cancel task, id_task = 274
+10.20.079.441 I slot      release: id  1 | task 274 | stop processing: n_tokens = 1523, truncated = 0
+11.02.625.207 I srv    operator(): operator(): cleaning up before exit...

@@ -27,8 +27,13 @@ public struct MerlinToolCall: Equatable, Sendable {
 /// decoding; checks script it to drive the loop deterministically.
 public protocol MerlinActor: Sendable {
     /// Produce the tool-call batch for the given turn (1...4 calls).
-    /// `prompt` is the task-spine system prompt for this turn; a thrown
-    /// error ends the run as a failure.
+    /// `prompt` is the task-spine system prompt for this turn. A thrown
+    /// transport-class error (dead server, HTTP failure, malformed
+    /// response) ends the run as a failure; a parse-class
+    /// `LlamaServerActor.ActorError` (the server answered but the
+    /// completion carried no usable tool call) is fed back correctively
+    /// and ends the run only after the stop authority's repeat threshold
+    /// of consecutive failures — see `MerlinActorFailureFeedback`.
     func toolCalls(prompt: String, turn: Int) async throws -> [MerlinToolCall]
 }
 
@@ -96,6 +101,46 @@ public protocol MerlinActorWithFeedback: MerlinActor {
     /// Best-effort by contract: the kernel logs a failure to the ledger and
     /// continues rather than ending the run on a feedback error.
     func receive(feedback: MerlinTurnFeedback) async
+
+    /// Receives one recoverable actor failure (parse class): the kernel
+    /// hands back the model's own words and the corrective instruction so
+    /// the next completion happens over a transcript where the model can
+    /// see its contract violation. Best-effort by the same contract as
+    /// `receive(feedback:)`. The default implementation is a no-op, so
+    /// plain transcript-less actors keep working unchanged.
+    func receiveActorFailure(_ feedback: MerlinActorFailureFeedback) async
+}
+
+extension MerlinActorWithFeedback {
+    public func receiveActorFailure(_ feedback: MerlinActorFailureFeedback) async {}
+}
+
+/// One recoverable actor failure (parse class), handed back before the
+/// next completion (2026-11-16 gate fix): the live Spark gate lost 6/14
+/// cells to the FIRST completion that narrated instead of calling a tool —
+/// several after real progress — because the kernel treated one content-
+/// only reply as machinery death. This payload is the corrective channel:
+/// what the model said, and what it must do instead.
+public struct MerlinActorFailureFeedback: Sendable {
+    /// The turn whose completion carried no usable tool call.
+    public let turn: Int
+    /// The actor's error description (carries the rung, finish reason,
+    /// and excerpt where the actor captured them).
+    public let errorDescription: String
+    /// The model's own narration when the actor captured it; the
+    /// transcript-keeping actor appends it as the assistant turn being
+    /// corrected.
+    public let responseExcerpt: String?
+    /// The corrective instruction, phrased for the model.
+    public let instruction: String
+
+    public init(turn: Int, errorDescription: String,
+                responseExcerpt: String?, instruction: String) {
+        self.turn = turn
+        self.errorDescription = errorDescription
+        self.responseExcerpt = responseExcerpt
+        self.instruction = instruction
+    }
 }
 
 /// Guardian hook point (M4).
@@ -168,7 +213,10 @@ public struct MerlinOutcome: Equatable, Sendable {
         case completed
         /// The turn budget ran out first (M6 stop authority).
         case budgetExhausted
-        /// The actor itself failed; nothing to recover from in-loop.
+        /// The actor failed: transport-class failures end the run
+        /// immediately (nothing in-loop can fix a dead server); parse-class
+        /// failures end it only after the repeat threshold of consecutive
+        /// completions that no corrective turn could shape into a tool call.
         case failed
     }
 
@@ -202,8 +250,10 @@ public struct MerlinOutcome: Equatable, Sendable {
 /// goes through the completion verifier (M5) before the run may end as
 /// completed; a rejection ledgers a blocker and the loop continues. The
 /// run ends on a verified `task_done`, on the turn budget, or on an actor
-/// failure — never on a tool error, which is ledgered and handed back to
-/// the model as state.
+/// failure — transport-class actor failures immediately, parse-class
+/// failures (a completion with no usable tool call) only after the stop
+/// authority's repeat threshold of corrective turns — never on a tool
+/// error, which is ledgered and handed back to the model as state.
 public final class MerlinKernel: @unchecked Sendable {
     public struct Configuration: Sendable {
         /// Hard ceiling on executed turns (model completions).
@@ -261,6 +311,24 @@ public final class MerlinKernel: @unchecked Sendable {
     /// `count <= captured + 1`.
     private var ledgerCountAtLastRejection: Int?
 
+    /// Consecutive recoverable actor failures (parse class — the server
+    /// answered, the completion carried no usable tool call). Reset by any
+    /// successfully parsed batch; at the stop authority's repeat threshold
+    /// the run ends as failed rather than burning the whole budget
+    /// correcting an unteachable model. The 2026-11-16 gate fix: before
+    /// this counter, ONE content-only completion ended the run, killing
+    /// 6/14 Spark cells mid-progress.
+    private var consecutiveActorFailures = 0
+
+    /// The corrective instruction for a parse-class actor failure, phrased
+    /// in the spine's voice. Names the violation and the two legal exits,
+    /// and answers budget truncation (finish_reason "length") by demanding
+    /// terse, call-only replies.
+    private static let actorContractCorrection =
+        "Your last reply was not a tool call — it was prose the runtime could not execute. " +
+        "Every reply must be one to four tool calls (or a single task_done when finished); " +
+        "plain text is a contract violation. Reply again now with tool calls only, no narration."
+
     public init(workspace: MerlinWorkspace, ledger: MerlinLedger,
                 spine: MerlinTaskSpine, configuration: Configuration = Configuration()) {
         self.workspace = workspace
@@ -298,16 +366,59 @@ public final class MerlinKernel: @unchecked Sendable {
             do {
                 batch = try await actor.toolCalls(prompt: prompt, turn: turn)
             } catch {
-                try? ledger.append(turn: turn, kind: .blocker, key: "actor",
-                                   text: "actor failed: \(error)")
+                // Parse-class actor failures — the server answered but the
+                // completion carried no usable tool call — are model
+                // behavior, not machinery death: the same class of
+                // contract mistake the kernel already absorbs for tool
+                // errors, guardian rejections, and verifier rejections
+                // (2026-11-16 gate: 6/14 Spark cells died to the FIRST
+                // content-only completion, several mid-progress). Ledger
+                // it, correct the model through the transcript, continue;
+                // only transport-class failures — or a streak past the
+                // repeat threshold — end the run.
+                guard let actorError = error as? LlamaServerActor.ActorError,
+                      actorError.parseFailure else {
+                    try? ledger.append(turn: turn, kind: .blocker, key: "actor",
+                                       text: "actor failed: \(error)")
+                    try? ledger.append(turn: turn, kind: .result, key: "actor",
+                                       text: "run ended on an actor failure")
+                    emit(.blocker(text: "actor failed: \(error)"))
+                    let outcome = MerlinOutcome(status: .failed, summary: "actor failed: \(error)",
+                                                turnsUsed: turn, maxTurns: configuration.maxTurns)
+                    emit(.completed(outcome))
+                    return outcome
+                }
+                consecutiveActorFailures += 1
+                let threshold = stopAuthority.authority.repeatThreshold
+                let summarized = "actor produced no usable tool call " +
+                    "(attempt \(consecutiveActorFailures) of \(threshold)): \(actorError)"
+                try? ledger.append(turn: turn, kind: .blocker, key: "actor", text: summarized)
                 try? ledger.append(turn: turn, kind: .result, key: "actor",
-                                   text: "run ended on an actor failure")
-                emit(.blocker(text: "actor failed: \(error)"))
-                let outcome = MerlinOutcome(status: .failed, summary: "actor failed: \(error)",
-                                            turnsUsed: turn, maxTurns: configuration.maxTurns)
-                emit(.completed(outcome))
-                return outcome
+                                   text: "contract violation fed back; turn consumed")
+                emit(.blocker(text: summarized))
+                if let feedbackActor = actor as? any MerlinActorWithFeedback {
+                    await feedbackActor.receiveActorFailure(MerlinActorFailureFeedback(
+                        turn: turn,
+                        errorDescription: String(describing: actorError),
+                        responseExcerpt: actorError.responseExcerpt,
+                        instruction: Self.actorContractCorrection))
+                }
+                if consecutiveActorFailures >= threshold {
+                    try? ledger.append(turn: turn, kind: .result, key: "actor",
+                                       text: "run ended after \(consecutiveActorFailures) consecutive unparseable completions")
+                    let outcome = MerlinOutcome(
+                        status: .failed,
+                        summary: "actor failed \(consecutiveActorFailures) consecutive turns: " +
+                            "no usable tool call despite corrective feedback",
+                        turnsUsed: turn, maxTurns: configuration.maxTurns)
+                    emit(.completed(outcome))
+                    return outcome
+                }
+                continue
             }
+            // A parsed batch is progress on the contract itself: the
+            // recoverable-failure streak starts over.
+            consecutiveActorFailures = 0
 
             // Out-of-contract batches are clamped, never trusted.
             let calls = Array(batch.prefix(max(1, configuration.maxCallsPerTurn)))
