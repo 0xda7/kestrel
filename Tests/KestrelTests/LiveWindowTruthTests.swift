@@ -117,7 +117,11 @@ final class LiveWindowTruthTests: CheckCase {
     /// Sabotage drill: change ServerSettings.engineDefaultUbatch -> this
     /// check RED; a bundled engine that changes its default -> RED.
     func testEngineDefaultUbatchIsPinnedAgainstTheEngineBinary() {
-        let candidates: [String?] = [Bundle.main.resourceURL?.appendingPathComponent("bin/llama-server").path,
+        // CI's fast gate builds the vendored engines before the suite (build.yml),
+        // so the repo-local binary is a first-class candidate — the app-bundle and
+        // installed-app paths cover everything else.
+        let candidates: [String?] = ["vendor/llama.cpp/build-static/bin/llama-server",
+                                     Bundle.main.resourceURL?.appendingPathComponent("bin/llama-server").path,
                                      "/Applications/Kestrel.app/Contents/Resources/bin/llama-server"]
         var binary = candidates.compactMap { path in
             (path != nil && FileManager.default.fileExists(atPath: path!)) ? path : nil
@@ -129,7 +133,7 @@ final class LiveWindowTruthTests: CheckCase {
             binary = custom
         }
         guard let enginePath = binary else {
-            return XCTFail("no engine binary to pin the ubatch default against (tried Bundle.main bin/llama-server, /Applications/Kestrel.app, and the custom serverBinary)")
+            return XCTFail("no engine binary to pin the ubatch default against (tried vendor/llama.cpp/build-static, Bundle.main bin/llama-server, /Applications/Kestrel.app, and the custom serverBinary)")
         }
 
         let process = Process()
