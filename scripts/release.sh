@@ -29,7 +29,14 @@ sed -i '' "s/static let versionFallback = \"[^\"]*\"/static let versionFallback 
 grep -q "static let versionFallback = \"$V\"" Sources/App/AboutTab.swift || {
     echo "error: failed to stamp version $V into Sources/App/AboutTab.swift" >&2; exit 1; }
 
-git add CHANGELOG.md VERSION Sources/App/AboutTab.swift
+# Citation metadata rode ~30 releases stale (frozen at 0.83.21) because nothing
+# stamped it (audit G6). Stamp it beside the CHANGELOG so it can't drift again.
+if [ -f CITATION.cff ]; then
+    sed -i '' -E "s/^version: ['\"]?[0-9][^'\"]*['\"]?/version: \"$V\"/" CITATION.cff
+    sed -i '' -E "s/^(date-released: ).*/\1'$(date +%Y-%m-%d)'/" CITATION.cff
+fi
+
+git add CHANGELOG.md VERSION Sources/App/AboutTab.swift CITATION.cff
 git diff --cached --quiet || git commit -m "release: $V"
 
 # annotated so the tag is a real object and tag.gpgsign can sign it; a lightweight tag cannot be

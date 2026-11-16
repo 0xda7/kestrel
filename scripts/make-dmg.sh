@@ -58,7 +58,15 @@ hdiutil create -volname "$VOLNAME" -srcfolder "$STAGE" -ov -format UDRW "$TMPDMG
 # Finder addresses disks by name under /Volumes, so the layout pass cannot use a
 # private mountpoint; everything else stays out of the user's way.
 if [ -n "${KESTREL_DMG_LAYOUT:-}" ]; then
-    hdiutil detach "/Volumes/$VOLNAME" > /dev/null 2>&1 || true
+    # Detach only a leftover mount of OUR temporary image — never a volume the
+    # user mounted themselves that happens to share the name (audit G8: the
+    # unconditional detach could eject a user's mounted Kestrel install DMG).
+    LEFTOVER=$(hdiutil info | awk -v mount="/Volumes/$VOLNAME" \
+        '/^image-path/ {img=$2} /^mount-point/ && $2 == mount {print img}' \
+        | grep -E '(var/folders|/tmp)/' | head -1)
+    if [ -n "$LEFTOVER" ]; then
+        hdiutil detach "/Volumes/$VOLNAME" > /dev/null 2>&1 || true
+    fi
     hdiutil attach "$TMPDMG" -noautoopen > /dev/null
     MOUNT="/Volumes/$VOLNAME"
 else

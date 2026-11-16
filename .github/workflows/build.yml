@@ -116,6 +116,19 @@ jobs:
         if: github.event_name != 'pull_request' || steps.scope.outputs.build == 'true'
         run: KESTREL_ARCH=x86_64 ./make-app.sh
 
+      # Version truth gate (audit G5): a tag whose bundle disagrees with it is
+      # exactly the v0.90.0 regression — bundle 0.89.17, tag v0.90.0 — which
+      # made the updater silently deaf for every 0.90.0 install.
+      - name: Assert version truth (tag == bundle == source)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PLIST=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/Kestrel.app/Contents/Info.plist)
+          SRC=$(sed -n 's/.*versionFallback = "\([^"]*\)".*/\1/p' Sources/App/AboutTab.swift | head -1)
+          [ "$TAG" = "$PLIST" ] || { echo "::error::tag v$TAG != bundle version $PLIST (the v0.90.0 regression)"; exit 1; }
+          [ "$TAG" = "$SRC" ] || { echo "::error::tag v$TAG != stamped versionFallback $SRC"; exit 1; }
+          echo "version truth: tag == bundle == source ($TAG)"
+
       # Developer ID signing + notarization, skipped when the secrets are absent.
       # A submission can cost an hour in Apple's queue, so only tags get one;
       # everything else keeps the ad-hoc signature unless a manual run opts in.
