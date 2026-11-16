@@ -14,6 +14,8 @@ audit. Status columns updated as items are fixed.
 | `02-release-readiness-audit.md` | Release pipeline / updater / signing audit (subagent) |
 | `03-product-market-audit.md` | Product, monetization, and go-to-market audit (subagent) |
 | `04-revenue-roadmap.md` | The plan: prioritized execution to revenue |
+| `05-owner-actions.md` | Plain-language checklist of everything only the owner can do |
+| `06-telemetry-design.md` | Opt-in, privacy-preserving install-metrics design |
 
 ---
 
