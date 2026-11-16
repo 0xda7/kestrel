@@ -13,6 +13,7 @@ enum CheckRegistry {
         ("AgentLoopTests", AgentLoopTests.__checkSet),
         ("AgentTurnBudgetTests", AgentTurnBudgetTests.__checkSet),
         ("MerlinChecks", MerlinChecks.__checkSet),
+        ("ReleaseHygieneChecks", ReleaseHygieneChecks.__checkSet),
         ("AudioSurfacingTests", AudioSurfacingTests.__checkSet),
         ("AtomicExportTests", AtomicExportTests.__checkSet),
         ("AudioVideoExportIntegrationTests", AudioVideoExportIntegrationTests.__checkSet),

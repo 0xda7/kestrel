@@ -20,3 +20,6 @@ out/
 
 # workflow-runner scratch (audit/debris; untracked by design)
 .zcode/
+
+# Merlin run workspaces: transient scratch TMPDIRs (bytecode caches et al)
+.merlin-scratch/
