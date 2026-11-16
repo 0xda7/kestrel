@@ -20,3 +20,5 @@ Environment: MacBook Pro 16" 2019 · i9-9980HK · Radeon Pro 5500M 4 GB (RDNA, w
   server stable for hours, no crash reports.
 - Contamination rule for benchmarks: never measure while a model is loaded in the app;
   kill all GPU consumers first.
+
+| C9 | **P2** | Web UI opens blank when visited without the API key: static JS/CSS assets return 401 before the UI can load its own login prompt (`unauthorized: Invalid API Key` × 8 in server log; assets 200 with the key) | observed 2026-11-16, LFM2.5 session on the 0.90.1 build | A user who opens `127.0.0.1:8080` directly sees a blank page with no explanation; only the `?api_key=` URL works. Upstream llama-server serves static assets unauthenticated — one of Kestrel's `--ui-mcp-proxy`/`--tools all` security flags changes that | Verify which flag causes static-asset auth; exclude immutable UI assets from auth or serve a key-entry page at `/`; document "open the web UI from the app button" | open |
