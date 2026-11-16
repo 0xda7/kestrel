@@ -3,6 +3,42 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased] — product-takeover wave 1
+
+Reliability and release-truth fixes from the 2026-11-16 takeover audit
+(`product-takeover/`), validated on a Radeon Pro 5500M test box. All 855
+checks green.
+
+### Fixed
+
+- **Tagged builds can no longer ship mislabeled** (the v0.90.0 regression):
+  `AppInfo.version` now reads the bundle's `CFBundleShortVersionString`
+  (stamped from VERSION at build time) instead of a hand-editable constant,
+  and the release scripts hard-fail if the stamp ever misses.
+- **CI version gate**: tag builds assert tag == bundle == source before
+  publishing.
+- **Unsigned releases can never ship again**: CI's sign job fails a tag build
+  when the signing secrets are absent, instead of silently keeping ad-hoc
+  (which Gatekeeper rejects for every browser-download user). `make-app.sh`
+  likewise fails on engine-less CI/release bundles.
+- **Agent turns survive a grammar the engine cannot compile**: the failure
+  that killed a live turn ("Failed to initialize samplers") now retries once
+  without the envelope grammar, falling through to the text-side tool-call
+  rescue. Five regression checks added (`ToolGrammarRetryTests`).
+- **No more engine crash-loops on unsupported models** (six LFM3 restarts in
+  six minutes on the test box): a (model, engine) pair whose GGUF
+  architecture the engine refused is remembered and declined up front with a
+  bilingual message; switching or updating the engine clears the refusal.
+- **The repo slug lives in one constant**: update feed, release notes, issue
+  and sponsor URLs all derive from `AppInfo.repositorySlug`, so moving
+  publishing to the org cannot orphan the updater.
+- README's first-launch note now states the real signing status (including
+  the v0.90.0 slip) instead of a claim the pipeline did not honor.
+- Hygiene: CITATION.cff is release-stamped again (it rode ~30 releases
+  stale); make-dmg.sh never ejects an unrelated user volume; test.sh warns
+  fresh clones about engine-dependent checks; release artifacts cannot be
+  committed.
+
 ## [0.90.0] — 2026-11-16 — Merlin agent kernel
 
 Merlin replaces the legacy chat agent loop as Kestrel's agent runtime. It is built
