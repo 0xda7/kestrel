@@ -82,7 +82,14 @@ if [ -x "$LLAMA_STATIC/llama-server" ]; then
     fi
     echo "bundled static llama-server/llama-bench from $LLAMA_STATIC"
 else
-    echo "WARNING: engines not built; run ./scripts/build-engines.sh first"
+    # A DMG without engines is a bricked install: the app cannot serve any
+    # model (audit G4). Local dev builds may proceed with a loud warning;
+    # a release/CI build fails hard so the pipeline can never ship one.
+    if [ -n "$CI" ] || [ "$KESTREL_RELEASE" = "1" ]; then
+        echo "error: engines not built — run ./scripts/build-engines.sh first; refusing to package an engine-less $([ -n "$CI" ] && echo CI || echo release) bundle" >&2
+        exit 1
+    fi
+    echo "WARNING: engines not built; run ./scripts/build-engines.sh first (dev build will have no engine)"
 fi
 
 # Web chat UI (served via llama-server --path). web-ui is the rebranded llama.cpp UI

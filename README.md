@@ -137,11 +137,13 @@ Kestrel is not only a chat window — the model can act on your machine, and eve
 1. **[Download the latest `.dmg`](https://github.com/0xda7/kestrel/releases/latest)**, open it, and drag **Kestrel** to Applications.
 2. The app is fully self-contained — the inference engines ship inside the bundle. No Homebrew, no Python, nothing else to install.
 
-> **First launch:** from 0.86.5 the app is signed with an Apple Developer ID and
-> notarized by Apple, so it opens straight away with no warning and nothing to
-> approve. On **0.86.4 and earlier** macOS blocks the first open: go to
+> **First launch:** releases are built to be signed with an Apple Developer ID and
+> notarized by Apple, so they open straight away with no warning. **v0.90.0 shipped
+> without signing (a release-pipeline slip) and macOS will block its first open**: go to
 > **System Settings → Privacy & Security** and click **"Open Anyway"**, or run
-> `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
+> `xattr -dr com.apple.quarantine /Applications/Kestrel.app`. From the next release,
+> CI refuses to publish a tag build it could not sign and notarize, so this page
+> stays honest automatically.
 
 > **Older Macs without AVX2 (e.g. Mac Pro 5,1 and other pre-2013 Xeons):** the normal build needs the AVX2 CPU instructions and will crash on launch with "illegal hardware instruction" on those machines. Each release also ships a dedicated **no-AVX2 build** — download the `.dmg` whose name ends in **`-noavx2`**. It updates on its own channel, so once installed it will only ever offer you no-AVX2 builds.
 

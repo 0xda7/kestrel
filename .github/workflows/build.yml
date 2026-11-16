@@ -128,8 +128,18 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           if [ -z "$CERT_P12" ]; then
+            # A release that ships ad-hoc is Gatekeeper-rejected for every
+            # browser-download user while the README promises Developer ID
+            # signing — the v0.90.0 regression (product-takeover audit G2).
+            # Local/manual non-tag builds may skip loudly; a TAG build fails
+            # hard so an unsigned release can never reach users again.
+            if [ "$IS_TAG" = "true" ]; then
+              echo "::error::tag build has no MACOS_CERT_P12 — refusing to publish an ad-hoc (Gatekeeper-rejected) release. Configure the signing secrets or build from a non-tag ref."
+              exit 1
+            fi
             echo "No signing secrets — keeping ad-hoc signature"
             exit 0
           fi
