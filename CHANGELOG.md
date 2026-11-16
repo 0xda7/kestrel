@@ -3,7 +3,15 @@
 All notable changes to Kestrel are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] — Merlin agent kernel
+## [0.90.0] — 2026-11-16 — Merlin agent kernel
+
+Merlin replaces the legacy chat agent loop as Kestrel's agent runtime. It is built
+for the models Kestrel actually runs — ≤9B local GGUFs — by making the runtime supply
+what those models lack (memory, format discipline, verification, stopping judgment)
+instead of asking the model to improvise them. Ships behind the new Agent engine
+toggle, default Classic; the legacy loop is untouched. The formal eval gate
+(14-task suite, machinery-on vs machinery-off) is running; the default flips only
+when it passes.
 
 ### Added
 
