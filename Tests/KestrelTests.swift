@@ -1177,6 +1177,9 @@ final class ServerSettingsTests: CheckCase {
     }
 
     func testSlotSavePathFollowsLoadedVision() {
+        guard let override = ServerSettings.slotsDirectoryOverride else {
+            return XCTFail("ChecksMain must set ServerSettings.slotsDirectoryOverride before any check runs — without it building argv mkdirs the operator's live slots tree")
+        }
         var s = makeSettings()
         s.persistCache = true
         s.faAmd = true
@@ -1185,7 +1188,13 @@ final class ServerSettingsTests: CheckCase {
         s.loadVision = true
         XCTAssertTrue(s.arguments.contains("--slot-save-path"))
         s.loadVision = false
-        XCTAssertTrue(s.arguments.contains("--slot-save-path"))
+        let args = s.arguments
+        XCTAssertTrue(args.contains("--slot-save-path"))
+        // The seam (pinned by ChatStoreIsolationTests): resolving the
+        // slot directory must mkdir inside the per-run override, never
+        // the operator's live Application Support.
+        XCTAssertTrue(args[args.firstIndex(of: "--slot-save-path")! + 1].hasPrefix(override.path + "/"),
+                      "the emitted --slot-save-path must resolve inside the per-run override")
         s.persistCache = false
         XCTAssertFalse(s.arguments.contains("--slot-save-path"))
     }

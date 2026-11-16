@@ -33,15 +33,9 @@ struct GGUFMetadata: Sendable {
         return Self.moeArchitectures.contains(architecture.lowercased())
     }
 
-    /// Typed-decision capability, mirroring the engine's own gate
-    /// (`common_get_decision_type`): a model answers POST /v1/systemone iff
-    /// its GGUF carries a `<arch>.decision.type` metadata entry — the value's
-    /// exact meaning stays the engine's business, so future decision
-    /// architectures are detected without an app change.
-    var isDecisionModel: Bool {
-        guard let architecture = string(for: "general.architecture"), !architecture.isEmpty else { return false }
-        return string(for: "\(architecture).decision.type") != nil
-    }
+    // NOTE: no app-side decision-model gate. The Laya integration was removed
+    // in 0.89.13; the engine still serves /v1/systemone for any GGUF carrying
+    // an `<arch>.decision.type` entry, but nothing in the app consumes it.
 
     private static let moeArchitectures: Set<String> = [
         "olmoe", "deepseek", "deepseek2", "deepseek2-ocr", "deepseek32", "deepseek4",

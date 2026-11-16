@@ -1,3 +1,144 @@
+# Changelog
+
+All notable changes to Kestrel are documented here.
+Format based on [Keep a Changelog](https://keepachangelog.com/).
+
+## [Unreleased] — Merlin agent kernel
+
+### Added
+
+- **Merlin, the replacement agent runtime for ≤9B local models** — nine systems
+  (M0–M8) that make the runtime supply what small models lack: task spine,
+  grammar-constrained actor, token-efficient ledger state, structured memory,
+  guardian post-conditions, adversarial completion verifier, stop authority,
+  per-tool-class retry budgets, and per-model-family profiles. Batched tool calls
+  (up to 4 per model completion) keep wall-clock inside eval budgets; a run only
+  ends as completed through the explicit `task_done` contract, and that claim is
+  checked before it is trusted.
+- **Per-family tool-call rungs, measured not guessed.** Spark-X2.5, LFM2.5,
+  DeepSeek-R1, and Qwen3.5 ride native `tools[]`; GLM-4 rides the json_schema
+  envelope (its native channel fails and hallucinated results are flagged);
+  unprofiled models start on the rescue ladder and auto-promote after three clean
+  parses. DeepSeek-R1 gets a 3000-token think floor; a configuration below any
+  floor refuses loudly instead of starving a thinking model into inaction.
+- **The workspace sandbox.** Every run gets its own directory — the app keeps
+  them under Application Support/Kestrel/MerlinWorkspaces/, the CLI under
+  ~/.kestrel/merlin/workspaces/ — with `..` traversal refused, canonicalized
+  path re-checks that defeat symlink laundering, one-task locks, and ten tools
+  (`fs_read/fs_write/fs_list/fs_grep/shell_run/js_eval/todo_write/todo_read/
+  note_add/task_done`) that can only see inside it.
+- **The `merlin` CLI** (`--task`, `--workspace`, `--max-turns`) runs the kernel
+  headless; the live-model path currently runs through the eval harness.
+- **The `merlin-eval` harness and the frozen 14-task suite** (merlin-eval-v1,
+  5 axes, five mechanical assertion kinds, no LLM judge). Machinery-on and
+  machinery-off baselines share weights, server, seeds, and scoring; a wall
+  guard records harness timeouts as harness events, not model scores. The suite
+  gate — 14/14 on at least two bench models — is still open.
+- **Merlin in the app, behind the Agent engine toggle.** Chat Settings → Agents
+  now selects Merlin or Classic (default stays Classic until the eval gate
+  passes); right-click → "Run as Merlin task" runs the composer draft against
+  the active engine, live progress folds into one fence block, and the outcome
+  card states status, turns, and the completion summary.
+- **The transcript feedback seam.** The kernel hands each executed batch's
+  outcomes back to transcript-keeping actors before the next completion —
+  without it, probes showed the model blind to its own history, re-issuing the
+  identical failing call every turn.
+
+### Known issues
+
+- `js_eval` cannot preempt a running script; the watchdog is observational only,
+  so a non-terminating script blocks the run.
+- Stop/cancel takes effect at the next turn boundary — mid-flight completions
+  and tool executions are not interrupted.
+- The bundled llama-server wedged (accept-then-silence, zero tokens) under
+  sustained multi-turn traffic during the smoke run, hitting both machinery
+  modes equally; the suite needs a quiet-box re-run before any verdict.
+- The reduced smoke gate on Spark-X2.5-1.7B proved the pipeline (T01 passed in
+  both modes) but is not a machinery verdict; the 14×2 × 3-model matrix remains
+  open, and media tools stay out of Merlin until after the core gate.
+
+## [0.89.17] — 2026-10-23
+
+Guardian wave 2 — nothing the operator owns is ever destroyed by a failed write:
+
+- **A failed secret-store write never destroys the only surviving copy.**
+- **Save-panel exports are atomic** — a failed write never destroys the
+  operator's existing file.
+- **MCP hardening:** fail-safe server-list persistence; env secrets leave
+  plaintext defaults and are excluded from exports.
+- **Updates:** the checksums matcher becomes a pinned pure seam — the KES-09
+  guard leaves the confusable-closure limbo.
+- **Chat:** the rejected-payload hot-spin is stopped, and the archive queue is
+  put under owner-only custody.
+- **Checks:** AppSupport joins the isolation seam — no check can prune the
+  operator's live logs or lockfile.
+
+## [0.89.16] — 2026-10-23
+
+Guardian wave 1 — security and honesty fixes:
+
+- **The engine key is mandatory on every launch — keyless `POST /tools` is
+  closed** (H-1).
+- **Remote MCP credential traffic requires https/wss**; loopback is exempt.
+- **Failures stop silently losing data:** transcription and Markdown-export
+  failures surface; secrets-dir chmod failures and dead log channels surface
+  instead of staying silent.
+- **The check suite is fully isolated:** derived tool templates join the
+  isolation seam, and no check reads, rewrites, or deletes the operator's
+  live Application Support.
+- An import can no longer silently repoint the memory-archive hook (M-1).
+- **The tool channel is real again** for native tool-call templates — the C1
+  envelope stands down — and `toolGrammarMode` (Auto / On / Off) becomes a
+  per-model operator choice.
+
+## [0.89.13] — 2026-10-23
+
+The store-isolation release; the surgical-mvp merge (native tool path, audit
+hardening) and the Laya/latch removals reach the operator's Mac.
+
+### Removed
+
+- **Laya integration removed per operator decision.** The `laya_decide` agent
+  tool, the Decisions UI (decision cards, question sets, run store), the
+  seeded "Laya Decisions" server card, the `layaDecideEnabled` toggle, and
+  the Laya architecture docs are gone from the app. The bundled engine still
+  serves llama-server's `/v1/systemone` endpoint for any decision-model GGUF,
+  but the app no longer surfaces it anywhere.
+- **Latch removed end-to-end per operator decision.** LatchDelegateService,
+  LatchBridge, MetaPromptService, latch chat mode, the delegate tool, the
+  sidecar/sandbox-home machinery, and their settings keys and toggles.
+  Conversations decode without `assistantMode`, so history stays readable and
+  native assistant answers.
+
+### Fixed
+
+- **The check suite never touches the operator's live chat store** — the
+  "importado" pollution closes.
+- **Silent catches surfaced across the app:** chat store layers, imports,
+  summarize, tool-path and stream handling, the sidecar store, engine-adjacent
+  server paths, secret reads and file hashes, audio transcription, subtitles,
+  video, benchmarks, images, model shard scans, and surgical dictation parse
+  failures. A failure now says what failed instead of reading as "nothing
+  happened".
+- **Launch truth everywhere:** window display, slot decisions, and triage (C5);
+  quit-path teardown is bounded doctrine (C6/W2-4); the secret masker fails
+  closed (C4); the DMG app-swap never leaves the machine with no app (C3);
+  update app-swap restore and relaunch failures are surfaced instead of
+  quitting silently.
+
+### Changed
+
+- **Settings became a real registry:** a full key-to-Kind registry for every
+  numeric/Bool reader; the A2 completeness law (every key resettable or
+  documented-excluded); legacy declarations retire behind green migrations;
+  and constants the engine ran on secretly — compaction trigger, keep-tail,
+  response margin, cache-reuse window, per-engine tool caps, ubatch 512 —
+  become visible settings.
+- **Grammar-constrained tool calls** ship via a per-request json_schema
+  envelope.
+- Engine: launch sweeps persist, and the sleep family becomes bounded
+  poll-with-cap (T4-3 H4+H5).
+
 ## [0.89.12] — 2026-10-14
 
 - Fix: pass the operator-stored gateway key to the embedded agent again —
@@ -5,14 +146,12 @@
   every agent turn: no tools, no answers, empty context bar). Isolation and
   hidden-login removal unchanged; 415/415 checks.
 
-# Changelog
-
-All notable changes to Kestrel are documented here.
-Format based on [Keep a Changelog](https://keepachangelog.com/).
-
-
-
 ## [0.89.11] — 2026-10-14
+
+> **Removed in 0.89.13** per operator decision — the `laya_decide` tool,
+> the Decisions UI, and the "Laya Decisions" card no longer exist in the app.
+> The engine's `/v1/systemone` endpoint described below still serves any
+> decision-model GGUF. History preserved as shipped.
 
 - **Laya is a native agent capability.** The chat agent gets a built-in
   `laya_decide` tool: hand it any document (path or inline text) and it
@@ -59,6 +198,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.89.8] — 2026-10-14
 
+> **Removed in 0.89.13** per operator decision — the seeded "Laya Decisions"
+> server card no longer exists in the app. History preserved as shipped.
+
 - **Laya served from Kestrel, not from hidden processes.** A one-time
   "Laya Decisions" server card is seeded on the Servers tab (port 8098,
   ctx 2048, never auto-started, deletable — deletion sticks). Start and
@@ -91,34 +233,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- **Engines: the llama.cpp pin advances five commits, through the graph-capture wall** (`cdc06426e` → `ed319febb`, build b11174). Four patches are re-authored (`0002`, `0039`, `0063`, `0085`) — each wall was context drift around upstream's `n_nodes` early-return and the `capture_compute == 0` argument change, not semantic conflict. Full gate: all 92 patches apply with the build's own plain `git apply`; `llama-server` builds 100%; the round trip (fresh worktree at the pin + series) diffs byte-identical against the built tree; a temp-0 smoke answers coherently through the new binary; and the bench gate ran as a thermally-clean interleaved A/B — pin 55.9 vs frontier 55.7 t/s decode (parity; the first, alarming readings were taken on a heat-soaked machine immediately after full builds and are excluded as measurement artifacts, a lesson now recorded in `patches/README.md`). Advisory triage for the range: no published llama.cpp advisories exist since the previous pin's coverage (all 13 predate both commits). The next wall — `5a75f14c0`'s FA per-dtype library split breaking patch `0001` — is the `kernels/` layout port proper, mapped in the mission's `engines-frontier/EVIDENCE.md`.
-## [0.89.4] - 2026-10-12
-
-### Changed
-
-- **Engine: llama.cpp pin advances `cdc06426e` → `ed319febb`** — five commits upstream, through the graph-capture change (84e76d8a2, #29390) via four re-authored Metal patches (0002/0039/0063/0085). Gates: strict apply 92/92, build 100%, round-trip byte-identical, temp-0 smoke coherent, and **bench parity on the Radeon Pro 5500M** (pin 55.9 vs frontier 55.7 t/s tg128, measured interleaved with cool-downs after the first comparison proved heat-soak was faking a regression — "never bench right after a build on this machine" is now recorded in patches/README.md). Next upstream wall: 5a75f14c0's FA per-dtype split breaks patch 0001 (the kernels/ layout port).
+- **Engine: the llama.cpp pin advances `cdc06426e` → `ed319febb`, through the graph-capture wall** (five commits upstream, build b11174). Four Metal patches are re-authored (`0002`, `0039`, `0063`, `0085`) — each wall was context drift around upstream's `n_nodes` early-return and the `capture_compute == 0` argument change, not semantic conflict. Full gate: all 92 patches apply with the build's own plain `git apply`; `llama-server` builds 100%; the round trip (fresh worktree at the pin + series) diffs byte-identical against the built tree; a temp-0 smoke answers coherently through the new binary; and the bench gate ran as a thermally-clean interleaved A/B — pin 55.9 vs frontier 55.7 t/s tg128 on the Radeon Pro 5500M (parity; the first, alarming readings were taken on a heat-soaked machine immediately after full builds and are excluded as measurement artifacts — "never bench right after a build on this machine" is now recorded in `patches/README.md`). Advisory triage for the range: no published llama.cpp advisories exist since the previous pin's coverage (all 13 predate both commits). The next wall — `5a75f14c0`'s FA per-dtype library split breaking patch `0001` — is the `kernels/` layout port proper, mapped in the mission's `engines-frontier/EVIDENCE.md`.
 - Xcode 26.5 support: local Metal metallib assembly works on this machine for the first time (relevant to the kernels/ port).
-
-## [0.89.3] - 2026-10-12
-
-### Fixed
-
-- **Security wave A — the 2026-10-10 assessment's two Highs and the key-exposure mediums are closed (KES-01..04).** A server bound to the local network now refuses to start without an API key — any non-loopback bind, not just the previous agent-tools case — because plaintext HTTP leaves the key as the only gate between the LAN and this machine's engine. "Export diagnostics" no longer leaks `--api-key` into the shareable report: the builder is extracted and reuses the startup banner's redaction, with regression tests asserting the key never appears. The engine key left child-process argv (`ps`-visible for the server's whole lifetime): the bundled engine reads it from the 0600 local secret store through `--api-key-file`. Bonjour no longer broadcasts `auth: none` to the LAN. The Settings copy now states the plaintext-HTTP risk, the key requirement (warning upgraded from "recommended" to "required"), and where the key actually lives. Diagnosis and plan for the full upgrade: `UPGRADE_REPORT.md` and `.agents/missions/2026-10-12-enterprise-upgrade/`.
-
-
-### Changed
-
-- **Security wave B — tool consent, import gates, updater fail-closed, and the remaining secret moves (KES-05..10).** "Always allow" for agent tools is session-scoped now — restarting the app clears every grant, `exec_shell_command` is never eligible (the permission card shows per-call confirmation only), and the permanent grants persisted by older versions are swept on first use. Importing settings that would change what gets spawned (engine/latch/pi binaries, MCP server commands, extra engine arguments) shows exactly what will run and requires explicit approval before applying. Imported transcripts no longer adopt a stored tool working directory (KES-07). The updater fails closed: a release that publishes no checksums, or a checksum entry that can't be verified, aborts the install; the mounted app must carry a valid code signature matching the running app's team; and the quarantine attribute is no longer stripped from the installed copy. The memory-archive receiver token moved from plaintext UserDefaults into the local secret store (0700/0600), migrating once and deleting the legacy copy; the `secrets/` directory is created with explicit 0700 permissions. Advisory triage at each vendor bump is recorded in `patches/README.md`.
-
-### Fixed
-
-- **The context trap is extinct: "Auto" context is real, and a request that cannot fit is refused before it is sent.** `contextAutomatic` was display-only — selecting "Auto" silently aliased 16384 while the Dashboard read "selected by the app" (the documented root cause of the "models not working" reports: a 128k window on an 8 GB card spills the KV cache out of VRAM and drops generation ~20×). Auto now computes the largest window whose weights + KV cache still fit, with the same halving solver router mode uses, keeps the configured value as its ceiling instead of rewriting it, and shows the computed number in the Dashboard, the startup banner (`ctx=… (auto)`) and the memory estimate. The chat meter, the auto-compaction threshold and the "may slow generation" heuristic all read the window the engine actually launched with. And the engine's `send_error` class (a request bigger than the window answered with nothing — reproduced live at 70,871 tokens against a 65,536 window) dies before the wire: the assembled request is estimated with the same per-message token estimator compaction trusts, and an over-window send stops with a bilingual notice naming the ways out (summarize, archive, new chat, raise the window) instead of a blank bubble.
-
-- **Kestrel owns latch's provider configuration** (`~/.latch/v2/provider_config.json`), closing the last multi-owner config surface the way 0.89.2 did for pi. The file is generated from Settings → Providers at launch, on every route or key change, and alongside every engine start: the local engine is always present as `kestrel-local` and is the default — delegation stays on this machine unless an active remote route says otherwise, where before the tool description had to warn that "Kestrel does not route or constrain" where latch runs. A hand-authored config is imported once into real settings (loopback endpoints are recognized as the engine and never become duplicate routes; keys land in the local secret store), then the marker file records ownership. The delegate's tool description now states the actual routing truth, including the one residual case: a hand-replaced file applies as-is.
-
-### Changed
-
-- **The test suite runs anywhere, and the package is fully Swift 6.** The 26-suite XCTest target is now `kestrel-checks`, a zero-dependency check harness (`Tests/Checks`): XCTest names and signatures preserved at every call site, typed registrations so a missing check is a compile error, a per-check 120 s watchdog, skips with reasons, exit codes CI understands — and `swift run kestrel-checks` needs no Xcode at all. First local run on this machine: **350 checks, 0 failures** (two fixture-gated integration tests skip with instructions). To make the module importable, the app compiles as the `KestrelCore` library behind a two-line `Kestrel` launcher (packaging unchanged: the executable keeps its name and path), CI and `scripts/test.sh` run the harness, and release builds select `--product Kestrel` so shipping artifacts carry no testing instrumentation. With Xcode 26.5 installed, the long-staged Swift 6 v6 language-mode flip was arbitrated and landed: the IRGen SmallVector crash that blocked it on 6.3.3.1/26.0 is gone — the whole package builds in v6 mode, the suite is green under it, and the release product builds clean.
 
 ## [0.89.3] - 2026-10-12
 
@@ -126,21 +242,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **`kestrel-checks`: the test suite now runs on bare Command Line Tools.** A zero-dependency check harness (350 checks, 26 suites) replaces the XCTest target as an executable target — `swift run kestrel-checks` — so the suite runs locally without a 15 GB Xcode install and in CI with one command. It caught a real bug on its first CI run.
 
+### Changed
+
+- **Security wave B — tool consent, import gates, updater fail-closed, and the remaining secret moves (KES-05..10).** "Always allow" for agent tools is session-scoped now — restarting the app clears every grant, `exec_shell_command` is never eligible (the permission card shows per-call confirmation only), and the permanent grants persisted by older versions are swept on first use. Importing settings that would change what gets spawned (engine/latch/pi binaries, MCP server commands, extra engine arguments) shows exactly what will run and requires explicit approval before applying. Imported transcripts no longer adopt a stored tool working directory (KES-07). The updater fails closed: a release that publishes no checksums, or a checksum entry that can't be verified, aborts the install; the mounted app must carry a valid code signature matching the running app's team; and the quarantine attribute is no longer stripped from the installed copy. The memory-archive receiver token moved from plaintext UserDefaults into the local secret store (0700/0600), migrating once and deleting the legacy copy; the `secrets/` directory is created with explicit 0700 permissions. Advisory triage at each vendor bump is recorded in `patches/README.md`.
+
+- **The test suite runs anywhere, and the package is fully Swift 6.** The 26-suite XCTest target is now `kestrel-checks`, a zero-dependency check harness (`Tests/Checks`): XCTest names and signatures preserved at every call site, typed registrations so a missing check is a compile error, a per-check 120 s watchdog, skips with reasons, exit codes CI understands — and `swift run kestrel-checks` needs no Xcode at all. First local run on this machine: **350 checks, 0 failures** (two fixture-gated integration tests skip with instructions). To make the module importable, the app compiles as the `KestrelCore` library behind a two-line `Kestrel` launcher (packaging unchanged: the executable keeps its name and path), CI and `scripts/test.sh` run the harness, and release builds select `--product Kestrel` so shipping artifacts carry no testing instrumentation. With Xcode 26.5 installed, the long-staged Swift 6 v6 language-mode flip was arbitrated and landed: the IRGen SmallVector crash that blocked it on 6.3.3.1/26.0 is gone — the whole package builds in v6 mode, the suite is green under it, and the release product builds clean.
+
+- **Kestrel owns latch's provider configuration** (`~/.latch/v2/provider_config.json`), closing the last multi-owner config surface the way 0.89.2 did for pi. The file is generated from Settings → Providers at launch, on every route or key change, and alongside every engine start: the local engine is always present as `kestrel-local` and is the default — delegation stays on this machine unless an active remote route says otherwise, where before the tool description had to warn that "Kestrel does not route or constrain" where latch runs. A hand-authored config is imported once into real settings (loopback endpoints are recognized as the engine and never become duplicate routes; keys land in the local secret store), then the marker file records ownership. The delegate's tool description now states the actual routing truth, including the one residual case: a hand-replaced file applies as-is.
+
+- Agent tool registration is schema-gated with a dynamic tool budget and a delegate view.
+
 ### Fixed
 
+- **Security wave A — the 2026-10-10 assessment's two Highs and the key-exposure mediums are closed (KES-01..04).** A server bound to the local network now refuses to start without an API key — any non-loopback bind, not just the previous agent-tools case — because plaintext HTTP leaves the key as the only gate between the LAN and this machine's engine. "Export diagnostics" no longer leaks `--api-key` into the shareable report: the builder is extracted and reuses the startup banner's redaction, with regression tests asserting the key never appears. The engine key left child-process argv (`ps`-visible for the server's whole lifetime): the bundled engine reads it from the 0600 local secret store through `--api-key-file`. Bonjour no longer broadcasts `auth: none` to the LAN. The Settings copy now states the plaintext-HTTP risk, the key requirement (warning upgraded from "recommended" to "required"), and where the key actually lives. Diagnosis and plan for the full upgrade: `UPGRADE_REPORT.md` and `.agents/missions/2026-10-12-enterprise-upgrade/`.
+
+- **The context trap is extinct: "Auto" context is real, and a request that cannot fit is refused before it is sent.** `contextAutomatic` was display-only — selecting "Auto" silently aliased 16384 while the Dashboard read "selected by the app" (the documented root cause of the "models not working" reports: a 128k window on an 8 GB card spills the KV cache out of VRAM and drops generation ~20×). Auto now computes the largest window whose weights + KV cache still fit, with the same halving solver router mode uses, keeps the configured value as its ceiling instead of rewriting it, and shows the computed number in the Dashboard, the startup banner (`ctx=… (auto)`) and the memory estimate. The chat meter, the auto-compaction threshold and the "may slow generation" heuristic all read the window the engine actually launched with. And the engine's `send_error` class (a request bigger than the window answered with nothing — reproduced live at 70,871 tokens against a 65,536 window) dies before the wire: the assembled request is estimated with the same per-message token estimator compaction trusts, and an over-window send stops with a bilingual notice naming the ways out (summarize, archive, new chat, raise the window) instead of a blank bubble.
+
 - **Markdown: `NSNotFound` capture-group ranges crashed `Range` conversion.** The new check harness flushed it out on its first CI run; group ranges are now guarded before conversion.
-- **The context trap is extinct.** "Auto" context used to alias 16384 while the Dashboard claimed it had chosen; it now computes the largest window that actually fits VRAM (weights + KV), and a send larger than the window is refused with a bilingual notice instead of reaching the engine unanswered.
+
 - **Agent tools retry only on transient errors.** A malformed or empty tool step no longer triggers blind rapid retries (the empty-answer storms), and the conversation rolls up per-turn token usage.
 
 ### Security (independent audit waves, KES-01…11)
 
 - LAN mode now **requires** the API key (was: plaintext HTTP, optional key); diagnostics export no longer includes the engine argv (which carried `--api-key`); the web UI advertises its auth state; agent-tool "always allow" consent is bounded per-tool with a revoke surface; archive-hook and update paths fail closed; imports are gated.
-
-### Changed
-
-- **Swift 6 language mode is live.** The app compiles under full v6 checking: the package split into a `KestrelCore` library plus a thin app launcher, which also dodged the previously documented IRGen toolchain crash — verified locally (CLT) and in CI (Xcode 26.5).
-- **Kestrel owns latch's provider configuration** — the pi-pattern applied to the second sidecar: generated config, one-time import of hand-authored files, consistency tests.
-- Agent tool registration is schema-gated with a dynamic tool budget and a delegate view.
 
 ## [0.89.2] - 2026-10-12
 

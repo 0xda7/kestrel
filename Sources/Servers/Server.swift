@@ -281,12 +281,23 @@ struct ServerSettings {
         }
     }
 
+    /// Set once by the check harness before any check runs (nil in
+    /// production): the per-port slot KV folders then resolve inside the
+    /// per-run store, so a check building engine argv — resolving a slot
+    /// directory CREATES it, a bare mkdir under the live Application
+    /// Support even when no slot file is ever written — cannot touch the
+    /// operator's live tree. Same contract as routerDirectoryOverride;
+    /// unsafe-by-contract because it is written only at startup.
+    nonisolated(unsafe) static var slotsDirectoryOverride: URL?
+
     /// Directory where one server's per-conversation KV slot files live. Namespaced
     /// by port so independent servers don't overwrite each other's slot 0 / prefix
     /// files in a shared folder.
     static func slotCacheDir(port: Int) -> URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Kestrel/slots/\(port)/\(slotKVSignature(port: port))")
+        let base = slotsDirectoryOverride
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Kestrel", isDirectory: true)
+        let dir = base.appendingPathComponent("slots/\(port)/\(slotKVSignature(port: port))", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

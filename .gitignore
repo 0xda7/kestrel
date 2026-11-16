@@ -13,3 +13,6 @@ icon-1024.png
 
 # local analysis artifacts
 out/
+
+# workflow-runner scratch (audit/debris; untracked by design)
+.zcode/

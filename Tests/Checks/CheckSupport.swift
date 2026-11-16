@@ -371,7 +371,9 @@ struct ChecksMain {
         // Same doctrine for the remaining live-data writers: the local
         // secret store (engine/provider keys, archive token), the
         // audio-studio recovery project, the router preset folder (a
-        // check building router argv resolves and creates it), and every
+        // check building router argv resolves and creates it), the
+        // per-port slot KV tree (resolving --slot-save-path mkdirs the
+        // live folder even when no slot file is ever written), and every
         // AppSupport-rooted store — the rotating server logs and their
         // retention prune, the engine PID lockfile, the memory-archive
         // delivery queue, the dynamic-MoE profiles, and the prompt
@@ -379,6 +381,7 @@ struct ChecksMain {
         // restore dance, or prune can ever reach the live files.
         LocalSecretStore.directoryOverride = ChatStore.storeDirectoryOverride
         ServerSettings.routerDirectoryOverride = ChatStore.storeDirectoryOverride
+        ServerSettings.slotsDirectoryOverride = ChatStore.storeDirectoryOverride
         AudioStudioController.recoveryURLOverride = ChatStore.storeDirectoryOverride?
             .appendingPathComponent("AudioRecovery.json")
         AppSupport.directoryOverride = ChatStore.storeDirectoryOverride

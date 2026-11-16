@@ -62,6 +62,60 @@ final class ChatStoreIsolationTests: CheckCase {
                        "a derived tool template must never land in the operator's real tool-templates folder")
     }
 
+    /// Same doctrine for the engine's per-port slot KV tree: resolving
+    /// slotCacheDir(port:) CREATES its folder (the engine requires an
+    /// existing --slot-save-path directory), so with
+    /// ServerSettings.slotsDirectoryOverride set the resolution, the
+    /// argv seam that reaches it (ServerSettings.arguments with
+    /// persistence on), and the mkdir itself must land inside the
+    /// per-run directory — the live slots tree must not gain so much as
+    /// an empty folder.
+    @MainActor func testSlotCacheDirResolvesInsideThePerRunOverride() throws {
+        guard let override = ServerSettings.slotsDirectoryOverride else {
+            return XCTFail("ChecksMain must set ServerSettings.slotsDirectoryOverride before any check runs — without it every --slot-save-path resolution mkdirs the operator's live slots tree")
+        }
+        let liveSlotsBefore = Self.slotFileInventory(under: CheckLivePaths.slotsDirectory)
+
+        let dir = ServerSettings.slotCacheDir(port: 4242)
+        XCTAssertTrue(dir.path.hasPrefix(override.path + "/"),
+                      "slotCacheDir must resolve inside the per-run override")
+        XCTAssertFalse(dir.path.hasPrefix(CheckLivePaths.kestrelDirectory.path),
+                       "slotCacheDir must never aim at the operator's live Kestrel tree")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.path),
+                      "resolving slotCacheDir must create its folder inside the per-run override")
+
+        // The argv seam that reaches slotCacheDir in production: with
+        // persistence on, the emitted --slot-save-path must carry the
+        // overridden directory, never a live path.
+        var settings = ServerSettings(serverBinary: "/usr/bin/true", modelPath: "/tmp/m.gguf", port: 4242,
+                                      ngl: 99, ncmoe: 24, ctx: 16384, threads: 6, flashAttn: "auto",
+                                      noMmap: true, jinja: true,
+                                      vramReserveMB: 1024, gpuIndex: -1, extraArgs: "",
+                                      cacheTypeK: "f16", cacheTypeV: "f16", mlock: false)
+        settings.persistCache = true
+        settings.faAmd = true
+        let args = settings.arguments
+        let slotPath = args[args.firstIndex(of: "--slot-save-path")! + 1]
+        XCTAssertTrue(slotPath.hasPrefix(override.path + "/"),
+                      "the --slot-save-path argv must carry the per-run override, not a live path")
+
+        // The extended inventory sees a bare directory creation — the
+        // exact shape a live-tree mkdir would leave — so a seeded empty
+        // slot folder inside a fixture root shows as a new dir row.
+        let fixtureRoot = override.appendingPathComponent("inventory-fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtureRoot, withIntermediateDirectories: true)
+        let fixtureBefore = Self.slotFileInventory(under: fixtureRoot)
+        try FileManager.default.createDirectory(
+            at: fixtureRoot.appendingPathComponent("4242/f16-f16-v", isDirectory: true),
+            withIntermediateDirectories: true)
+        XCTAssertNotEqual(Self.slotFileInventory(under: fixtureRoot), fixtureBefore,
+                          "the inventory must catch a bare directory creation — the shape slotCacheDir leaves before any slot file exists")
+
+        XCTAssertEqual(Self.slotFileInventory(under: CheckLivePaths.slotsDirectory),
+                       liveSlotsBefore,
+                       "a slot-directory resolution must not add, remove, or touch so much as a folder in the live slots tree")
+    }
+
     /// Same doctrine for the local secret store: with
     /// LocalSecretStore.directoryOverride set, a full store/read/delete
     /// cycle — the exact cycle the KES-08 migration performs on the archive
@@ -266,17 +320,21 @@ final class ChatStoreIsolationTests: CheckCase {
                        "the live engine PID lockfile must not change by one byte")
     }
 
-    /// Stable inventory of every file under the slot tree: relative path plus
-    /// byte count, so an add, a delete, or an in-place rewrite all show.
+    /// Stable inventory of every file AND directory under the slot tree:
+    /// kind plus relative path (plus byte count for files), so an add, a
+    /// delete, an in-place rewrite, or a bare directory creation — the
+    /// shape slotCacheDir's mkdir leaves before any slot file exists —
+    /// all show.
     private static func slotFileInventory(under root: URL) -> [String] {
         let fm = FileManager.default
-        guard let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey]) else {
+        guard let walker = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey]) else {
             return []
         }
         var rows: [String] = []
         for case let url as URL in walker {
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
-            rows.append("\(url.path.replacingOccurrences(of: root.path + "/", with: "")):\(size)")
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+            let rel = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            rows.append((values?.isDirectory ?? false) ? "dir:\(rel)" : "file:\(rel):\(values?.fileSize ?? -1)")
         }
         return rows.sorted()
     }
@@ -292,5 +350,6 @@ extension ChatStoreIsolationTests {
             .init(name: "testLocalSecretStoreCycleNeverTouchesTheLiveSecrets") { try $0.testLocalSecretStoreCycleNeverTouchesTheLiveSecrets() },
             .init(name: "testAudioRecoveryRoundTripNeverTouchesTheLiveFile") { try $0.testAudioRecoveryRoundTripNeverTouchesTheLiveFile() },
             .init(name: "testServerCycleAndSupportStoresNeverTouchTheLiveTree") { try $0.testServerCycleAndSupportStoresNeverTouchTheLiveTree() },
+            .init(name: "testSlotCacheDirResolvesInsideThePerRunOverride") { try $0.testSlotCacheDirResolvesInsideThePerRunOverride() },
         ])
 }

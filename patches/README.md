@@ -60,8 +60,9 @@ on upstream's tile prepass (`htpe`/`hids`) with the Kestrel NLR/manual/wave64 se
 re-applied on top. The numbered-per-change tail patches (0008-0097) were absorbed into the
 regenerated seven during this port — their contents are unchanged in the tree, but the
 per-change patches are gone (see the 2026-10-13 mission journal for the drop list); new
-changes number from 0098. Laya loads on this base (`a4cb4c61f` systemone API, `1537a0a8b`
-abort fix, `6184e92c5` exact GELU ModernBERT).
+changes number from 0098. (The ModernBERT/decision-model capability this base was verified
+for — `a4cb4c61f` systemone API, `1537a0a8b` abort fix, `6184e92c5` exact GELU — remains
+engine-side; the app-level Laya integration was removed in 0.89.13 per operator decision.)
 
 ## `shared-metal/`
 
