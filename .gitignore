@@ -6,6 +6,10 @@ AppIcon.iconset/
 icon-1024.png
 .DS_Store
 
+# release artifacts must never be committed from a release machine
+*.dmg
+/checksums.txt
+
 /experiments/
 
 # Local-only operator backups (may carry pre-rebrand personal metadata)

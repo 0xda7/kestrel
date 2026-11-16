@@ -24,7 +24,10 @@ elif [ -z "$CI" ] && [ "$KESTREL_NO_BUMP" != "1" ]; then
 else
     VERSION=$(<VERSION)
 fi
-sed -i '' -E "s/static let version = \"[^\"]*\"/static let version = \"$VERSION\"/" Sources/App/AboutTab.swift
+sed -i '' -E "s/static let versionFallback = \"[^\"]*\"/static let versionFallback = \"$VERSION\"/" Sources/App/AboutTab.swift
+# Post-condition: the stamp must have matched, or the release ships mislabeled again.
+grep -q "static let versionFallback = \"$VERSION\"" Sources/App/AboutTab.swift || {
+    echo "error: failed to stamp version $VERSION into Sources/App/AboutTab.swift" >&2; exit 1; }
 echo "version: $VERSION"
 
 # Stamp the no-AVX2 variant so the updater keeps it on its own channel (an AVX2 DMG

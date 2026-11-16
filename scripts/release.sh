@@ -20,10 +20,14 @@ if ! grep -q "^## \[$V\]" CHANGELOG.md; then
     exit 1
 fi
 
-# The in-app About page reads AppInfo.version. Stamp it from VERSION here so
-# a release can never ship mislabeled (v0.89.1 shipped with "0.89.0" on the
-# About page because the constant was edited by hand).
-sed -i '' "s/static let version = \"[^\"]*\"/static let version = \"$V\"/" Sources/App/AboutTab.swift
+# AppInfo.version now reads the bundle's CFBundleShortVersionString (stamped from
+# VERSION by make-app.sh); the literal below is only the CLI-checks fallback and the
+# sed target. Stamp it here too so a release can never ship mislabeled (v0.89.1 and
+# v0.90.0 both shipped mislabeled because the old constant was edited by hand).
+sed -i '' "s/static let versionFallback = \"[^\"]*\"/static let versionFallback = \"$V\"/" Sources/App/AboutTab.swift
+# Post-condition: the stamp must have matched.
+grep -q "static let versionFallback = \"$V\"" Sources/App/AboutTab.swift || {
+    echo "error: failed to stamp version $V into Sources/App/AboutTab.swift" >&2; exit 1; }
 
 git add CHANGELOG.md VERSION Sources/App/AboutTab.swift
 git diff --cached --quiet || git commit -m "release: $V"

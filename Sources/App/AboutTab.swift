@@ -7,7 +7,16 @@ import SwiftUI
 // MARK: - About
 
 enum AppInfo {
-    static let version = "0.90.0"
+    /// Single source of truth at runtime is the bundle's CFBundleShortVersionString,
+    /// stamped from the VERSION file by make-app.sh / release.sh. The fallback literal
+    /// below is the release scripts' sed target (keep this line shape intact) and the
+    /// value used by the kestrel-checks CLI target, which has no app bundle.
+    /// Never hand-edit the version for a release: bump VERSION and run scripts/release.sh.
+    static let versionFallback = "0.90.0"
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? versionFallback
+    }
     /// True for the pre-AVX2 legacy build (Info.plist KestrelNoAVX2). Kept on its own
     /// update channel so it never pulls an AVX2 DMG that would SIGILL on those CPUs.
     static let isNoAVX2 = Bundle.main.object(forInfoDictionaryKey: "KestrelNoAVX2") as? Bool ?? false
