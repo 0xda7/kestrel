@@ -1,0 +1,2 @@
+2026-11-16T10:39:23Z supervisor: restart: killing the port listener
+2026-11-16T10:39:23Z supervisor: sent SIGTERM to port listener pid 66844

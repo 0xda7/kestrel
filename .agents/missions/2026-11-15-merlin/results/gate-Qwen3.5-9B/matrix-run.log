@@ -1,0 +1,9 @@
+^Dlive: model Qwen3.5-9B-distilled-IQ4_NL.gguf → family 'qwen3.5', rung nativeTools, max_tokens 1024, floor 512 + 512 headroom
+run root: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Qwen3.5-9B/runs/20261116-102000
+sandbox-exec: execvp() of '/bin/true' failed: No such file or directory
+  [merlin] T01 ✔(3t)
+  [baseline] T01 ✔(4t)
+  [merlin] T02 ✔(4t)
+  [baseline] T02 ✔(4t)
+  [merlin] T03 ✘(1t) — FAILED
+  [baseline] T03 ✘(1t,budget) — FAILED

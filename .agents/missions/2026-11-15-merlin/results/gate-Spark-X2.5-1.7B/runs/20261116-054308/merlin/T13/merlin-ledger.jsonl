@@ -1,0 +1,11 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock inputs tools","turn":1}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":2}
+{"key":"fs_list","kind":"result","text":"README.md build.sh gen_parts.py","turn":2}
+{"key":"fs_list","kind":"result","text":".merlin-lock inputs merlin-ledger.jsonl tools","turn":3}
+{"key":"fs_read","kind":"result","text":"error: no such file: README.md","turn":3}
+{"key":"fs_read","kind":"result","text":"error: no such file: build.sh","turn":3}
+{"key":"fs_read","kind":"result","text":"error: no such file: gen_parts.py","turn":3}
+{"key":"fs_list","kind":"result","text":"README.md build.sh gen_parts.py","turn":4}
+{"key":"fs_read","kind":"result","text":"eval-T13","turn":4}
+{"key":"actor","kind":"blocker","text":"actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7faed780d9f0 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <E469A822-7164-4E17-AB5D-626609FFF8CF>.<164>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <E469A822-7164-4E17-AB5D-626609FFF8CF>.<164>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, NSErrorFailingURLKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, _kCFStreamErrorDomainKey=4}","turn":5}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":5}

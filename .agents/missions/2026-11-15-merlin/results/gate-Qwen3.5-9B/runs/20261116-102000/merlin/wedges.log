@@ -1,0 +1,2 @@
+2026-11-16T10:39:23Z	port=8302	cell=T03/qwen3.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T10:39:34Z	port=8302	cell=T03/qwen3.5-nativeTools	wedge_retry_server_restarted	relaunch_failed: port 8302 still occupied after kill

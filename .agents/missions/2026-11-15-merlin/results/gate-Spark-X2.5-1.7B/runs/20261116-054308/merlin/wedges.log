@@ -1,0 +1,33 @@
+2026-11-16T05:59:29Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T05:59:35Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 33379 on port 8301
+2026-11-16T06:03:48Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T06:13:27Z	port=8301	cell=T03/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T06:13:31Z	port=8301	cell=T03/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 35181 on port 8301
+2026-11-16T06:17:21Z	port=8301	cell=T03/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T06:48:00Z	port=8301	cell=T04/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T06:48:04Z	port=8301	cell=T04/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 39659 on port 8301
+2026-11-16T06:52:35Z	port=8301	cell=T04/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T07:01:24Z	port=8301	cell=T05/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T07:01:28Z	port=8301	cell=T05/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 41382 on port 8301
+2026-11-16T07:03:56Z	port=8301	cell=T05/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T07:28:51Z	port=8301	cell=T06/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T07:28:53Z	port=8301	cell=T06/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 44935 on port 8301
+2026-11-16T07:37:47Z	port=8301	cell=T06/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T07:45:14Z	port=8301	cell=T07/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T07:45:18Z	port=8301	cell=T07/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 47079 on port 8301
+2026-11-16T07:55:18Z	port=8301	cell=T07/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge
+2026-11-16T08:22:18Z	port=8301	cell=T08/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T08:22:22Z	port=8301	cell=T08/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 51858 on port 8301
+2026-11-16T08:24:50Z	port=8301	cell=T08/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T08:45:45Z	port=8301	cell=T10/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T08:45:48Z	port=8301	cell=T10/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 54878 on port 8301
+2026-11-16T08:48:41Z	port=8301	cell=T10/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T09:24:12Z	port=8301	cell=T12/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T09:24:16Z	port=8301	cell=T12/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 59807 on port 8301
+2026-11-16T09:30:13Z	port=8301	cell=T12/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T09:38:41Z	port=8301	cell=T13/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T09:38:45Z	port=8301	cell=T13/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 61677 on port 8301
+2026-11-16T09:48:45Z	port=8301	cell=T13/spark-x2.5-nativeTools	wedge_retry_wedged	permanent harness_event:wedge
+2026-11-16T10:15:45Z	port=8301	cell=T14/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T10:15:48Z	port=8301	cell=T14/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 66467 on port 8301
+2026-11-16T10:16:57Z	port=8301	cell=T14/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance

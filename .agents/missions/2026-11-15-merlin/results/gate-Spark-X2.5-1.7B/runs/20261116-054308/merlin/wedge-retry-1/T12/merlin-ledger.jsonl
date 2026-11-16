@@ -1,0 +1,15 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock data summary.txt","turn":1}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":2}
+{"key":"fs_list","kind":"result","text":".merlin-lock data merlin-ledger.jsonl summary.txt","turn":2}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/summary.txt","turn":3}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/data\/merlin-ledger.jsonl","turn":3}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":4}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock\/data","turn":4}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock","turn":5}
+{"key":"fs_list","kind":"result","text":"error: not a directory in the workspace: .merlin-lock\/data","turn":5}
+{"key":"fs_list","kind":"result","text":".merlin-lock data merlin-ledger.jsonl summary.txt","turn":6}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/summary.txt","turn":7}
+{"key":"fs_read","kind":"result","text":"error: no such file: .merlin-lock\/data\/merlin-ledger.jsonl","turn":7}
+{"key":"fs_list","kind":"result","text":".merlin-lock data merlin-ledger.jsonl summary.txt","turn":8}
+{"key":"actor","kind":"blocker","text":"actor failed: [nativeTools] response carried no parseable tool calls","turn":9}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":9}

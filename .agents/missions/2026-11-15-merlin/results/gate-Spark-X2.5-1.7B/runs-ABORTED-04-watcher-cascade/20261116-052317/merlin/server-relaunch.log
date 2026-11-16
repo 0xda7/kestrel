@@ -1,0 +1,22 @@
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.00.965.729 I srv  llama_server: initializing ...
+0.00.965.742 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.00.965.743 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.966.169 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.967.559 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'
+0.01.884.036 I cmn          init: llama threadpool init, n_threads = 8
+0.02.061.090 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+0.02.092.196 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.02.092.222 I srv  llama_server: model loaded
+0.02.092.226 I srv  llama_server: listening on http://127.0.0.1:8301
+0.04.005.110 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.04.005.959 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+2026-11-16T05:38:24Z supervisor: restart: killing the port listener
+2026-11-16T05:38:25Z supervisor: no listener found on port 8301
+2026-11-16T05:38:25Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server
+ggml_metal: device 0: AMD Radeon Pro 5500M (peer group 0, not bridged) probed SIMD-group width = 32 (32 = Apple/AMD RDNA, 64 = AMD GCN/Vega)
+0.00.043.588 I srv  llama_server: initializing ...
+0.00.043.600 I cmn  common_param: common_params_print_info: Kestrel engine 0.89.5 (app standalone)
+0.00.043.600 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.044.028 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.045.743 I srv    load_model: loading model '/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf'

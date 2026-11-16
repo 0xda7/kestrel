@@ -1,0 +1,5 @@
+2026-11-16T05:38:17Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T05:38:23Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 27918 on port 8301
+2026-11-16T05:38:24Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_retry_recovered	cell scored on the fresh instance
+2026-11-16T05:38:24Z	port=8301	cell=T05/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T05:38:27Z	port=8301	cell=T05/spark-x2.5-nativeTools	wedge_retry_server_restarted	relaunch_failed: /health not ok within the load window (see the relaunch log)

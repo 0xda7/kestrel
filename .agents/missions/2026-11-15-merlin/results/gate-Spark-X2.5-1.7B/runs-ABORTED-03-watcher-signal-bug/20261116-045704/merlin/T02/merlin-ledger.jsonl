@@ -1,0 +1,6 @@
+{"key":"fs_list","kind":"result","text":"alpha.txt bravo.txt charlie.txt delta.txt echo.txt","turn":1}
+{"key":"fs_grep","kind":"result","text":"docs\/charlie.txt:2: Marker: K7-QX-4417","turn":1}
+{"key":"marker.txt","kind":"artifact","text":"wrote 11 chars to marker.txt","turn":2}
+{"key":"fs_write","kind":"result","text":"wrote marker.txt (11 chars)","turn":2}
+{"key":"fs_read","kind":"result","text":"charlie.txt","turn":3}
+{"key":"task_done","kind":"result","text":"Goal achieved: exactly one .txt file in docs\/ contains \"K7-QX-4417\"\n- marker.txt\n- charlie.txt","turn":4}

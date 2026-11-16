@@ -1,0 +1,4 @@
+2026-11-16T04:46:16Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T04:46:27Z	port=8301	cell=T02/spark-x2.5-nativeTools	wedge_retry_server_restarted	relaunch_failed: port 8301 still occupied after kill
+2026-11-16T04:53:27Z	port=8301	cell=T03/spark-x2.5-nativeTools	wedge_first_attempt	actor_failed
+2026-11-16T04:53:32Z	port=8301	cell=T03/spark-x2.5-nativeTools	wedge_retry_server_restarted	ready: pid 16488 on port 8301

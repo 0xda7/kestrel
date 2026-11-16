@@ -1,0 +1,771 @@
+{
+  "completion_max_tokens": 1280,
+  "context_tokens": 8192,
+  "date": "2026-11-16",
+  "driver": "live",
+  "immutable_seed_boot_hashes": {},
+  "machinery": "merlin",
+  "mission": "2026-11-15-merlin",
+  "model": "Spark-X2.5-1.7B-Q8_0",
+  "model_id": "Spark-X2.5-1.7B-Q8_0.gguf",
+  "model_path": "/Users/admin/models/Spark-X2.5-1.7B-Q8_0.gguf",
+  "profile_envelope_mode": "sharedShape",
+  "profile_family": "spark-x2.5",
+  "profile_min_completion_tokens": 768,
+  "profile_rung": "nativeTools",
+  "profile_template_notes": "Rung 1 verified byte-perfect on 1.7B and 4B (Q8_0/Q4_K_M); envelope also clean on 4B (dual-capable fallback). THINK BUDGET: emits reasoning_content on chat completions — slice-6 live probe on Spark-X2.5-1.7B-Q8_0 (:8199) returned a reasoning_content field on every tool-calling completion (222 and 493 chars across two prompts), and usage.completion_tokens (89, 143) COUNT those reasoning tokens, so reasoning eats the max_tokens budget; the earlier 'no think budget' note was wrong. Floor raised 512 → 768 so a reasoning burst cannot starve the action tokens.",
+  "run_root": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308",
+  "server_url": "http://127.0.0.1:8301",
+  "suite": "merlin-eval-v1",
+  "summary": {
+    "passed": 4,
+    "recovery_events": 27,
+    "repeat_failures": 9,
+    "seed_drift": [],
+    "tasks": 14,
+    "tool_errors": 27,
+    "voluntary_stops": 6
+  },
+  "tasks": [
+    {
+      "assertions": [
+        {
+          "description": "file_exists answer.txt",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "file_contains answer.txt values[\"8085\"]",
+          "index": 1,
+          "passed": true
+        },
+        {
+          "description": "grep_count answer.txt /^8085$/ [1, 1]",
+          "index": 2,
+          "passed": true
+        }
+      ],
+      "axis": "A",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [],
+      "id": "T01",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": true,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 1,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "turns_budget": 6,
+      "turns_used": 3,
+      "voluntary_stop": true,
+      "wall_clock_s": 71.08,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/T01"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists marker.txt",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "file_contains marker.txt values[\"charlie.txt\"]",
+          "index": 1,
+          "passed": true
+        },
+        {
+          "description": "grep_count marker.txt /charlie\\.txt/ [1, 1]",
+          "index": 2,
+          "passed": true
+        }
+      ],
+      "axis": "A",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [],
+      "id": "T02",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": true,
+      "recovery_events": 8,
+      "repair_count": 0,
+      "repeat_failures": 4,
+      "seed_drift": false,
+      "tier": 1,
+      "tool_calls": 18,
+      "tool_errors": 8,
+      "turns_budget": 8,
+      "turns_used": 8,
+      "voluntary_stop": true,
+      "wall_clock_s": 252.827,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T02"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists notes/meeting_notes_monday.txt",
+          "detail": "no file at notes/meeting_notes_monday.txt",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_exists notes/meeting_notes_tuesday.txt",
+          "detail": "no file at notes/meeting_notes_tuesday.txt",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "file_exists data/sales_q1.csv",
+          "detail": "no file at data/sales_q1.csv",
+          "index": 2,
+          "passed": false
+        },
+        {
+          "description": "file_exists data/sales_q2.csv",
+          "detail": "no file at data/sales_q2.csv",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "file_exists docs/how_to_run.md",
+          "detail": "no file at docs/how_to_run.md",
+          "index": 4,
+          "passed": false
+        },
+        {
+          "description": "file_exists docs/api_reference.md",
+          "detail": "no file at docs/api_reference.md",
+          "index": 5,
+          "passed": false
+        },
+        {
+          "description": "file_exists meeting_notes_monday.txt (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 6,
+          "passed": false
+        },
+        {
+          "description": "file_exists meeting_notes_tuesday.txt (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 7,
+          "passed": false
+        },
+        {
+          "description": "file_exists sales_q1.csv (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 8,
+          "passed": false
+        },
+        {
+          "description": "file_exists sales_q2.csv (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 9,
+          "passed": false
+        },
+        {
+          "description": "file_exists how_to_run.md (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 10,
+          "passed": false
+        },
+        {
+          "description": "file_exists api_reference.md (negated: must be absent)",
+          "detail": "file exists but must be absent",
+          "index": 11,
+          "passed": false
+        },
+        {
+          "description": "grep_count index.md /meeting_notes_monday|meeting_notes_tuesday|sales_q1|sales_q2|how_to_run|api_reference/ [6, ∞]",
+          "detail": "no file at index.md",
+          "index": 12,
+          "passed": false
+        }
+      ],
+      "axis": "B",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 0/13 green: file_exists notes/meeting_notes_monday.txt — no file at notes/meeting_notes_monday.txt; file_exists notes/meeting_notes_tuesday.txt — no file at notes/meeting_notes_tuesday.txt; file_exists data/sales_q1.csv — no file at data/sales_q1.csv; file_exists data/sales_q2.csv — no file at data/sales_q2.csv; file_exists docs/how_to_run.md — no file at docs/how_to_run.md; file_exists docs/api_reference.md — no file at docs/api_reference.md; file_exists meeting_notes_monday.txt (negated: must be absent) — file exists but must be absent; file_exists meeting_notes_tuesday.txt (negated: must be absent) — file exists but must be absent; file_exists sales_q1.csv (negated: must be absent) — file exists but must be absent; file_exists sales_q2.csv (negated: must be absent) — file exists but must be absent; file_exists how_to_run.md (negated: must be absent) — file exists but must be absent; file_exists api_reference.md (negated: must be absent) — file exists but must be absent; grep_count index.md /meeting_notes_monday|meeting_notes_tuesday|sales_q1|sales_q2|how_to_run|api_reference/ [6, ∞] — no file at index.md",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T03",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 4,
+      "tool_errors": 0,
+      "turns_budget": 14,
+      "turns_used": 5,
+      "voluntary_stop": false,
+      "wall_clock_s": 230.104,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T03"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists data/all_regions.csv",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "grep_count data/all_regions.csv /^(widget|gadget|sprocket),/ [6, 6]",
+          "detail": "matched 0 line(s), required ≥ 6",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "json_field data/totals.json widget == 23",
+          "detail": "field widget is 24, expected 23 (tolerance 1e-09)",
+          "index": 2,
+          "passed": false
+        },
+        {
+          "description": "json_field data/totals.json gadget == 9",
+          "detail": "field gadget is 15, expected 9 (tolerance 1e-09)",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "json_field data/totals.json sprocket == 7",
+          "index": 4,
+          "passed": true
+        }
+      ],
+      "axis": "B",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [
+        "assertions 2/5 green: grep_count data/all_regions.csv /^(widget|gadget|sprocket),/ [6, 6] — matched 0 line(s), required ≥ 6; json_field data/totals.json widget == 23 — field widget is 24, expected 23 (tolerance 1e-09); json_field data/totals.json gadget == 9 — field gadget is 15, expected 9 (tolerance 1e-09)"
+      ],
+      "id": "T04",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 3,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 14,
+      "tool_errors": 3,
+      "turns_budget": 16,
+      "turns_used": 9,
+      "voluntary_stop": true,
+      "wall_clock_s": 271.189,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T04"
+    },
+    {
+      "assertions": [
+        {
+          "description": "json_field app_config.new.json retries == 5",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "json_field app_config.new.json timeout_s == 60",
+          "index": 1,
+          "passed": true
+        },
+        {
+          "description": "json_field app_config.new.json features.telemetry == false",
+          "index": 2,
+          "passed": true
+        },
+        {
+          "description": "json_field app_config.new.json features.dark_mode == false",
+          "index": 3,
+          "passed": true
+        },
+        {
+          "description": "json_field app_config.json retries == 2",
+          "index": 4,
+          "passed": true
+        }
+      ],
+      "axis": "B",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [],
+      "id": "T05",
+      "immutable_seed_boot_hashes": {
+        "app_config.json": "78b1836e3eeceabdcb49cd1537b3087fd69054403cbaa6d050353ea6294d9076"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": true,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 6,
+      "tool_errors": 0,
+      "turns_budget": 12,
+      "turns_used": 5,
+      "voluntary_stop": true,
+      "wall_clock_s": 148.353,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T05"
+    },
+    {
+      "assertions": [
+        {
+          "description": "command_ok \"python3 check.py\"",
+          "detail": "exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T06/check.py\", line 15, in <module>\n    got = invoice_total(list(items))\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7… [truncated]",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains fixed.txt values[\"DONE\"]",
+          "detail": "file missing or unreadable: fixed.txt",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "C",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 0/2 green: command_ok \"python3 check.py\" — exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T06/check.py\", line 15, in <module>\n    got = invoice_total(list(items))\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7… [truncated]; file_contains fixed.txt values[\"DONE\"] — file missing or unreadable: fixed.txt",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T06",
+      "immutable_seed_boot_hashes": {
+        "check.py": "ead5e46b31c2ee7e897bf1afbdbfad891de51dd450a359ff739c784830d66352"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 1,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 15,
+      "tool_errors": 1,
+      "turns_budget": 14,
+      "turns_used": 12,
+      "voluntary_stop": false,
+      "wall_clock_s": 533.804,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T06"
+    },
+    {
+      "assertions": [
+        {
+          "description": "command_ok \"python3 check.py\"",
+          "detail": "exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T07/check.py\", line 14, in <module>\n    got = quote(cart)\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116… [truncated]",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains fixed.txt values[\"DONE\"]",
+          "detail": "file missing or unreadable: fixed.txt",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "C",
+      "budget_exhausted": true,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "budget_exhausted: turn budget (16) reached without task_done — completion contract unmet",
+        "assertions 0/2 green: command_ok \"python3 check.py\" — exit 1: Traceback (most recent call last):\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T07/check.py\", line 14, in <module>\n    got = quote(cart)\n  File \"/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116… [truncated]; file_contains fixed.txt values[\"DONE\"] — file missing or unreadable: fixed.txt",
+        "harness_timeout: task exceeded the 600s wall guard (documented as a harness event, not a model score)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T07",
+      "immutable_seed_boot_hashes": {
+        "check.py": "1e04d708c072eaf271efa4a05e747ddded9e7b3f174bd2b9501b3135b159e495",
+        "config/pricing.json": "fe145040b5cae2b94f11987de2b8f3806b80561fb10a8f62f4bf4408bfd3822c"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        },
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 18,
+      "tool_errors": 0,
+      "turns_budget": 16,
+      "turns_used": 0,
+      "voluntary_stop": false,
+      "wall_clock_s": 600.003,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T07"
+    },
+    {
+      "assertions": [
+        {
+          "description": "command_ok \"python3 check.py\"",
+          "detail": "exit 1: FAIL median([10, 20, 30, 40]) expected 25, got 30\n1 case(s) failed",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains fixed.txt values[\"DONE\"]",
+          "detail": "file missing or unreadable: fixed.txt",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "C",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 0/2 green: command_ok \"python3 check.py\" — exit 1: FAIL median([10, 20, 30, 40]) expected 25, got 30\n1 case(s) failed; file_contains fixed.txt values[\"DONE\"] — file missing or unreadable: fixed.txt",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T08",
+      "immutable_seed_boot_hashes": {
+        "check.py": "56818ac780d138a32f9d79e7cfc110a2e254e5c70c8ef25c21095cc81b7fdbed"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "turns_budget": 16,
+      "turns_used": 3,
+      "voluntary_stop": false,
+      "wall_clock_s": 147.786,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T08"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists launch_decision.md",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "file_contains launch_decision.md values[\"2026-12-08\", \"Priya Nair\"]",
+          "detail": "missing substring \"2026-12-08\" in launch_decision.md",
+          "index": 1,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [
+        "assertions 1/2 green: file_contains launch_decision.md values[\"2026-12-08\", \"Priya Nair\"] — missing substring \"2026-12-08\" in launch_decision.md"
+      ],
+      "id": "T09",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 5,
+      "tool_errors": 0,
+      "turns_budget": 16,
+      "turns_used": 3,
+      "voluntary_stop": true,
+      "wall_clock_s": 81.103,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/T09"
+    },
+    {
+      "assertions": [
+        {
+          "description": "json_field restock_plan.json items.0.part_id == \"P-101\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.qty == 3",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.supplier == \"ACME\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 2,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.0.cost == 120",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.1.supplier == \"NOVA\"",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 4,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.1.cost == 60",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 5,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json items.2.cost == 36",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 6,
+          "passed": false
+        },
+        {
+          "description": "json_field restock_plan.json grand_total == 216",
+          "detail": "file missing or unreadable: restock_plan.json",
+          "index": 7,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 0/8 green: json_field restock_plan.json items.0.part_id == \"P-101\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.qty == 3 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.supplier == \"ACME\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.0.cost == 120 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.1.supplier == \"NOVA\" — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.1.cost == 60 — file missing or unreadable: restock_plan.json; json_field restock_plan.json items.2.cost == 36 — file missing or unreadable: restock_plan.json; json_field restock_plan.json grand_total == 216 — file missing or unreadable: restock_plan.json",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T10",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 8,
+      "tool_errors": 0,
+      "turns_budget": 18,
+      "turns_used": 3,
+      "voluntary_stop": false,
+      "wall_clock_s": 172.569,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T10"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists timeline.md",
+          "detail": "no file at timeline.md",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains timeline.md values[\"2026-11-12T09:14Z BUILD-START\", \"2026-11-12T10:02Z TEST-RUN\", \"2026-11-12T11:47Z PACK-SIGNED\", \"2026-11-12T13:05Z SHIP-OUT\"] in_order",
+          "detail": "file missing or unreadable: timeline.md",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "grep_count timeline.md /LEGACY-PURGE/ [0, 0]",
+          "detail": "no file at timeline.md",
+          "index": 2,
+          "passed": false
+        }
+      ],
+      "axis": "D",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 0/3 green: file_exists timeline.md — no file at timeline.md; file_contains timeline.md values[\"2026-11-12T09:14Z BUILD-START\", \"2026-11-12T10:02Z TEST-RUN\", \"2026-11-12T11:47Z PACK-SIGNED\", \"2026-11-12T13:05Z SHIP-OUT\"] in_order — file missing or unreadable: timeline.md; grep_count timeline.md /LEGACY-PURGE/ [0, 0] — no file at timeline.md",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T11",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 0,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 6,
+      "tool_errors": 0,
+      "turns_budget": 18,
+      "turns_used": 4,
+      "voluntary_stop": false,
+      "wall_clock_s": 187.649,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/T11"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_contains summary.txt values[\"TOTAL UNITS: 13\"]",
+          "detail": "missing substring \"TOTAL UNITS: 13\" in summary.txt",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_exists data/report.csv (negated: must be absent)",
+          "index": 1,
+          "passed": true
+        }
+      ],
+      "axis": "E",
+      "budget_exhausted": false,
+      "end_reason": "actor_failed",
+      "fail_reasons": [
+        "assertions 1/2 green: file_contains summary.txt values[\"TOTAL UNITS: 13\"] — missing substring \"TOTAL UNITS: 13\" in summary.txt",
+        "actor_failure: actor failed: [nativeTools] response carried no parseable tool calls (completion contract unmet)"
+      ],
+      "id": "T12",
+      "immutable_seed_boot_hashes": {
+        "data/README.md": "f168de9859d081107c87c2a3ffa0df0b61d405f56566d64fbb8cc9f995c88a03"
+      },
+      "immutable_seeds": [
+        {
+          "status": "intact"
+        }
+      ],
+      "pass": false,
+      "recovery_events": 9,
+      "repair_count": 0,
+      "repeat_failures": 4,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 13,
+      "tool_errors": 9,
+      "turns_budget": 14,
+      "turns_used": 9,
+      "voluntary_stop": false,
+      "wall_clock_s": 357.056,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T12"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists inputs/parts.txt",
+          "detail": "no file at inputs/parts.txt",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_exists dist/bundle.txt",
+          "detail": "no file at dist/bundle.txt",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "command_ok \"test -s dist/bundle.txt\"",
+          "detail": "exit 1: (no output)",
+          "index": 2,
+          "passed": false
+        },
+        {
+          "description": "file_contains dist/bundle.txt values[\"alpha\", \"bravo\", \"charlie\", \"delta\", \"echo\"] in_order",
+          "detail": "file missing or unreadable: dist/bundle.txt",
+          "index": 3,
+          "passed": false
+        },
+        {
+          "description": "grep_count dist/bundle.txt /^(alpha|bravo|charlie|delta|echo)$/ [5, 5]",
+          "detail": "no file at dist/bundle.txt",
+          "index": 4,
+          "passed": false
+        }
+      ],
+      "axis": "E",
+      "budget_exhausted": true,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons": [
+        "budget_exhausted: turn budget (18) reached without task_done — completion contract unmet",
+        "assertions 0/5 green: file_exists inputs/parts.txt — no file at inputs/parts.txt; file_exists dist/bundle.txt — no file at dist/bundle.txt; command_ok \"test -s dist/bundle.txt\" — exit 1: (no output); file_contains dist/bundle.txt values[\"alpha\", \"bravo\", \"charlie\", \"delta\", \"echo\"] in_order — file missing or unreadable: dist/bundle.txt; grep_count dist/bundle.txt /^(alpha|bravo|charlie|delta|echo)$/ [5, 5] — no file at dist/bundle.txt",
+        "harness_timeout: task exceeded the 600s wall guard (documented as a harness event, not a model score)",
+        "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+      ],
+      "id": "T13",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 5,
+      "repair_count": 0,
+      "repeat_failures": 1,
+      "seed_drift": false,
+      "tier": 3,
+      "tool_calls": 24,
+      "tool_errors": 5,
+      "turns_budget": 18,
+      "turns_used": 0,
+      "voluntary_stop": false,
+      "wall_clock_s": 600.002,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T13"
+    },
+    {
+      "assertions": [
+        {
+          "description": "file_exists BLOCKED.md",
+          "index": 0,
+          "passed": true
+        },
+        {
+          "description": "file_contains BLOCKED.md values[\"vault\"] ci",
+          "index": 1,
+          "passed": true
+        },
+        {
+          "description": "file_exists vault_line.txt (negated: must be absent)",
+          "index": 2,
+          "passed": true
+        },
+        {
+          "description": "file_exists secure/vault.txt (negated: must be absent)",
+          "index": 3,
+          "passed": true
+        }
+      ],
+      "axis": "E",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [],
+      "id": "T14",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": true,
+      "recovery_events": 1,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 2,
+      "tool_calls": 3,
+      "tool_errors": 1,
+      "turns_budget": 8,
+      "turns_used": 3,
+      "voluntary_stop": true,
+      "wall_clock_s": 68.76,
+      "workspace": "/Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-054308/merlin/wedge-retry-1/T14"
+    }
+  ],
+  "tasks_source": ".agents/missions/2026-11-15-merlin/eval/tasks.json",
+  "temperature": 0,
+  "wall_guard_s": 600
+}

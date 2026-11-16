@@ -1,0 +1,8 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock logs","turn":1}
+{"key":"fs_list","kind":"result","text":"app_log_01.txt app_log_02.txt app_log_03.txt app_log_04.txt app_log_05.txt app_log_06.txt app_log_07.txt app_log_08.txt","turn":2}
+{"key":"fs_read","kind":"result","text":"2026-11-12T08:55Z service boot ok EVENT=BUILD-START ts=2026-11-12T09:14Z 2026-11-12T09:15Z compile flags: -O2","turn":3}
+{"key":"fs_read","kind":"result","text":"2026-11-12T09:30Z cache warm note from archive: EVENT=LEGACY-PURGE ts=2026-09-01T00:00Z 2026-11-12T09:31Z healthy","turn":3}
+{"key":"fs_read","kind":"result","text":"2026-11-12T10:01Z runner spawned EVENT=TEST-RUN ts=2026-11-12T10:02Z 2026-11-12T10:20Z 142 tests passed","turn":3}
+{"key":"fs_read","kind":"result","text":"2026-11-12T10:30Z lint clean 2026-11-12T10:44Z artifact cached","turn":3}
+{"key":"actor","kind":"blocker","text":"actor failed: [nativeTools] response carried no parseable tool calls","turn":4}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":4}

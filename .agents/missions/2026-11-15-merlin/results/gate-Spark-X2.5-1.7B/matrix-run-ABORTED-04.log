@@ -1,0 +1,78 @@
+^Dlive: model Spark-X2.5-1.7B-Q8_0.gguf → family 'spark-x2.5', rung nativeTools, max_tokens 1280, floor 768 + 512 headroom
+run root: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-052317
+sandbox-exec: execvp() of '/bin/true' failed: No such file or directory
+  [merlin] T01 ✔(3t)
+  [baseline] T01 ✔(3t)
+2026-11-16T05:38:17Z supervisor: restart: killing the port listener
+2026-11-16T05:38:18Z supervisor: sent SIGTERM to port listener pid 23941
+2026-11-16T05:38:19Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server
+  [merlin] T02 ✘(1t) — FAILED
+  [baseline] T02 ✔(6t)
+  [merlin] T03 ✘(1t) — FAILED
+  [baseline] T03 ✘(1t,budget) — FAILED
+  [merlin] T04 ✘(1t) — FAILED
+  [baseline] T04 ✘(1t,budget) — FAILED
+  [merlin] T05 ✘(1t) — FAILED
+  [baseline] T05 ✘(1t,budget) — FAILED
+  [merlin] T06 ✘(1t) — FAILED
+  [baseline] T06 ✘(1t,budget) — FAILED
+  [merlin] T07 ✘(1t) — FAILED
+  [baseline] T07 ✘(1t,budget) — FAILED
+  [merlin] T08 ✘(1t) — FAILED
+  [baseline] T08 ✘(1t,budget) — FAILED
+  [merlin] T09 ✘(1t) — FAILED
+  [baseline] T09 ✘(1t,budget) — FAILED
+  [merlin] T10 ✘(1t) — FAILED
+  [baseline] T10 ✘(1t,budget) — FAILED
+  [merlin] T11 ✘(1t) — FAILED
+  [baseline] T11 ✘(1t,budget) — FAILED
+  [merlin] T12 ✘(1t) — FAILED
+  [baseline] T12 ✘(1t,budget) — FAILED
+  [merlin] T13 ✘(1t) — FAILED
+  [baseline] T13 ✘(1t,budget) — FAILED
+  [merlin] T14 ✘(1t) — FAILED
+  [baseline] T14 ✘(1t,budget) — FAILED
+report-merlin.json → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-052317/report-merlin.json
+report-baseline.json → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-052317/report-baseline.json
+report.json → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-052317/report.json
+out.txt → /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-052317/out.txt
+MODEL SCORECARD — Spark-X2.5-1.7B-Q8_0 · suite merlin-eval-v1 · 2026-11-16 · machinery: merlin
+────────────────────────────────────────────────────────────────────────────
+pass_rate        : 1/14 (7.1%)
+axis_gates       : A ✘  B ✘  C ✘  D ✘  E ✘
+median_turns     : 1.0   (of budget; per-task turns_used median over all 14 runs)
+median_wallclock : 0m00s
+tool_errors      : 0 total
+recovery_events  : 0   ·  repeat_failures: 0
+repair_count     : 0                    # expected 0 on M1 grammar path
+voluntary_stops  : 1/14
+seed_drift       : none
+per-task         : T01 ✔(3t) T02 ✘(1t) T03 ✘(1t) T04 ✘(1t) T05 ✘(1t) T06 ✘(1t) T07 ✘(1t) T08 ✘(1t) T09 ✘(1t) T10 ✘(1t) T11 ✘(1t) T12 ✘(1t) T13 ✘(1t) T14 ✘(1t)
+────────────────────────────────────────────────────────────────────────────
+verdict          : MERLIN GATE: Spark-X2.5-1.7B-Q8_0 FAIL (suite gate = 14/14 tasks; got 1/14; failing axes: A, B, C, D, E)
+
+MODEL SCORECARD — Spark-X2.5-1.7B-Q8_0 · suite merlin-eval-v1 · 2026-11-16 · machinery: baseline
+────────────────────────────────────────────────────────────────────────────
+pass_rate        : 2/14 (14.3%)
+axis_gates       : A ✔  B ✘  C ✘  D ✘  E ✘
+median_turns     : 1.0   (of budget; per-task turns_used median over all 14 runs)
+median_wallclock : 0m00s
+tool_errors      : 0 total
+recovery_events  : 0   ·  repeat_failures: 0
+repair_count     : 0                    # expected 0 on M1 grammar path
+voluntary_stops  : 2/14
+seed_drift       : none
+per-task         : T01 ✔(3t) T02 ✔(6t) T03 ✘(1t,budget) T04 ✘(1t,budget) T05 ✘(1t,budget) T06 ✘(1t,budget) T07 ✘(1t,budget) T08 ✘(1t,budget) T09 ✘(1t,budget) T10 ✘(1t,budget) T11 ✘(1t,budget) T12 ✘(1t,budget) T13 ✘(1t,budget) T14 ✘(1t,budget)
+────────────────────────────────────────────────────────────────────────────
+verdict          : MERLIN GATE: Spark-X2.5-1.7B-Q8_0 FAIL (suite gate = 14/14 tasks; got 2/14; failing axes: B, C, D, E)
+
+MERLIN-EVAL REPORT — 2026-11-16
+models: Spark-X2.5-1.7B-Q8_0
+
+model                 machinery   pass_rate    axes    med_turns  med_time  recoveries  loops
+Spark-X2.5-1.7B-Q8_0  merlin     1/14 (7%)   A✘B✘C✘  1.0        0m00s      0           0
+Spark-X2.5-1.7B-Q8_0  baseline   2/14 (14%)  A✔B✘C✘  1.0        0m00s      0           0
+
+DELTA (merlin − baseline, per model): Spark-X2.5-1.7B-Q8_0: -7% pass rate, +0.0 median turns, +0 loops
+known flaws: (recorded per run in report.json fail_reasons)
+

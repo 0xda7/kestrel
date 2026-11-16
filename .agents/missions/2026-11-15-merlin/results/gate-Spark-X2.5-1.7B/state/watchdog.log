@@ -1,0 +1,38 @@
+2026-11-16T05:42:37Z watcher: anchored on 20260101-000000-chaingtest
+2026-11-16T05:42:39Z watcher: restart line -> sentinel
+2026-11-16T05:42:40Z watchdog: port 8301 confirmed free
+2026-11-16T05:43:33Z watcher: anchored on 20261116
+2026-11-16T05:43:47Z watcher: anchored on 20261116-054308
+2026-11-16T05:59:29Z watcher: restart line -> sentinel
+2026-11-16T05:59:30Z watchdog: SIGKILLed listener pid 31162 on port 8301
+2026-11-16T05:59:30Z watchdog: port 8301 confirmed free
+2026-11-16T06:13:27Z watcher: restart line -> sentinel
+2026-11-16T06:13:28Z watchdog: SIGKILLed listener pid 33379 on port 8301
+2026-11-16T06:13:28Z watchdog: port 8301 confirmed free
+2026-11-16T06:48:00Z watcher: restart line -> sentinel
+2026-11-16T06:48:01Z watchdog: SIGKILLed listener pid 35181 on port 8301
+2026-11-16T06:48:01Z watchdog: port 8301 confirmed free
+2026-11-16T07:01:24Z watcher: restart line -> sentinel
+2026-11-16T07:01:25Z watchdog: SIGKILLed listener pid 39659 on port 8301
+2026-11-16T07:01:25Z watchdog: port 8301 confirmed free
+2026-11-16T07:28:51Z watcher: restart line -> sentinel
+2026-11-16T07:28:51Z watchdog: SIGKILLed listener pid 41382 on port 8301
+2026-11-16T07:28:51Z watchdog: port 8301 confirmed free
+2026-11-16T07:45:14Z watcher: restart line -> sentinel
+2026-11-16T07:45:15Z watchdog: SIGKILLed listener pid 44935 on port 8301
+2026-11-16T07:45:15Z watchdog: port 8301 confirmed free
+2026-11-16T08:22:18Z watcher: restart line -> sentinel
+2026-11-16T08:22:19Z watchdog: SIGKILLed listener pid 47079 on port 8301
+2026-11-16T08:22:19Z watchdog: port 8301 confirmed free
+2026-11-16T08:45:45Z watcher: restart line -> sentinel
+2026-11-16T08:45:45Z watchdog: SIGKILLed listener pid 51858 on port 8301
+2026-11-16T08:45:46Z watchdog: port 8301 confirmed free
+2026-11-16T09:24:12Z watcher: restart line -> sentinel
+2026-11-16T09:24:13Z watchdog: SIGKILLed listener pid 54878 on port 8301
+2026-11-16T09:24:13Z watchdog: port 8301 confirmed free
+2026-11-16T09:38:41Z watcher: restart line -> sentinel
+2026-11-16T09:38:42Z watchdog: SIGKILLed listener pid 59807 on port 8301
+2026-11-16T09:38:42Z watchdog: port 8301 confirmed free
+2026-11-16T10:15:45Z watcher: restart line -> sentinel
+2026-11-16T10:15:46Z watchdog: SIGKILLed listener pid 61677 on port 8301
+2026-11-16T10:15:46Z watchdog: port 8301 confirmed free

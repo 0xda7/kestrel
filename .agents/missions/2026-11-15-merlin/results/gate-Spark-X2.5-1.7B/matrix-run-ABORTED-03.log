@@ -1,0 +1,11 @@
+^Dlive: model Spark-X2.5-1.7B-Q8_0.gguf → family 'spark-x2.5', rung nativeTools, max_tokens 1280, floor 768 + 512 headroom
+run root: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-045704
+sandbox-exec: execvp() of '/bin/true' failed: No such file or directory
+  [merlin] T01 ✔(3t)
+  [baseline] T01 ✔(3t)
+  [merlin] T02 ✔(4t)
+  [baseline] T02 ✔(5t)
+2026-11-16T05:11:35Z supervisor: restart: killing the port listener
+2026-11-16T05:11:35Z supervisor: sent SIGTERM to port listener pid 16934
+  [merlin] T03 ✘(1t) — FAILED
+  [baseline] T03 ✘(1t,budget) — FAILED

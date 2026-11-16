@@ -1,0 +1,10 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock catalog orders suppliers","turn":1}
+{"key":"fs_list","kind":"result","text":"parts.csv","turn":1}
+{"key":"fs_list","kind":"result","text":"acme.md nova.md","turn":1}
+{"key":"fs_list","kind":"result","text":"order_a.csv order_b.csv","turn":1}
+{"key":"fs_read","kind":"result","text":"part_id,name,unit_price P-101,sensor,40 P-102,cable,6 P-103,bracket,9","turn":2}
+{"key":"fs_read","kind":"result","text":"# ACME Supply Supplies parts: P-101, P-103 Lead time: 5 days","turn":2}
+{"key":"fs_read","kind":"result","text":"# NOVA Parts Co Supplies parts: P-102 Lead time: 2 days","turn":2}
+{"key":"fs_read","kind":"result","text":"part_id,qty P-101,3 P-102,10","turn":2}
+{"key":"actor","kind":"blocker","text":"actor failed: [nativeTools] response carried no parseable tool calls","turn":3}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":3}

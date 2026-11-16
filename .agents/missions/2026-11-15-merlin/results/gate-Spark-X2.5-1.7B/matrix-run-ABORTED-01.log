@@ -1,0 +1,8 @@
+live: model Spark-X2.5-1.7B-Q8_0.gguf → family 'spark-x2.5', rung nativeTools, max_tokens 1280, floor 768 + 512 headroom
+run root: /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/.agents/missions/2026-11-15-merlin/results/gate-Spark-X2.5-1.7B/runs/20261116-033906
+sandbox-exec: execvp() of '/bin/true' failed: No such file or directory
+2026-11-16T03:52:50Z supervisor: restart: killing the port listener
+2026-11-16T03:52:50Z supervisor: sent SIGTERM to port listener pid 12405
+2026-11-16T04:18:12Z supervisor: restart: killing the port listener
+2026-11-16T04:18:13Z supervisor: no listener found on port 8301
+2026-11-16T04:18:13Z supervisor: restart: port free; launching /Users/admin/KimiK3_Nvidia/Kestrel-AIEngine/vendor/llama.cpp/build-static/bin/llama-server

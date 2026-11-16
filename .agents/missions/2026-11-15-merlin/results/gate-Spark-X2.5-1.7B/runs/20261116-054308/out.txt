@@ -1,0 +1,39 @@
+MODEL SCORECARD — Spark-X2.5-1.7B-Q8_0 · suite merlin-eval-v1 · 2026-11-16 · machinery: merlin
+────────────────────────────────────────────────────────────────────────────
+pass_rate        : 4/14 (28.6%)
+axis_gates       : A ✔  B ✘  C ✘  D ✘  E ✘
+median_turns     : 3.5   (of budget; per-task turns_used median over all 14 runs)
+median_wallclock : 3m29s
+tool_errors      : 27 total (T02:8, T04:3, T06:1, T12:9, T13:5, T14:1)
+recovery_events  : 27   ·  repeat_failures: 9
+repair_count     : 0                    # expected 0 on M1 grammar path
+voluntary_stops  : 6/14
+seed_drift       : none
+per-task         : T01 ✔(3t) T02 ✔(8t) T03 ✘(5t) T04 ✘(9t) T05 ✔(5t) T06 ✘(12t) T07 ✘(0t,budget) T08 ✘(3t) T09 ✘(3t) T10 ✘(3t) T11 ✘(4t) T12 ✘(9t) T13 ✘(0t,budget) T14 ✔(3t)
+────────────────────────────────────────────────────────────────────────────
+verdict          : MERLIN GATE: Spark-X2.5-1.7B-Q8_0 FAIL (suite gate = 14/14 tasks; got 4/14; failing axes: B, C, D, E)
+
+MODEL SCORECARD — Spark-X2.5-1.7B-Q8_0 · suite merlin-eval-v1 · 2026-11-16 · machinery: baseline
+────────────────────────────────────────────────────────────────────────────
+pass_rate        : 2/14 (14.3%)
+axis_gates       : A ✘  B ✘  C ✘  D ✘  E ✘
+median_turns     : 1.5   (of budget; per-task turns_used median over all 14 runs)
+median_wallclock : 10m00s
+tool_errors      : 2 total (T03:2)
+recovery_events  : 2   ·  repeat_failures: 1
+repair_count     : 9                    # expected 0 on M1 grammar path
+voluntary_stops  : 2/14
+seed_drift       : none
+per-task         : T01 ✔(3t) T02 ✘(5t,budget) T03 ✘(12t,budget) T04 ✘(1t,budget) T05 ✔(8t) T06 ✘(2t,budget) T07 ✘(1t,budget) T08 ✘(1t,budget) T09 ✘(1t,budget) T10 ✘(8t,budget) T11 ✘(7t,budget) T12 ✘(1t,budget) T13 ✘(1t,budget) T14 ✘(1t,budget)
+────────────────────────────────────────────────────────────────────────────
+verdict          : MERLIN GATE: Spark-X2.5-1.7B-Q8_0 FAIL (suite gate = 14/14 tasks; got 2/14; failing axes: A, B, C, D, E)
+
+MERLIN-EVAL REPORT — 2026-11-16
+models: Spark-X2.5-1.7B-Q8_0
+
+model                 machinery   pass_rate    axes    med_turns  med_time  recoveries  loops
+Spark-X2.5-1.7B-Q8_0  merlin     4/14 (29%)  A✔B✘C✘  3.5        3m29s      27          9
+Spark-X2.5-1.7B-Q8_0  baseline   2/14 (14%)  A✘B✘C✘  1.5        10m00s     2           1
+
+DELTA (merlin − baseline, per model): Spark-X2.5-1.7B-Q8_0: +14% pass rate, +2.0 median turns, +8 loops
+known flaws: (recorded per run in report.json fail_reasons)

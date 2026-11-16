@@ -1,0 +1,9 @@
+{
+  "name": "relay",
+  "retries": 2,
+  "timeout_s": 30,
+  "features": {
+    "dark_mode": false,
+    "telemetry": true
+  }
+}

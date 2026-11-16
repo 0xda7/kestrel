@@ -170,3 +170,47 @@ Server: vendor/llama.cpp/build-static/bin/llama-server, version 0.6.0-dev build 
 - COMMIT WAVE 1 LANDED: 245b5c8 "fix(checks): per-port slot KV trees resolve inside the per-run store" — the pre-mission slots patch (8 files, +258/−54). Message notes the CHANGELOG carries the Merlin [Unreleased] section (file-level entanglement, declared). Not pushed yet — push after wave 2 lands.
 - Dispatched security-hardening worker (c51fd595): SECURITY-REVIEW §3 items 1-5 — sandbox-exec confinement (workspace-write-only, no network, HOME→scratch, setpgid+kill(-pgid), bounded drain) with honest fallback if seatbelt unavailable; js_eval watchdog + MerlinChatService cancel-takeover (no more force-quit); schema honesty (kill the "network disabled" lie in ToolSchema/ToolRegistry/MerlinShell); case-fold ledger reservation; injection defanging (outcome summary plain-text, verifier first-line verdict + digest data-framing). Checks for every fix incl. a real confinement proof (curl/escape probes through the kernel path).
 - Box state at dispatch: quiet (load 1.92, zero llama-servers) — eval re-run conditions good once hardening lands.
+
+## 2026-11-15 night — CLOSURE EXECUTED: hardening landed, committed, pushed; eval gate launched
+
+- Operator changed approval policy to never-ask + requested faster delivery with deeper orchestration. Lead re-sequenced: commit decoupled from eval verdict (850/0 is the shipping bar; the gate gates only the default-flip); media-phase plan staged in parallel (MEDIA-PHASE-PLAN.md: tts_say → image_gen → transcribe, each eval-gated, explicit non-goals).
+- SECURITY WAVE 2 LANDED (c51fd595): all five §3 fixes — seatbelt-first shell confinement with runtime probe (screening fallback honest; the session's probe failure PROVEN to be Seatbelt no-nesting, not a macOS bug — three independent proofs), MerlinProcessGroup POSIX_SPAWN_SETPGROUP + kill(-pgid) ladder + bounded drain (mirrored into eval ShellRunner), js_eval watchdog + app cancel-takeover ("run did not return" — no more force-quit), injection defanging (outcome fenced inert + verifier BEGIN DATA framing + first-line verdict), case-folded ledger reservation. Schema honesty: modelFacingDescription() single-sources the tool description — the "network disabled" lie is gone. 850 checks 0 failures (lead-verified). Release build green (226s). Residual limitations documented in-code (js_eval thread leak pending a child-process target; textual ledger screen; screening-mode token-scan).
+- COMMITS (pushed to 0xda7/kestrel main, c971109..be87169):
+  - 245b5c8 fix(checks): slots patch (wave 1, pre-mission work).
+  - 45cc425 feat(merlin): kernel + harness + tooling (33 files, +12,521).
+  - e303fea feat(chat): Merlin app surfaces (toggle, task runner, injection-safe outcome rendering).
+  - be87169 docs(merlin): runbook + CHANGELOG + full evidence pack (116 files).
+- EVAL GATE LAUNCHED (eb5ec96e, background): full 14×2 matrix, sequential models (Spark-1.7B + Qwen3.5-9B priority), interleave + wedge-retry on, runs-root inside mission folder, GLM excluded unless time permits. Verdict per SCORING.md §5 on the committed tree.
+
+## 2026-11-15 late night — RELEASE v0.90.0 CUT (operator: "update my kestrel version with the latest release")
+
+- Version 0.89.17 → 0.90.0 (minor: big feature, no breaking changes). AboutTab.swift version + CHANGELOG [Unreleased]→[0.90.0] — 2026-11-16 with outcome-first intro stating the honest eval-gate-pending status. Commit d6bb1e2, tag v0.90.0, pushed — tag verified on remote (gh api: v0.90.0 @ d6bb1e2). Gates closed pre-tag: 850 checks 0 failures on the versioned tree; release product builds.
+- DMG packaging dispatched (a0fefd4b) per release-contract last mile ("published is not installable"): build from tagged commit, mount-verify version + bundled llama-server, launch smoke. dist/ currently holds Kestrel-v0.87.9.dmg (two releases stale) — being replaced.
+- Eval gate mid-flight on Spark (matrix 2 after a wedge-cascade abort preserved as INCIDENT-01: supervisor's 10s port-free window was shorter than the wedged server's SIGTERM latency — BUG-1 reported not fixed, tree-is-judged doctrine held; worker self-managed relaunch). Worker protocol performing as designed: honest per-cell outcomes, incidents preserved.
+- Release scope decision recorded: the eval gate verdict gates ONLY the Merlin-default flip; the release ships the code (kernel + security wave, 850/0). Gate report + any default-flip follow in the gate worker's wake.
+
+## 2026-11-15 late night — RELEASE PUBLISHED: v0.90.0 live on the update feed
+
+- CI tag run 43808911178 SUCCESS: standard + noavx2 variants built, Developer-ID signed/notarized per repo secrets, Publish release step green. GitHub Release v0.90.0 live with Kestrel-v0.90.0.dmg + Kestrel-v0.90.0-noavx2.dmg + checksums.txt. Updater smoke: /releases/latest returns v0.90.0 with exactly those assets — installed Kestrels (0.87.x-0.89.x) will see the update.
+- Local DMG (dist/Kestrel-v0.90.0.dmg, SHA-256 8dea1595…) remains the ad-hoc-signed local artifact; the CI artifacts are the feed-canonical ones.
+- CI fast-gate failure on main (LiveWindowTruthTests engine-pinned check vs no engines on runner) fixed forward: 8d4aed4 — the test job now builds the vendored engines (cached) before the suite, 40-min budget. Root cause predates Merlin (Census W5-5 ordering vs the new 850-check full suite on pushes).
+- Post-release [Unreleased] changelog section: will reopen with the next code change (gate-verdict/default-flip commit).
+
+## 2026-11-16 — gate progress + fast-gate fix confirmed
+
+- CI main-push run (94244d3): completed/success — the engines-prerequisite + vendored-path fix holds; the push fast gate is permanently green (850 checks incl. Merlin's 135 on every push now).
+- Eval gate, Spark matrix 3: T01 ✔/✔ (3t both), **T02 merlin ✔(4t) vs baseline ✘(8t budget)** — first clean merlin-vs-baseline separation of the formal gate, on the axis the suite predicts (spine+ledger vs raw transcript). T03 merlin running. Wedge-retry restarts logged and self-managed.
+
+## 2026-11-16 00:18 — gate tally checkpoint (16/28 cells)
+
+- merlin 3✔ (T01 3t, T02 8t, T05 5t) vs baseline 2✔ (T01 3t, T05 8t) — merlin ahead + faster on shared passes (T05: 5t vs 8t).
+- T03/T04/T06/T07 failed both modes; T04-b(1t)/T06-b(2t)/T07-b(1t)/T07-m(0t) budget-stops carry the wedge signature (wall-guard class, wedges.log).
+- Worker eb5ec96e continues autonomously; GATE-REPORT.md lands with the formal §5 verdict. Delta so far: merlin +1 pass, −3 turns on shared passes.
+
+## 2026-11-16 03:07 — GATE CLOSED: Spark-only verdict, FAIL (operator decision)
+
+- Qwen leg found dead at 02:49 PT (llama-server :8302 "second interrupt, terminating"; watchdog quiet, port dead, no processes) at 6/28 cells. Operator chose "verdict on Spark only" — no re-run authorized; Qwen artifacts preserved under results/gate-Qwen3.5-9B/.
+- Spark leg complete (28/28): merlin 4/14 (axes A✔ B✘ C✘ D✘ E✘) vs baseline 2/14 (all axes ✘, 12/14 budget-dead, wedge-eaten windows). Suite gate = 14/14 → **MERLIN GATE: FAIL**. Merlin-default flip NOT taken; Agent engine stays opt-in behind the toggle. GATE-REPORT.md written.
+- Machinery signal (not gate): clean separations T02/T14, faster shared passes T05 (5t/148s vs 8t/451s); wedge retry recovered 9/11. Merlinspecific failure mode = 6 actor_failed cells (T03/T06/T08/T10/T11/T12) → next kernel work item.
+- analyze.py schema bug found + fixed during report writing (report emits `pass`, analyzer read `passed` → false 0/14 both modes). Fixed analyzer verified against matrix-run.log ✔ lines and the runner's own summary table (4/14, 2/14 — agree).
+- Uncommitted: journal.md, results/GATE-REPORT.md, gate-*/ evidence, analyze.py fix. No commit/push ordered for these yet.

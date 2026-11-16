@@ -1,0 +1,14 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock api_reference.md how_to_run.md meeting_notes_monday.txt meeting_notes_tuesday.txt sales_q1.csv sales_q2.csv","turn":1}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: mv: rename meeting_notes_monday.txt to notes\/meeting_notes_monday.txt: No such file or directory confinement: screening fallback (no OS boundary; ledger and outside-path sc…","turn":2}
+{"key":"fs_list","kind":"result","text":".merlin-lock .merlin-scratch api_reference.md how_to_run.md meeting_notes_monday.txt meeting_notes_tuesday.txt merlin-ledger.jsonl sales_q1.csv sales_q2.csv","turn":3}
+{"key":"shell_run","kind":"result","text":"exit 1 (no output) stderr: mv: rename meeting_notes_monday.txt to notes\/meeting_notes_monday.txt: No such file or directory confinement: screening fallback (no OS boundary; ledger and outside-path sc…","turn":4}
+{"key":"notes\/meeting_notes_monday.txt","kind":"artifact","text":"wrote 23 chars to notes\/meeting_notes_monday.txt","turn":5}
+{"key":"fs_write","kind":"result","text":"wrote notes\/meeting_notes_monday.txt (23 chars)","turn":5}
+{"key":"notes\/meeting_notes_tuesday.txt","kind":"artifact","text":"wrote 24 chars to notes\/meeting_notes_tuesday.txt","turn":5}
+{"key":"fs_write","kind":"result","text":"wrote notes\/meeting_notes_tuesday.txt (24 chars)","turn":5}
+{"key":"data\/sales_q1.csv","kind":"artifact","text":"wrote 13 chars to data\/sales_q1.csv","turn":5}
+{"key":"fs_write","kind":"result","text":"wrote data\/sales_q1.csv (13 chars)","turn":5}
+{"key":"data\/sales_q2.csv","kind":"artifact","text":"wrote 13 chars to data\/sales_q2.csv","turn":5}
+{"key":"fs_write","kind":"result","text":"wrote data\/sales_q2.csv (13 chars)","turn":5}
+{"key":"actor","kind":"blocker","text":"actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7faef7b0bfc0 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <CC4BF74A-A51D-40B5-9666-1F7C44104EBF>.<30>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <CC4BF74A-A51D-40B5-9666-1F7C44104EBF>.<30>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, NSErrorFailingURLKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, _kCFStreamErrorDomainKey=4}","turn":6}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":6}

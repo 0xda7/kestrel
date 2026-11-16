@@ -1,0 +1,6 @@
+{"key":"fs_list","kind":"result","text":"alpha.txt bravo.txt charlie.txt delta.txt echo.txt","turn":1}
+{"key":"fs_grep","kind":"result","text":"docs\/charlie.txt:2: Marker: K7-QX-4417","turn":1}
+{"key":"marker.txt","kind":"artifact","text":"wrote 11 chars to marker.txt","turn":2}
+{"key":"fs_write","kind":"result","text":"wrote marker.txt (11 chars)","turn":2}
+{"key":"actor","kind":"blocker","text":"actor failed: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\" UserInfo={_kCFStreamErrorCodeKey=-2102, NSUnderlyingError=0x7fce66f04fc0 {Error Domain=kCFErrorDomainCFNetwork Code=-1001 \"(null)\" UserInfo={_kCFStreamErrorCodeKey=-2102, _kCFStreamErrorDomainKey=4}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <CEAB92CD-6C90-4A20-A2B0-F8EA0727CDF6>.<16>, _NSURLErrorRelatedURLSessionTaskErrorKey=(\n    \"LocalDataTask <CEAB92CD-6C90-4A20-A2B0-F8EA0727CDF6>.<16>\"\n), NSLocalizedDescription=The request timed out., NSErrorFailingURLStringKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, NSErrorFailingURLKey=http:\/\/127.0.0.1:8301\/v1\/chat\/completions, _kCFStreamErrorDomainKey=4}","turn":3}
+{"key":"actor","kind":"result","text":"run ended on an actor failure","turn":3}

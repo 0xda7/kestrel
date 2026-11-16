@@ -1,0 +1,3 @@
+2026-11-12T11:40Z signing service reachable
+EVENT=PACK-SIGNED ts=2026-11-12T11:47Z
+2026-11-12T11:48Z sha256 recorded

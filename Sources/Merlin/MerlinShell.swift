@@ -22,10 +22,12 @@ import JavaScriptCore
 /// operator's real HOME are denied — the child's `HOME` variable points at
 /// a workspace scratch directory, so `~` expansion stays inside the
 /// workspace. Availability is decided ONCE per process by
-/// `MerlinShell.probe()`, a real spawn of `/bin/true` under
+/// `MerlinShell.probe()`, a real spawn of `/usr/bin/true` under
 /// `(allow default)` — no OS-version guessing. When the probe fails (the
 /// documented nested-Seatbelt case: a host already inside a seatbelt
-/// refuses `sandbox_apply` with EPERM/exit 71), the runner degrades to the
+/// refuses `sandbox_apply` with EPERM/exit 71 — or the probe binary itself
+/// is missing, which macOS 26 made true of `/bin/true`: exec fails ENOENT
+/// with the same exit 71), the runner degrades to the
 /// SCREENING fallback for the process's lifetime: the command text is
 /// screened against the ledger filename (case-insensitively) and against
 /// tokens naming absolute paths outside the workspace, and the model-facing
@@ -117,7 +119,7 @@ public enum MerlinShell {
     nonisolated(unsafe) private static var probedMode: ConfinementMode?
 
     /// Decides (once per process) whether the seatbelt boundary is usable:
-    /// spawns `/bin/true` under `(allow default)` through `sandbox-exec`
+    /// spawns `/usr/bin/true` under `(allow default)` through `sandbox-exec`
     /// and checks the exit status. A nested-sandbox host (the documented
     /// `forbidden-sandbox-reinit` case) fails this probe and the runner
     /// ships the screening fallback for the process's lifetime.
@@ -145,11 +147,16 @@ public enum MerlinShell {
         probeLock.unlock()
     }
 
-    /// One real `sandbox-exec -p '(version 1)(allow default)' /bin/true`.
+    /// One real `sandbox-exec -p '(version 1)(allow default)' /usr/bin/true`.
     private static func probeOnce() -> ConfinementMode {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
-        process.arguments = ["-p", "(version 1)(allow default)", "/bin/true"]
+        // `/usr/bin/true`, never `/bin/true`: macOS 26 (darwin 25) ships no
+        // `/bin/true`, and the missing-binary ENOENT (exit 71) is
+        // indistinguishable from a seatbelt refusal — every host on that OS
+        // silently degraded to `.screening` before this. `/usr/bin/true`
+        // exists on every macOS that has `sandbox-exec`.
+        process.arguments = ["-p", "(version 1)(allow default)", "/usr/bin/true"]
         // Deliberately NOT the confined environment: the probe answers
         // "can this host apply a profile at all", independent of our env.
         do {
