@@ -34,9 +34,21 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'branch'
     name: Unit tests
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      # Engine-dependent checks (e.g. LiveWindowTruthTests pin the ubatch default
+      # against the bundled llama-server) need the vendored engines on disk. The
+      # engines job below caches them; building here first keeps the fast gate
+      # honest on pushes (found when Merlin's wave made CI run the full suite —
+      # the check dates to Census W5-5 but main pushes never built engines first).
+      - name: Build inference engines (fast-gate prerequisite)
+        run: |
+          if [ ! -x vendor/llama.cpp/build-static/bin/llama-server ]; then
+            ARCH=x86_64 ./scripts/build-engines.sh
+          else
+            echo "Using cached inference engines"
+          fi
       - run: swift run --disable-sandbox kestrel-checks
 
   build:
