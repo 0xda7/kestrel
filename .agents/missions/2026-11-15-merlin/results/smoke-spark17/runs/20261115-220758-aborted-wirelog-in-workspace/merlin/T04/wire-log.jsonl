@@ -1,0 +1,4 @@
+{"error":"","turn":1,"calls":[{"arguments":"{\"path\":\".\"}","name":"fs_list"}]}
+
+{"calls":[{"arguments":"{\"path\":\"data\"}","name":"fs_list"},{"name":"fs_read","arguments":"{\"path\":\"data\/wire-log.jsonl\"}"}],"turn":2,"error":""}
+{"calls":[{"name":"fs_read","arguments":"{\"path\":\"data\/region_east.csv\"}"},{"name":"fs_read","arguments":"{\"path\":\"data\/region_north.csv\"}"},{"arguments":"{\"path\":\"data\/region_west.csv\"}","name":"fs_read"}],"turn":3,"error":""}

@@ -1,0 +1,6 @@
+{"key":"fs_list","kind":"result","text":".merlin-lock data wire-log.jsonl","turn":1}
+{"key":"fs_list","kind":"result","text":"region_east.csv region_north.csv region_west.csv","turn":2}
+{"key":"fs_read","kind":"result","text":"error: no such file: data\/wire-log.jsonl","turn":2}
+{"key":"fs_read","kind":"result","text":"item,units widget,8 sprocket,7","turn":3}
+{"key":"fs_read","kind":"result","text":"item,units gadget,4 widget,3","turn":3}
+{"key":"fs_read","kind":"result","text":"item,units widget,12 gadget,5","turn":3}

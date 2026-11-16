@@ -1,0 +1,80 @@
+{
+  "completion_max_tokens": 1024,
+  "context_tokens": 8192,
+  "date": "2026-11-16",
+  "driver": "live",
+  "immutable_seed_boot_hashes": {
+    "T01": {}
+  },
+  "machinery": "merlin",
+  "mission": "2026-11-15-merlin",
+  "model": "scripted-reference",
+  "model_id": "GLM-4-9B-0414-Q4_K_M.gguf",
+  "model_path": "/Users/admin/models/GLM-4-9B-0414-Q4_K_M.gguf",
+  "profile_envelope_mode": "perToolSchemas",
+  "profile_family": "glm-4",
+  "profile_min_completion_tokens": 512,
+  "profile_rung": "jsonEnvelope",
+  "profile_template_notes": "Rung 1 FAILS on 9B-0414: tool_calls null, raw call syntax inline in content, hallucinated fake results (tool_choice required and --jinja do not fix it). Rung 2 envelope is byte-perfect and grammar-locked. Suspected-hallucination flag armed on rung-2 content. Slice 6: envelope grammar tightened to perToolSchemas — the shared shape let schema-sloppy argument keys through (kernel-2 soak: {\"report_file\": …} against fs_write's {path, content}).",
+  "run_root": "/tmp/merlin-slice6/glm-eval-runs/20261116-013014",
+  "server_url": "http://127.0.0.1:8201",
+  "suite": "merlin-eval-v1",
+  "summary": {
+    "passed": 0,
+    "recovery_events": 3,
+    "repeat_failures": 0,
+    "seed_drift": [],
+    "tasks": 1,
+    "tool_errors": 3,
+    "voluntary_stops": 1
+  },
+  "tasks": [
+    {
+      "assertions": [
+        {
+          "description": "file_exists answer.txt",
+          "detail": "no file at answer.txt",
+          "index": 0,
+          "passed": false
+        },
+        {
+          "description": "file_contains answer.txt values[\"8085\"]",
+          "detail": "file missing or unreadable: answer.txt",
+          "index": 1,
+          "passed": false
+        },
+        {
+          "description": "grep_count answer.txt /^8085$/ [1, 1]",
+          "detail": "no file at answer.txt",
+          "index": 2,
+          "passed": false
+        }
+      ],
+      "axis": "A",
+      "budget_exhausted": false,
+      "end_reason": "task_done",
+      "fail_reasons": [
+        "assertions 0/3 green: file_exists answer.txt — no file at answer.txt; file_contains answer.txt values[\"8085\"] — file missing or unreadable: answer.txt; grep_count answer.txt /^8085$/ [1, 1] — no file at answer.txt"
+      ],
+      "id": "T01",
+      "immutable_seed_boot_hashes": {},
+      "immutable_seeds": [],
+      "pass": false,
+      "recovery_events": 3,
+      "repair_count": 0,
+      "repeat_failures": 0,
+      "seed_drift": false,
+      "tier": 1,
+      "tool_calls": 4,
+      "tool_errors": 3,
+      "turns_budget": 6,
+      "turns_used": 4,
+      "voluntary_stop": true,
+      "wall_clock_s": 107.444,
+      "workspace": "/tmp/merlin-slice6/glm-eval-runs/20261116-013014/T01"
+    }
+  ],
+  "tasks_source": ".agents/missions/2026-11-15-merlin/eval/tasks.json",
+  "temperature": 0,
+  "wall_guard_s": 420
+}

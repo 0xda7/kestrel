@@ -1,0 +1,5 @@
+{
+  "currency": "EUR",
+  "discount_pct": 25,
+  "items": {"bolt": 5, "nut": 2}
+}

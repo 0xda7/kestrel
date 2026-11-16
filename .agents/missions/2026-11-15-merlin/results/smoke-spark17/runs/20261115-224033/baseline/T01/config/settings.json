@@ -1,0 +1,6 @@
+{
+  "service": "kestrel-report-gen",
+  "port": 8085,
+  "log_level": "info",
+  "retries": 3
+}

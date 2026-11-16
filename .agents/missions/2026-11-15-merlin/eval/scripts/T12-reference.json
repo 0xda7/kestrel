@@ -1,0 +1,27 @@
+{
+  "task": "T12",
+  "notes": [
+    "Reference solution for T12 (axis E, tier 2): recovery-from-error.",
+    "fs_read on the deliberately-missing data/report.csv errors (not_found); the agent",
+    "recovers via fs_list + README + fs_read of report_v2.csv, then appends the total.",
+    "Exercises file_contains and the negated file_exists on data/report.csv (must NOT be created)."
+  ],
+  "turns": [
+    { "calls": [
+      { "tool": "fs_read", "args": { "path": "data/report.csv" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_list", "args": { "path": "data" } },
+      { "tool": "fs_read", "args": { "path": "data/README.md" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_read", "args": { "path": "data/report_v2.csv" } }
+    ] },
+    { "calls": [
+      { "tool": "shell_run", "args": { "command": "printf '# summary\\nTOTAL UNITS: 13\\n' > summary.txt" } }
+    ] },
+    { "calls": [
+      { "tool": "task_done", "args": { "summary": "report.csv is unrecoverable per data/README.md; used report_v2.csv instead (4+9=13) and appended 'TOTAL UNITS: 13' to summary.txt; data/report.csv deliberately not created." } }
+    ] }
+  ]
+}

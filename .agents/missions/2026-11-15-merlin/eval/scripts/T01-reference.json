@@ -1,0 +1,13 @@
+{
+  "task": "T01",
+  "notes": [
+    "Reference solution for T01 (axis A, tier 1): read the port field, write it bare.",
+    "Exercises file_exists, file_contains, grep_count (^8085$ exactly once).",
+    "Solver sketch from TASKS.md §7: fs_read then fs_write, then the completion contract."
+  ],
+  "turns": [
+    { "calls": [ { "tool": "fs_read", "args": { "path": "config/settings.json" } } ] },
+    { "calls": [ { "tool": "fs_write", "args": { "path": "answer.txt", "content": "8085\n" } } ] },
+    { "calls": [ { "tool": "task_done", "args": { "summary": "Wrote answer.txt containing 8085, the port from config/settings.json." } } ] }
+  ]
+}

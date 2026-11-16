@@ -1,0 +1,23 @@
+{
+  "task": "T06",
+  "notes": [
+    "Reference solution for T06 (axis C, tier 2): the code-fix loop.",
+    "Exercises command_ok (python3 check.py), the fix, and file_contains on fixed.txt.",
+    "Turn 1 runs the checker (fails: NameError 'nmae'); turn 2 fixes invoice.py and re-runs green; turn 3 writes fixed.txt; turn 4 declares done."
+  ],
+  "turns": [
+    { "calls": [
+      { "tool": "shell_run", "args": { "command": "python3 check.py" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "invoice.py", "content": "\"\"\"Totals a simple invoice. Prices are per unit, integers.\"\"\"\n\nPRICES = {\"bolt\": 3, \"nut\": 1, \"washer\": 2}\n\n\ndef invoice_total(items):\n    \"\"\"items: list of (part_name, quantity) tuples. Returns the total price.\"\"\"\n    total = 0\n    for name, qty in items:\n        total = total + PRICES[name] * qty\n    return total\n" } },
+      { "tool": "shell_run", "args": { "command": "python3 check.py" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "fixed.txt", "content": "DONE\n" } }
+    ] },
+    { "calls": [
+      { "tool": "task_done", "args": { "summary": "check.py exits 0 (ALL GREEN); invoice.py typo 'nmae' -> 'name' fixed; fixed.txt written with DONE." } }
+    ] }
+  ]
+}

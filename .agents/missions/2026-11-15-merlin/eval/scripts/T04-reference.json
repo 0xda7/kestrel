@@ -1,0 +1,24 @@
+{
+  "task": "T04",
+  "notes": [
+    "Reference solution for T04 (axis B, tier 2): merge three CSVs, compute totals.",
+    "Exercises grep_count bounds (exactly 6 data rows) and json_field numeric equality.",
+    "Totals: widget 12+8+3=23, gadget 5+4=9, sprocket 7."
+  ],
+  "turns": [
+    { "calls": [
+      { "tool": "fs_read", "args": { "path": "data/region_west.csv" } },
+      { "tool": "fs_read", "args": { "path": "data/region_east.csv" } },
+      { "tool": "fs_read", "args": { "path": "data/region_north.csv" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "data/all_regions.csv", "content": "item,units\nwidget,12\ngadget,5\nwidget,8\nsprocket,7\ngadget,4\nwidget,3\n" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "data/totals.json", "content": "{\n  \"widget\": 23,\n  \"gadget\": 9,\n  \"sprocket\": 7\n}\n" } }
+    ] },
+    { "calls": [
+      { "tool": "task_done", "args": { "summary": "Wrote data/all_regions.csv (header + 6 rows) and data/totals.json with widget=23, gadget=9, sprocket=7." } }
+    ] }
+  ]
+}

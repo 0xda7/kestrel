@@ -1,0 +1,30 @@
+{
+  "task": "T07",
+  "notes": [
+    "Reference solution for T07 (axis C, tier 3): the two-bug fix loop.",
+    "Bug chain per TASKS.md §9: KeyError 'discount' (seeded key is discount_pct), then",
+    "the missing /100 in the discount line. Two fix iterations, checker green on run 3.",
+    "Exercises command_ok + file_contains with BOTH immutable seeds (check.py and",
+    "config/pricing.json) verified intact at scoring."
+  ],
+  "turns": [
+    { "calls": [
+      { "tool": "shell_run", "args": { "command": "python3 check.py" } },
+      { "tool": "fs_read", "args": { "path": "quote.py" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "quote.py", "content": "\"\"\"Quote tool: subtotal minus discount, rounded to 2 decimals.\"\"\"\nimport json\n\nCFG = json.load(open(\"config/pricing.json\"))\n\n\ndef quote(cart):\n    subtotal = sum(CFG[\"items\"][name] * qty for name, qty in cart)\n    discount = subtotal * CFG[\"discount_pct\"]\n    return round(subtotal - discount, 2)\n" } },
+      { "tool": "shell_run", "args": { "command": "python3 check.py" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "quote.py", "content": "\"\"\"Quote tool: subtotal minus discount, rounded to 2 decimals.\"\"\"\nimport json\n\nCFG = json.load(open(\"config/pricing.json\"))\n\n\ndef quote(cart):\n    subtotal = sum(CFG[\"items\"][name] * qty for name, qty in cart)\n    discount = subtotal * CFG[\"discount_pct\"] / 100\n    return round(subtotal - discount, 2)\n" } },
+      { "tool": "shell_run", "args": { "command": "python3 check.py" } }
+    ] },
+    { "calls": [
+      { "tool": "fs_write", "args": { "path": "fixed.txt", "content": "DONE\n" } }
+    ] },
+    { "calls": [
+      { "tool": "task_done", "args": { "summary": "Two bugs fixed in quote.py (discount key name, missing /100); check.py exits 0 ALL GREEN; fixed.txt written with DONE; check.py and config/pricing.json untouched." } }
+    ] }
+  ]
+}

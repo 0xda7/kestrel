@@ -1,0 +1,27 @@
+{
+  "run5_wedge_recovered": {
+    "run_root": "/tmp/merlin-slice6/wedge-test-runs5/20261116-012358",
+    "wedges.log": [
+      "2026-11-16T01:26:30Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_first_attempt\tharness_timeout",
+      "2026-11-16T01:26:35Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_retry_server_restarted\tready: pid 7238 on port 8210",
+      "2026-11-16T01:28:01Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_retry_recovered\tcell scored on the fresh instance"
+    ],
+    "score": {"passed": true, "end_reason": "task_done", "turns_used": 3, "wall_clock_s": 85.985, "fail_reasons": []},
+    "method": "fake accept-then-silence wedge server on 8210 for attempt 1; supervisor SIGTERM-killed it, relaunched the bundled llama-server, retry scored normally"
+  },
+  "run3_wedge_permanent": {
+    "run_root": "/tmp/merlin-slice6/wedge-test-runs3/20261116-011812",
+    "wedges.log": [
+      "2026-11-16T01:18:42Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_first_attempt\tharness_timeout",
+      "2026-11-16T01:18:47Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_retry_server_restarted\tready: pid 7085 on port 8210",
+      "2026-11-16T01:19:17Z\tport=8210\tcell=T01/spark-x2.5-nativeTools\twedge_retry_wedged\tpermanent harness_event:wedge"
+    ],
+    "score": {
+      "passed": false,
+      "end_reason": "harness_event_wedge",
+      "fail_reasons_appended": "harness_event:wedge: request-timeout wedge persisted after the one fresh-instance retry (codified policy: one retry, then harness_event:wedge; a harness event, never a model score)"
+    },
+    "method": "fresh real server ran real inference (relaunch log shows prompt eval 15.6s + 64-token generation) but the 30s test guard tripped again; classified permanent harness_event:wedge"
+  },
+  "supervisor_bug_found_and_fixed_during_proof": "first implementation used `lsof -ti tcp:PORT` which matches CLIENT-side sockets too — the eval process's own hung request made the port look occupied and the relaunch refused ('port 8210 still occupied after kill'). Fixed with `-sTCP:LISTEN` + direct SIGTERM + 5s-bounded lsof reads + step breadcrumbs in server-relaunch.log."
+}
